@@ -1,0 +1,25 @@
+{
+  "name": "github-pr-scoreboard",
+  "version": "1.0.0",
+  "description": "A GitHub pull request scoreboard application",
+  "main": "github-pr-scoreboard.js",
+  "type": "module",
+  "scripts": {
+    "start": "node github-pr-scoreboard.js",
+    "test": "echo \"No tests specified\" && exit 1"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "mongoose": "^7.2.1",
+    "node-cron": "^3.0.2",
+    "@octokit/rest": "^20.0.0",
+    "dotenv": "^16.0.0",
+    "express-rate-limit": "^6.7.0",
+    "helmet": "^6.0.0",
+    "express-mongo-sanitize": "^2.2.0",
+    "node-fetch": "^3.3.1",
+    "cors": "^2.8.5"
+  },
+  "author": "Luis Rodriguez",
+  "license": "MIT"
+}
