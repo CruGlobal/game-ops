@@ -7,7 +7,8 @@ import {
     fetchReviewsData,
     awardContributorBadges,
     topContributors,
-    topReviewers
+    topReviewers,
+    awardBillsAndVonettes
 } from '../controllers/contributorController.js';
 
 const router = express.Router();
@@ -19,6 +20,7 @@ router.get('/fetch-reviews', fetchReviewsData);
 router.get('/award-badges', awardContributorBadges);
 router.get('/top-contributors', topContributors);
 router.get('/top-reviewers', topReviewers);
+router.get('/award-bills-vonettes', awardBillsAndVonettesController);
 
 router.get('/badges', (req, res) => {
     const imagesDir = path.join(__dirname, '../public/images/badges');

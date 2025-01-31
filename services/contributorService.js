@@ -204,3 +204,73 @@ export const getTopReviewers = async () => {
     }
     return reviewers;
 };
+
+export const awardBillsAndVonettes = async (pullRequestNumber = null, test = false) => {
+    const results = [];
+    try {
+        let contributors;
+        if (process.env.NODE_ENV === 'production') {
+            const params = { TableName: 'Contributors' };
+            const data = await dbClient.scan(params).promise();
+            contributors = data.Items;
+        } else {
+            contributors = await Contributor.find();
+        }
+
+        for (const contributor of contributors) {
+            if (/\[bot\]$/.test(contributor.username)) {
+                continue;
+            }
+
+            let badgeAwarded = null;
+            let badgeImage = null;
+
+            if (contributor.prCount >= 10 && !contributor.first10PrsAwarded) {
+                badgeAwarded = 'Bill';
+                badgeImage = '1_bill_57X27.png';
+                contributor.first10PrsAwarded = true;
+            } else if (contributor.reviewCount >= 10 && !contributor.first10ReviewsAwarded) {
+                badgeAwarded = 'Bill';
+                badgeImage = '1_bill_57X27.png';
+                contributor.first10ReviewsAwarded = true;
+            } else if ((contributor.prCount >= 500 || contributor.reviewCount >= 500) && !contributor.first500PrsAwarded || !contributor.first500ReviewsAwarded) {
+                badgeAwarded = 'Vonette';
+                badgeImage = '5_vonett_57_25.png';
+                contributor.first500Awarded = true;
+                contributor.first500ReviewsAwarded = true;
+
+            if (badgeAwarded) {
+                await octokit.rest.issues.createComment({
+                    owner: repoOwner,
+                    repo: repoName,
+                    issue_number: pullRequestNumber || contributor.lastPR,
+                    body: `🎉 Congratulations @${contributor.username}, you've earned a ${badgeAwarded}! 🎉\n\n![${badgeAwarded}](${domain}/images/${badgeImage})`,
+                });
+
+                results.push({ username: contributor.username, badge: badgeAwarded, badgeImage: badgeImage });
+
+                if (process.env.NODE_ENV === 'production') {
+                    const updateParams = {
+                        TableName: 'Contributors',
+                        Key: { username: contributor.username },
+                        UpdateExpression: 'set prCount = :prCount, reviewCount = :reviewCount, first10PrsAwarded = :first10PrsAwarded, first10ReviewsAwarded = :first10ReviewsAwarded',
+                        ExpressionAttributeValues: {
+                            ':prCount': contributor.prCount,
+                            ':reviewCount': contributor.reviewCount,
+                            ':first10PrsAwarded': contributor.first10PrsAwarded,
+                            ':first10ReviewsAwarded': contributor.first10ReviewsAwarded,
+                            ':first500PrsAwarded': contributor.first500PrsAwarded,
+                            ':first500ReviewsAwarded': contributor.first500ReviewsAwarded,
+                        },
+                    };
+                    await dbClient.update(updateParams).promise();
+                } else {
+                    await contributor.save();
+                }
+            }
+        }
+    } catch (err) {
+        console.error('Error awarding Bills and Vonettes', err);
+    }
+    return results;
+};

@@ -8,6 +8,8 @@ const ContributorSchema = new mongoose.Schema({
     lastUpdated: { type: Date, default: Date.now },
     first10PrsAwarded: { type: Boolean, default: false },
     first10ReviewsAwarded: { type: Boolean, default: false },
+    first500PrsAwarded: { type: Boolean, default: false },
+    first500ReviewsAwarded: { type: Boolean, default: false },
 });
 
 const Contributor = mongoose.model('Contributor', ContributorSchema);

@@ -4,7 +4,9 @@ import rateLimit from 'express-rate-limit';
 import helmet from 'helmet';
 import mongoSanitize from 'express-mongo-sanitize';
 import cors from 'cors';
+import cron from 'node-cron';
 import contributorRoutes from './routes/contributorRoutes.js';
+import { awardBillsAndVonettes, fetchPRs, fetchReviewsData, awardContributorBadges } from './controllers/contributorController.js';
 
 dotenv.config();
 
@@ -42,6 +44,38 @@ app.use(limiter);
 
 app.use(express.static('public'));
 app.use('/api', contributorRoutes);
+
+// Schedule tasks to be run on the server
+cron.schedule('0 * * * *', async () => {
+    console.log('Running a task every hour to fetch PRs and reviews');
+    try {
+        await fetchPRs();
+        await fetchReviewsData();
+        console.log('Data fetched successfully');
+    } catch (error) {
+        console.error('Error fetching data:', error);
+    }
+});
+
+cron.schedule('0 0 * * *', async () => {
+    console.log('Running a task daily to award badges');
+    try {
+        await awardContributorBadges();
+        console.log('Badges awarded successfully');
+    } catch (error) {
+        console.error('Error awarding badges:', error);
+    }
+});
+
+cron.schedule('0 0 * * *', async () => {
+    console.log('Running a task daily to award Bills and Vonettes');
+    try {
+        await awardBillsAndVonettes();
+        console.log('Bills and Vonettes awarded successfully');
+    } catch (error) {
+        console.error('Error awarding Bills and Vonettes:', error);
+    }
+});
 
 app.listen(port, () => {
     console.log(`GitHub PR Scoreboard app listening on http://localhost:${port}`);
