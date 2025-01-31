@@ -8,7 +8,7 @@ import {
     awardContributorBadges,
     topContributors,
     topReviewers,
-    awardBillsAndVonettes
+    awardBillsAndVonettesController
 } from '../controllers/contributorController.js';
 
 const router = express.Router();

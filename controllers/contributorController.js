@@ -47,7 +47,7 @@ export const topReviewers = async (req, res) => {
     }
 };
 
-export const awardBillsAndVonettes = async (req, res) => {
+export const awardBillsAndVonettesController = async (req, res) => {
     const pullRequestNumber = req.query.pull_request_number;
     const test = req.query.test === 'true';
     try {

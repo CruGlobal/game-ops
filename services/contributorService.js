@@ -233,11 +233,12 @@ export const awardBillsAndVonettes = async (pullRequestNumber = null, test = fal
                 badgeAwarded = 'Bill';
                 badgeImage = '1_bill_57X27.png';
                 contributor.first10ReviewsAwarded = true;
-            } else if ((contributor.prCount >= 500 || contributor.reviewCount >= 500) && !contributor.first500PrsAwarded || !contributor.first500ReviewsAwarded) {
+            } else if ((contributor.prCount >= 500 || contributor.reviewCount >= 500) && (!contributor.first500PrsAwarded || !contributor.first500ReviewsAwarded)) {
                 badgeAwarded = 'Vonette';
                 badgeImage = '5_vonett_57_25.png';
-                contributor.first500Awarded = true;
+                contributor.first500PrsAwarded = true;
                 contributor.first500ReviewsAwarded = true;
+            }
 
             if (badgeAwarded) {
                 await octokit.rest.issues.createComment({
@@ -253,7 +254,7 @@ export const awardBillsAndVonettes = async (pullRequestNumber = null, test = fal
                     const updateParams = {
                         TableName: 'Contributors',
                         Key: { username: contributor.username },
-                        UpdateExpression: 'set prCount = :prCount, reviewCount = :reviewCount, first10PrsAwarded = :first10PrsAwarded, first10ReviewsAwarded = :first10ReviewsAwarded',
+                        UpdateExpression: 'set prCount = :prCount, reviewCount = :reviewCount, first10PrsAwarded = :first10PrsAwarded, first10ReviewsAwarded = :first10ReviewsAwarded, first500PrsAwarded = :first500PrsAwarded, first500ReviewsAwarded = :first500ReviewsAwarded',
                         ExpressionAttributeValues: {
                             ':prCount': contributor.prCount,
                             ':reviewCount': contributor.reviewCount,

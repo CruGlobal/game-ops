@@ -6,7 +6,7 @@ import mongoSanitize from 'express-mongo-sanitize';
 import cors from 'cors';
 import cron from 'node-cron';
 import contributorRoutes from './routes/contributorRoutes.js';
-import { awardBillsAndVonettes, fetchPRs, fetchReviewsData, awardContributorBadges } from './controllers/contributorController.js';
+import { awardBillsAndVonettesController, fetchPRs, fetchReviewsData, awardContributorBadges } from './controllers/contributorController.js';
 
 dotenv.config();
 
