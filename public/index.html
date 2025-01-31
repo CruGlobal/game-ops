@@ -1,80 +1,86 @@
 <!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GitHub PR Scoreboard</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 0;
-            background-color: #f4f4f4;
-        }
-        .container {
-            width: 80%;
-            margin: 0 auto;
-            padding: 20px;
-        }
-        h1 {
-            text-align: center;
-            color: #333;
-        }
-        .card {
-            background-color: #fff;
-            border-radius: 5px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-            margin: 20px 0;
-            padding: 20px;
-        }
-        .card h2 {
-            margin-top: 0;
-        }
-        .list {
-            list-style: none;
-            padding: 0;
-        }
-        .list li {
-            display: flex;
-            align-items: center;
-            padding: 10px;
-            border-bottom: 1px solid #ddd;
-        }
-        .list li:last-child {
-            border-bottom: none;
-        }
-        .list img {
-            border-radius: 50%;
-            margin-right: 10px;
-        }
-        .list .details {
-            display: flex;
-            flex-direction: column;
-        }
-        .list .details .name {
-            font-weight: bold;
-        }
-        .list .details .total {
-            color: #666;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>GitHub PR Scoreboard</h1>
-        <div class="card">
-            <h2>Top Contributors</h2>
-            <ul class="list" id="top-contributors">
-                <!-- Top contributors will be populated here -->
-            </ul>
-        </div>
-        <div class="card">
-            <h2>Top Reviewers</h2>
-            <ul class="list" id="top-reviewers">
-                <!-- Top reviewers will be populated here -->
-            </ul>
-        </div>
-    </div>
-    <script src="scripts.js"></script>
-</body>
-</html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>GitHub PR Scoreboard</title>
+            <style>
+                body {
+                    font-family: Arial, sans-serif;
+                    margin: 0;
+                    padding: 0;
+                    background-color: #f4f4f4;
+                }
+                .container {
+                    width: 80%;
+                    margin: 0 auto;
+                    padding: 20px;
+                }
+                h1 {
+                    text-align: center;
+                    color: #333;
+                }
+                .card {
+                    background-color: #fff;
+                    border-radius: 5px;
+                    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+                    margin: 20px 0;
+                    padding: 20px;
+                }
+                .card h2 {
+                    margin-top: 0;
+                }
+                .list {
+                    list-style: none;
+                    padding: 0;
+                }
+                .list li {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    padding: 10px;
+                    border-bottom: 1px solid #ddd;
+                }
+                .list li:last-child {
+                    border-bottom: none;
+                }
+                .list img {
+                    border-radius: 50%;
+                    margin-right: 10px;
+                }
+                .list .details {
+                    display: flex;
+                    align-items: center;
+                    flex: 1;
+                }
+                .list .details .name {
+                    font-weight: bold;
+                    flex: 1;
+                    text-align: left;
+                }
+                .list .total {
+                    color: #666;
+                    text-align: right;
+                    flex: 1;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h1>GitHub PR Scoreboard</h1>
+                <div class="card">
+                    <h2>Top Contributors</h2>
+                    <ul class="list" id="top-contributors">
+                        <!-- Top contributors will be populated here -->
+                    </ul>
+                </div>
+                <div class="card">
+                    <h2>Top Reviewers</h2>
+                    <ul class="list" id="top-reviewers">
+                        <!-- Top reviewers will be populated here -->
+                    </ul>
+                </div>
+            </div>
+            <script src="scripts.js"></script>
+        </body>
+        </html>
