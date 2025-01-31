@@ -20,10 +20,14 @@ async function fetchTopContributors() {
         contributors.forEach(contributor => {
             const listItem = document.createElement('li');
             listItem.innerHTML = `
-                <img src="${contributor.avatarUrl}" alt="${contributor.username}" width="50" height="50" class="profile-picture">
-                <div class="details">
+                <div class="profile">
+                    <img src="${contributor.avatarUrl}" alt="${contributor.username}" width="50" height="50" class="profile-picture">
                     <span class="name">${contributor.username}</span>
-                    <span class="total">PRs: ${contributor.prCount}</span>
+                </div>
+                <div class="pr-count">PRs: ${contributor.prCount}</div>
+                <div class="badges">
+                    <img src="/images/github.png" alt="GitHub Badge" class="badge">
+                    ${contributor.badgeImage ? `<img src="/images/${contributor.badgeImage}" alt="Badge" class="badge">` : ''}
                 </div>
             `;
             list.appendChild(listItem);
@@ -41,10 +45,14 @@ async function fetchTopReviewers() {
         reviewers.forEach(reviewer => {
             const listItem = document.createElement('li');
             listItem.innerHTML = `
-                <img src="${reviewer.avatarUrl}" alt="${reviewer.username}" width="50" height="50" class="profile-picture">
-                <div class="details">
+                <div class="profile">
+                    <img src="${reviewer.avatarUrl}" alt="${reviewer.username}" width="50" height="50" class="profile-picture">
                     <span class="name">${reviewer.username}</span>
-                    <span class="total">Reviews: ${reviewer.reviewCount}</span>
+                </div>
+                <div class="pr-count">Reviews: ${reviewer.reviewCount}</div>
+                <div class="badges">
+                    <img src="/images/github.png" alt="GitHub Badge" class="badge">
+                    ${reviewer.badgeImage ? `<img src="/images/${reviewer.badgeImage}" alt="Badge" class="badge">` : ''}
                 </div>
             `;
             list.appendChild(listItem);
