@@ -14,7 +14,7 @@ function setDefaultImage(img) {
 
 async function fetchTopContributors() {
     try {
-        const response = await fetch('/top-contributors');
+        const response = await fetch('/api/top-contributors');
         const contributors = await response.json();
         const list = document.getElementById('top-contributors');
         contributors.forEach(contributor => {
@@ -35,7 +35,7 @@ async function fetchTopContributors() {
 
 async function fetchTopReviewers() {
     try {
-        const response = await fetch('/top-reviewers');
+        const response = await fetch('/api/top-reviewers');
         const reviewers = await response.json();
         const list = document.getElementById('top-reviewers');
         reviewers.forEach(reviewer => {
