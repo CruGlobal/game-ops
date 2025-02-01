@@ -9,43 +9,33 @@
 <body>
 <div class="container">
     <h1>GitHub Scoreboard</h1>
-    <div class="card">
-        <h2>Top Contributors</h2>
-        <div class="list-header">
-            <div class="profile-column">
-                <div class="profile">Contributor</div>
-            </div>
-            <div class="pr-count-column">
-                <div class="pr-count">Pull Requests</div>
-            </div>
-            <div class="total-bills-column">
-                <div class="total-bills">Total Bills Awarded</div>
-            </div>
-            <div class="badges-column">
-                <div class="badges"><a href="badges.html">Badges</a></div>
-            </div>
-        </div>
-        <ul class="list" id="top-contributors">
-        </ul>
+    <div class="tabs">
+        <button class="tab-button active" data-tab="contributors">Top Contributors</button>
+        <button class="tab-button" data-tab="reviewers">Top Reviewers</button>
     </div>
-    <div class="card">
-        <h2>Top Reviewers</h2>
-        <div class="list-header">
-            <div class="profile-column">
-                <div class="profile">Reviewer</div>
+    <div class="tab-content" id="contributors">
+        <div class="card">
+            <h2>Top Contributors</h2>
+            <div class="list-header">
+                <div class="profile-column">Contributor</div>
+                <div class="pr-count-column">Pull Requests</div>
+                <div class="total-bills-column">Total Bills Awarded</div>
+                <div class="badges-column"><a href="badges.html">Badges</a></div>
             </div>
-            <div class="review-count-column">
-                <div class="review-count">Reviews</div>
-            </div>
-            <div class="total-bills-column">
-                <div class="total-bills">Total Bills Awarded</div>
-            </div>
-            <div class="badges-column">
-                <div class="badges"><a href="badges.html">Badges</a></div>
-            </div>
+            <ul class="list" id="top-contributors"></ul>
         </div>
-        <ul class="list" id="top-reviewers">
-        </ul>
+    </div>
+    <div class="tab-content" id="reviewers">
+        <div class="card">
+            <h2>Top Reviewers</h2>
+            <div class="list-header">
+                <div class="profile-column">Reviewer</div>
+                <div class="review-count-column">Reviews</div>
+                <div class="total-bills-column">Total Bills Awarded</div>
+                <div class="badges-column"><a href="badges.html">Badges</a></div>
+            </div>
+            <ul class="list" id="top-reviewers"></ul>
+        </div>
     </div>
 </div>
 <script src="scripts.js"></script>

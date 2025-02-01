@@ -19,50 +19,38 @@ document.addEventListener('DOMContentLoaded', async () => {
     };
 
     const createContributorListItem = (contributor) => {
-            const listItem = document.createElement('li');
-            listItem.className = 'list-item';
-            listItem.innerHTML = `
-                <div class="profile-column">
-                    <div class="profile">
-                        <img src="${contributor.avatarUrl}" alt="${contributor.username}" width="50" height="50" class="profile-picture">
-                        <span>${contributor.username}</span>
-                    </div>
+        const listItem = document.createElement('li');
+        listItem.className = 'list-item';
+        listItem.innerHTML = `
+            <div class="profile-column">
+                <div class="profile">
+                    <img src="${contributor.avatarUrl}" alt="${contributor.username}" width="50" height="50" class="profile-picture">
+                    <span>${contributor.username}</span>
                 </div>
-                <div class="pr-count-column">
-                    <div class="pr-count">${contributor.prCount || 0}</div>
-                </div>
-                <div class="total-bills-column">
-                    <div class="total-bills">${contributor.totalBillsAwarded || 0}</div>
-                </div>
-                <div class="badges-column">
-                    <div class="badges">${(contributor.badges || []).map(badge => `<img src="/images/badges/${badge.badge.replace(/ /g, '_').toLowerCase()}.png" alt="${badge.badge}" class="badge">`).join('')}</div>
-                </div>
-            `;
-            return listItem;
-        };
+            </div>
+            <div class="pr-count-column">${contributor.prCount || 0}</div>
+            <div class="total-bills-column">${contributor.totalBillsAwarded || 0}</div>
+            <div class="badges-column">${(contributor.badges || []).map(badge => /pr|prs/i.test(badge.badge) ? `<img src="/images/badges/${badge.badge.replace(/ /g, '_').toLowerCase()}.png" alt="${badge.badge}" class="badge">` : '').join('')}</div>
+        `;
+        return listItem;
+    };
 
-        const createReviewerListItem = (reviewer) => {
-            const listItem = document.createElement('li');
-            listItem.className = 'list-item';
-            listItem.innerHTML = `
-                <div class="profile-column">
-                    <div class="profile">
-                        <img src="${reviewer.avatarUrl}" alt="${reviewer.username}" width="50" height="50" class="profile-picture">
-                        <span>${reviewer.username}</span>
-                    </div>
+    const createReviewerListItem = (reviewer) => {
+        const listItem = document.createElement('li');
+        listItem.className = 'list-item';
+        listItem.innerHTML = `
+            <div class="profile-column">
+                <div class="profile">
+                    <img src="${reviewer.avatarUrl}" alt="${reviewer.username}" width="50" height="50" class="profile-picture">
+                    <span>${reviewer.username}</span>
                 </div>
-                <div class="review-count-column">
-                    <div class="review-count">${reviewer.reviewCount || 0}</div>
-                </div>
-                <div class="total-bills-column">
-                    <div class="total-bills">${reviewer.totalBillsAwarded || 0}</div>
-                </div>
-                <div class="badges-column">
-                    <div class="badges">${(reviewer.badges || []).map(badge => `<img src="/images/badges/${badge.badge.replace(/ /g, '_').toLowerCase()}.png" alt="${badge.badge}" class="badge">`).join('')}</div>
-                </div>
-            `;
-            return listItem;
-        };
+            </div>
+            <div class="review-count-column">${reviewer.reviewCount || 0}</div>
+            <div class="total-bills-column">${reviewer.totalBillsAwarded || 0}</div>
+            <div class="badges-column">${(reviewer.badges || []).map(badge => /review|reviews/i.test(badge.badge) ? `<img src="/images/badges/${badge.badge.replace(/ /g, '_').toLowerCase()}.png" alt="${badge.badge}" class="badge">` : '').join('')}</div>
+        `;
+        return listItem;
+    };
 
     try {
         const [topContributors, topReviewers] = await Promise.all([fetchTopContributors(), fetchTopReviewers()]);
@@ -77,4 +65,21 @@ document.addEventListener('DOMContentLoaded', async () => {
     } catch (error) {
         console.error('Error fetching contributors or reviewers:', error);
     }
+
+    // Tab switching logic
+    const tabButtons = document.querySelectorAll('.tab-button');
+    const tabContents = document.querySelectorAll('.tab-content');
+
+    tabButtons.forEach(button => {
+        button.addEventListener('click', () => {
+            tabButtons.forEach(btn => btn.classList.remove('active'));
+            tabContents.forEach(content => content.classList.remove('active'));
+
+            button.classList.add('active');
+            document.getElementById(button.dataset.tab).classList.add('active');
+        });
+    });
+
+    // Show the default tab
+    document.querySelector('.tab-button[data-tab="contributors"]').click();
 });
