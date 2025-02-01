@@ -223,13 +223,13 @@ export const getTopContributors = async () => {
             TableName: 'Contributors',
             FilterExpression: 'NOT contains(username, :bot)',
             ExpressionAttributeValues: { ':bot': '[bot]' },
-            ProjectionExpression: 'username, prCount, avatarUrl, badges',
+            ProjectionExpression: 'username, prCount, avatarUrl, badges, totalBillsAwarded',
             Limit: 10,
         };
         const data = await dbClient.scan(params).promise();
         contributors = data.Items.sort((a, b) => b.prCount - a.prCount);
     } else {
-        contributors = await Contributor.find({ username: { $not: /\[bot\]$/ } }).sort({ prCount: -1 }).limit(10).select('username prCount avatarUrl badges');
+        contributors = await Contributor.find({ username: { $not: /\[bot\]$/ } }).sort({ prCount: -1 }).limit(10).select('username prCount avatarUrl badges totalBillsAwarded');
     }
     return contributors;
 };
@@ -241,13 +241,13 @@ export const getTopReviewers = async () => {
             TableName: 'Contributors',
             FilterExpression: 'NOT contains(username, :bot)',
             ExpressionAttributeValues: { ':bot': '[bot]' },
-            ProjectionExpression: 'username, reviewCount, avatarUrl, badges',
+            ProjectionExpression: 'username, reviewCount, avatarUrl, badges,totalBillsAwarded',
             Limit: 10,
         };
         const data = await dbClient.scan(params).promise();
         reviewers = data.Items.sort((a, b) => b.reviewCount - a.reviewCount);
     } else {
-        reviewers = await Contributor.find({ username: { $not: /\[bot\]$/ } }).sort({ reviewCount: -1 }).limit(10).select('username reviewCount avatarUrl badges');
+        reviewers = await Contributor.find({ username: { $not: /\[bot\]$/ } }).sort({ reviewCount: -1 }).limit(10).select('username reviewCount avatarUrl badges totalBillsAwarded');
     }
     return reviewers;
 };
