@@ -134,33 +134,79 @@ export const awardBadges = async (pullRequestNumber = null, test = false) => {
             if (/\[bot\]$/.test(contributor.username)) {
                 continue;
             }
-            let badgeAwarded = 'github badge';
-            let badgeImage = 'github.png';
+            let badgeAwarded = null;
+            let badgeImage = null;
 
-            await octokit.rest.issues.createComment({
-                owner: repoOwner,
-                repo: repoName,
-                issue_number: pullRequestNumber || contributor.lastPR,
-                body: `🎉 Congratulations @${contributor.username}, you've earned a GitHub badge! 🎉\n\n![GitHub Badge](${domain}/images/github.png)`,
-            });
+            if (contributor.prCount >= 1 && !contributor.firstPrAwarded) {
+                badgeAwarded = '1st PR badge';
+                badgeImage = '1st_pr_badge.png';
+                contributor.firstPrAwarded = true;
+            } else if (contributor.reviewCount >= 1 && !contributor.firstReviewAwarded) {
+                badgeAwarded = '1st Review badge';
+                badgeImage = '1st_review_badge.png';
+                contributor.firstReviewAwarded = true;
+            } else if (contributor.prCount >= 10 && !contributor.first10PrsAwarded) {
+                badgeAwarded = '10 PRs badge';
+                badgeImage = '10th_pr_badge.png';
+                contributor.first10PrsAwarded = true;
+            } else if (contributor.reviewCount >= 10 && !contributor.first10ReviewsAwarded) {
+                badgeAwarded = '10 Reviews badge';
+                badgeImage = '10th_review_badge.png';
+                contributor.first10ReviewsAwarded = true;
+            } else if (contributor.prCount >= 500 && !contributor.first500PrsAwarded) {
+                badgeAwarded = '500 PRs badge';
+                badgeImage = '500th_pr_badge.png';
+                contributor.first500PrsAwarded = true;
+            } else if (contributor.reviewCount >= 500 && !contributor.first500ReviewsAwarded) {
+                badgeAwarded = '500 Reviews badge';
+                badgeImage = '500th_review_badge.png';
+                contributor.first500ReviewsAwarded = true;
+            } else if (contributor.prCount >= 1000 && !contributor.first1000PrsAwarded) {
+                badgeAwarded = '1000 PRs badge';
+                badgeImage = '1000th_pr_badge.png';
+                contributor.first1000PrsAwarded = true;
+            } else if (contributor.reviewCount >= 1000 && !contributor.first1000ReviewsAwarded) {
+                badgeAwarded = '1000 Reviews badge';
+                badgeImage = '1000th_reviews_badge.png';
+                contributor.first1000ReviewsAwarded = true;
+            }
 
-            results.push({ username: contributor.username, badge: badgeAwarded, badgeImage: badgeImage });
+            if (badgeAwarded) {
+                await octokit.rest.issues.createComment({
+                    owner: repoOwner,
+                    repo: repoName,
+                    issue_number: pullRequestNumber || contributor.lastPR,
+                    body: `🎉 Congratulations @${contributor.username}, you''ve earned the ${badgeAwarded}! 🎉\n\n![Badge](${domain}/images/${badgeImage})`,
+                });
 
-            if (process.env.NODE_ENV === 'production') {
-                const updateParams = {
-                    TableName: 'Contributors',
-                    Key: { username: contributor.username },
-                    UpdateExpression: 'set prCount = :prCount, reviewCount = :reviewCount, first10PrsAwarded = :first10PrsAwarded, first10ReviewsAwarded = :first10ReviewsAwarded',
-                    ExpressionAttributeValues: {
-                        ':prCount': contributor.prCount,
-                        ':reviewCount': contributor.reviewCount,
-                        ':first10PrsAwarded': contributor.first10PrsAwarded,
-                        ':first10ReviewsAwarded': contributor.first10ReviewsAwarded,
-                    },
-                };
-                await dbClient.update(updateParams).promise();
-            } else {
-                await contributor.save();
+                results.push({ username: contributor.username, badge: badgeAwarded, badgeImage: badgeImage });
+
+                if (process.env.NODE_ENV === 'production') {
+                    const updateParams = {
+                        TableName: 'Contributors',
+                        Key: { username: contributor.username },
+                        UpdateExpression: 'set prCount = :prCount, reviewCount = :reviewCount, firstPrAwarded = :firstPrAwarded, firstReviewAwarded = :firstReviewAwarded, first10PrsAwarded = :first10PrsAwarded, first10ReviewsAwarded = :first10ReviewsAwarded, first500PrsAwarded = :first500PrsAwarded, first500ReviewsAwarded = :first500ReviewsAwarded, first1000PrsAwarded = :first1000PrsAwarded, first1000ReviewsAwarded = :first1000ReviewsAwarded, badges = list_append(if_not_exists(badges, :empty_list), :new_badge)',
+                        ExpressionAttributeValues: {
+                            ':prCount': contributor.prCount,
+                            ':reviewCount': contributor.reviewCount,
+                            ':firstPrAwarded': contributor.firstPrAwarded,
+                            ':firstReviewAwarded': contributor.firstReviewAwarded,
+                            ':first10PrsAwarded': contributor.first10PrsAwarded,
+                            ':first10ReviewsAwarded': contributor.first10ReviewsAwarded,
+                            ':first500PrsAwarded': contributor.first500PrsAwarded,
+                            ':first500ReviewsAwarded': contributor.first500ReviewsAwarded,
+                            ':first1000PrsAwarded': contributor.first1000PrsAwarded,
+                            ':first1000ReviewsAwarded': contributor.first1000ReviewsAwarded,
+                            ':empty_list': [],
+                            ':new_badge': [{ badge: badgeAwarded, date: new Date().toISOString() }],
+                        },
+                    };
+                    await dbClient.update(updateParams).promise();
+                } else {
+                    contributor.badges = contributor.badges || [];
+                    contributor.badges.push({ badge: badgeAwarded, date: new Date().toISOString() });
+                    await contributor.save();
+                }
             }
         }
     } catch (err) {
@@ -222,50 +268,60 @@ export const awardBillsAndVonettes = async (pullRequestNumber = null, test = fal
                 continue;
             }
 
-            let badgeAwarded = null;
-            let badgeImage = null;
+            let billsAwarded = null;
+            let billsImage = null;
+            let billsValue = 0;
 
             if (contributor.prCount >= 10 && !contributor.first10PrsAwarded) {
-                badgeAwarded = 'Bill';
-                badgeImage = '1_bill_57X27.png';
+                billsAwarded = 'Bill';
+                billsImage = '1_bill_57X27.png';
+                billsValue += 1;
                 contributor.first10PrsAwarded = true;
             } else if (contributor.reviewCount >= 10 && !contributor.first10ReviewsAwarded) {
-                badgeAwarded = 'Bill';
-                badgeImage = '1_bill_57X27.png';
+                billsAwarded = 'Bill';
+                billsImage = '1_bill_57X27.png';
+                billsValue += 1;
                 contributor.first10ReviewsAwarded = true;
             } else if ((contributor.prCount >= 500 || contributor.reviewCount >= 500) && (!contributor.first500PrsAwarded || !contributor.first500ReviewsAwarded)) {
-                badgeAwarded = 'Vonette';
-                badgeImage = '5_vonett_57_25.png';
-                contributor.first500PrsAwarded = true;
-                contributor.first500ReviewsAwarded = true;
+                billsAwarded = 'Vonette';
+                billsImage = '5_vonett_57_25.png';
+                billsValue += 5;
+                if (contributor.prCount >= 500) contributor.first500PrsAwarded = true;
+                if (contributor.reviewCount >= 500) contributor.first500ReviewsAwarded = true;
             }
 
-            if (badgeAwarded) {
+            const totalContributions = contributor.prCount + contributor.reviewCount;
+            const newBills = Math.floor(totalContributions / 100) - (contributor.totalBillsAwarded || 0);
+
+            if (newBills > 0) {
+                billsAwarded = 'Bill';
+                billsImage = '1_bill_57X27.png';
+                billsValue += newBills;
+            }
+
+            if (billsValue > 0) {
                 await octokit.rest.issues.createComment({
                     owner: repoOwner,
                     repo: repoName,
                     issue_number: pullRequestNumber || contributor.lastPR,
-                    body: `🎉 Congratulations @${contributor.username}, you've earned a ${badgeAwarded}! 🎉\n\n![${badgeAwarded}](${domain}/images/${badgeImage})`,
+                    body: `🎉 Congratulations @${contributor.username}, you've earned ${billsValue} ${billsAwarded}(s)! 🎉\n\n![${billsAwarded}](${domain}/images/${billsImage})`,
                 });
 
-                results.push({ username: contributor.username, badge: badgeAwarded, badgeImage: badgeImage });
+                results.push({ username: contributor.username, bills: billsAwarded, billsImage: billsImage });
 
                 if (process.env.NODE_ENV === 'production') {
                     const updateParams = {
                         TableName: 'Contributors',
                         Key: { username: contributor.username },
-                        UpdateExpression: 'set prCount = :prCount, reviewCount = :reviewCount, first10PrsAwarded = :first10PrsAwarded, first10ReviewsAwarded = :first10ReviewsAwarded, first500PrsAwarded = :first500PrsAwarded, first500ReviewsAwarded = :first500ReviewsAwarded',
+                        UpdateExpression: 'set totalBillsAwarded = if_not_exists(totalBillsAwarded, :start) + :billsValue',
                         ExpressionAttributeValues: {
-                            ':prCount': contributor.prCount,
-                            ':reviewCount': contributor.reviewCount,
-                            ':first10PrsAwarded': contributor.first10PrsAwarded,
-                            ':first10ReviewsAwarded': contributor.first10ReviewsAwarded,
-                            ':first500PrsAwarded': contributor.first500PrsAwarded,
-                            ':first500ReviewsAwarded': contributor.first500ReviewsAwarded,
+                            ':start': 0,
+                            ':billsValue': billsValue,
                         },
                     };
                     await dbClient.update(updateParams).promise();
                 } else {
+                    contributor.totalBillsAwarded = (contributor.totalBillsAwarded || 0) + billsValue;
                     await contributor.save();
                 }
             }
