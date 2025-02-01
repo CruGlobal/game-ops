@@ -1,7 +1,8 @@
 import express from 'express';
-import fs from 'fs';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
+import Contributor from '../models/contributor.js';
 import {
     fetchPRs,
     fetchReviewsData,

@@ -1,76 +1,60 @@
-document.addEventListener('DOMContentLoaded', () => {
-    const images = document.querySelectorAll('.profile-picture');
-    images.forEach(img => {
-        img.addEventListener('error', () => {
-            setDefaultImage(img);
-        });
-    });
-});
+document.addEventListener('DOMContentLoaded', async () => {
+    const topContributorsList = document.getElementById('top-contributors');
+    const topReviewersList = document.getElementById('top-reviewers');
 
-function setDefaultImage(img) {
-    img.onerror = null; // Prevent infinite loop if the default image also fails
-    img.src = 'default-image.png'; // Set the path to your default image
-}
-
-async function fetchTopContributors() {
-    try {
+    const fetchTopContributors = async () => {
         const response = await fetch('/api/top-contributors');
-        const contributors = await response.json();
-        const list = document.getElementById('top-contributors');
-        contributors.forEach(contributor => {
-            const listItem = document.createElement('li');
-            listItem.innerHTML = `
-                <div class="profile">
-                    <img src="${contributor.avatarUrl}" alt="${contributor.username}" width="50" height="50" class="profile-picture">
-                    <span class="name">${contributor.username}</span>
-                </div>
-                <div class="pr-count">PRs: ${contributor.prCount}</div>
-                <div class="badges">
-                    <img src="/images/github.png" alt="GitHub Badge" class="badge">
-                    ${contributor.badgeImage ? `<img src="/images/${contributor.badgeImage}" alt="Badge" class="badge">` : ''}
-                </div>
-            `;
-            list.appendChild(listItem);
-        });
-    } catch (error) {
-        console.error('Error fetching top contributors:', error);
-    }
-}
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.json();
+    };
 
-async function fetchTopReviewers() {
-    try {
+    const fetchTopReviewers = async () => {
         const response = await fetch('/api/top-reviewers');
-        const reviewers = await response.json();
-        const list = document.getElementById('top-reviewers');
-        reviewers.forEach(reviewer => {
-            const listItem = document.createElement('li');
-            listItem.innerHTML = `
-                <div class="profile">
-                    <img src="${reviewer.avatarUrl}" alt="${reviewer.username}" width="50" height="50" class="profile-picture">
-                    <span class="name">${reviewer.username}</span>
-                </div>
-                <div class="pr-count">Reviews: ${reviewer.reviewCount}</div>
-                <div class="badges">
-                    <img src="/images/github.png" alt="GitHub Badge" class="badge">
-                    ${reviewer.badgeImage ? `<img src="/images/${reviewer.badgeImage}" alt="Badge" class="badge">` : ''}
-                </div>
-            `;
-            list.appendChild(listItem);
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.json();
+    };
+
+    const createContributorListItem = (contributor) => {
+        const listItem = document.createElement('li');
+        listItem.innerHTML = `
+            <div class="profile">
+                <img src="${contributor.avatarUrl}" alt="${contributor.username}" width="50" height="50" class="profile-picture">
+                <span>${contributor.username}</span>
+            </div>
+            <div class="pr-count">${contributor.prCount || 0}</div>
+            <div class="badges">${(contributor.badges || []).map(badge => `<img src="/images/badges/${badge.badge.replace(/ /g, '_').toLowerCase()}.png" alt="${badge.badge}" class="badge">`).join('')}</div>
+        `;
+        return listItem;
+    };
+
+    const createReviewerListItem = (reviewer) => {
+        const listItem = document.createElement('li');
+        listItem.innerHTML = `
+            <div class="profile">
+                <img src="${reviewer.avatarUrl}" alt="${reviewer.username}" width="50" height="50" class="profile-picture">
+                <span>${reviewer.username}</span>
+            </div>
+            <div class="review-count">${reviewer.reviewCount || 0}</div>
+            <div class="badges">${(reviewer.badges || []).map(badge => `<img src="/images/badges/${badge.badge.replace(/ /g, '_').toLowerCase()}.png" alt="${badge.badge}" class="badge">`).join('')}</div>
+        `;
+        return listItem;
+    };
+
+    try {
+        const [topContributors, topReviewers] = await Promise.all([fetchTopContributors(), fetchTopReviewers()]);
+
+        topContributors.forEach(contributor => {
+            topContributorsList.appendChild(createContributorListItem(contributor));
+        });
+
+        topReviewers.forEach(reviewer => {
+            topReviewersList.appendChild(createReviewerListItem(reviewer));
         });
     } catch (error) {
-        console.error('Error fetching top reviewers:', error);
+        console.error('Error fetching contributors or reviewers:', error);
     }
-}
-
-try {
-    localStorage.setItem('key', 'value');
-} catch (error) {
-    if (error instanceof DOMException && error.name === 'SecurityError') {
-        console.error('Access to storage is not allowed from this context.');
-    } else {
-        console.error('An unexpected error occurred:', error);
-    }
-}
-
-fetchTopContributors();
-fetchTopReviewers();
+});

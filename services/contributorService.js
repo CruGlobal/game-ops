@@ -172,12 +172,13 @@ export const awardBadges = async (pullRequestNumber = null, test = false) => {
             }
 
             if (badgeAwarded) {
-                await octokit.rest.issues.createComment({
-                    owner: repoOwner,
-                    repo: repoName,
-                    issue_number: pullRequestNumber || contributor.lastPR,
-                    body: `🎉 Congratulations @${contributor.username}, you''ve earned the ${badgeAwarded}! 🎉\n\n![Badge](${domain}/images/${badgeImage})`,
-                });
+                //await octokit.rest.issues.createComment({
+                //    owner: repoOwner,
+                //    repo: repoName,
+                //    issue_number: pullRequestNumber || contributor.lastPR,
+                //    body: `🎉 Congratulations @${contributor.username}, you''ve earned the ${badgeAwarded}! 🎉\n\n![Badge](${domain}/images/${badgeImage})`,
+                //});
+                console.log(`🎉 Congratulations @${contributor.username}, you''ve earned the ${badgeAwarded}! 🎉\n\n![Badge](${domain}/images/${badgeImage})`);
 
                 results.push({ username: contributor.username, badge: badgeAwarded, badgeImage: badgeImage });
 
@@ -222,13 +223,13 @@ export const getTopContributors = async () => {
             TableName: 'Contributors',
             FilterExpression: 'NOT contains(username, :bot)',
             ExpressionAttributeValues: { ':bot': '[bot]' },
-            ProjectionExpression: 'username, prCount, avatarUrl',
+            ProjectionExpression: 'username, prCount, avatarUrl, badges',
             Limit: 10,
         };
         const data = await dbClient.scan(params).promise();
         contributors = data.Items.sort((a, b) => b.prCount - a.prCount);
     } else {
-        contributors = await Contributor.find({ username: { $not: /\[bot\]$/ } }).sort({ prCount: -1 }).limit(10).select('username prCount avatarUrl');
+        contributors = await Contributor.find({ username: { $not: /\[bot\]$/ } }).sort({ prCount: -1 }).limit(10).select('username prCount avatarUrl badges');
     }
     return contributors;
 };
@@ -240,13 +241,13 @@ export const getTopReviewers = async () => {
             TableName: 'Contributors',
             FilterExpression: 'NOT contains(username, :bot)',
             ExpressionAttributeValues: { ':bot': '[bot]' },
-            ProjectionExpression: 'username, reviewCount, avatarUrl',
+            ProjectionExpression: 'username, reviewCount, avatarUrl, badges',
             Limit: 10,
         };
         const data = await dbClient.scan(params).promise();
         reviewers = data.Items.sort((a, b) => b.reviewCount - a.reviewCount);
     } else {
-        reviewers = await Contributor.find({ username: { $not: /\[bot\]$/ } }).sort({ reviewCount: -1 }).limit(10).select('username reviewCount avatarUrl');
+        reviewers = await Contributor.find({ username: { $not: /\[bot\]$/ } }).sort({ reviewCount: -1 }).limit(10).select('username reviewCount avatarUrl badges');
     }
     return reviewers;
 };
@@ -300,12 +301,13 @@ export const awardBillsAndVonettes = async (pullRequestNumber = null, test = fal
             }
 
             if (billsValue > 0) {
-                await octokit.rest.issues.createComment({
-                    owner: repoOwner,
-                    repo: repoName,
-                    issue_number: pullRequestNumber || contributor.lastPR,
-                    body: `🎉 Congratulations @${contributor.username}, you've earned ${billsValue} ${billsAwarded}(s)! 🎉\n\n![${billsAwarded}](${domain}/images/${billsImage})`,
-                });
+                //await octokit.rest.issues.createComment({
+                //    owner: repoOwner,
+                //    repo: repoName,
+                //    issue_number: pullRequestNumber || contributor.lastPR,
+                //    body: `🎉 Congratulations @${contributor.username}, you've earned ${billsValue} ${billsAwarded}(s)! 🎉\n\n![${billsAwarded}](${domain}/images/${billsImage})`,
+                //});
+                console.log(`🎉 Congratulations @${contributor.username}, you've earned ${billsValue} ${billsAwarded}(s)! 🎉\n\n![${billsAwarded}](${domain}/images/${billsImage})`);
 
                 results.push({ username: contributor.username, bills: billsAwarded, billsImage: billsImage });
 

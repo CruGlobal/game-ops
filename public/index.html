@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GitHub PR Scoreboard</title>
+    <title>GitHub Scoreboard</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -54,7 +54,7 @@
             border-radius: 50%;
             margin-right: 10px;
         }
-        .list .pr-count, .list .badges {
+        .list .pr-count, .list .badges, .list .review-count {
             text-align: center;
             flex: 1;
         }
@@ -70,11 +70,15 @@
             border-bottom: 2px solid #333;
             font-weight: bold;
         }
+        .list-header .pr-count, .list-header .review-count {
+            text-align: center;
+            flex: 1;
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>GitHub PR Scoreboard</h1>
+        <h1>GitHub Scoreboard</h1>
         <div class="card">
             <h2>Top Contributors</h2>
             <div class="list-header">
@@ -90,7 +94,7 @@
             <h2>Top Reviewers</h2>
             <div class="list-header">
                 <div class="profile">Reviewer</div>
-                <div class="pr-count">Reviews</div>
+                <div class="review-count">Reviews</div>
                 <div class="badges"><a href="badges.html">Badges</a></div>
             </div>
             <ul class="list" id="top-reviewers">
