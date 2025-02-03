@@ -11,6 +11,8 @@ import {
     topReviewers,
     awardBillsAndVonettesController
 } from '../controllers/contributorController.js';
+import { adminLogin, resetContributor } from '../controllers/adminController.js';
+
 
 const router = express.Router();
 const __filename = fileURLToPath(import.meta.url);
@@ -22,6 +24,9 @@ router.get('/award-badges', awardContributorBadges);
 router.get('/top-contributors', topContributors);
 router.get('/top-reviewers', topReviewers);
 router.get('/award-bills-vonettes', awardBillsAndVonettesController);
+
+router.post('/admin/login', adminLogin);
+router.post('/admin/reset-contributor', resetContributor);
 
 router.get('/badges', (req, res) => {
     const imagesDir = path.join(__dirname, '../public/images/badges');
