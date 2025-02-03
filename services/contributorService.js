@@ -5,6 +5,7 @@ import FetchDate from '../models/fetchDate.js';
 import mongoSanitize from 'express-mongo-sanitize';
 import fetch from 'node-fetch';
 
+// Initialize Octokit with GitHub token and custom fetch
 const octokit = new Octokit({
     auth: process.env.GITHUB_TOKEN,
     request: {
@@ -16,6 +17,7 @@ const repoOwner = process.env.REPO_OWNER;
 const repoName = process.env.REPO_NAME;
 const domain = process.env.DOMAIN;
 
+// Update contributor's PR or review count
 export const updateContributor = async (username, type) => {
     if (!['prCount', 'reviewCount'].includes(type)) {
         throw new Error('Invalid type');
@@ -49,15 +51,18 @@ export const updateContributor = async (username, type) => {
     }
 };
 
+// Get the last fetch date from the database
 const getLastFetchDate = async () => {
     const fetchDate = await FetchDate.findOne({}).sort({ date: -1 });
     return fetchDate ? fetchDate.date : new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
 };
 
+// Update the last fetch date in the database
 const updateLastFetchDate = async (date) => {
     await FetchDate.updateOne({}, { date: date }, { upsert: true });
 };
 
+// Fetch pull requests and update contributors' PR counts
 export const fetchPullRequests = async () => {
     try {
         const lastFetchDate = await getLastFetchDate();
@@ -86,6 +91,7 @@ export const fetchPullRequests = async () => {
     }
 };
 
+// Fetch reviews and update contributors' review counts
 export const fetchReviews = async () => {
     try {
         const lastFetchDate = await getLastFetchDate();
@@ -118,6 +124,7 @@ export const fetchReviews = async () => {
     }
 };
 
+// Award badges to contributors based on their contributions
 export const awardBadges = async (pullRequestNumber = null, test = false) => {
     const results = [];
     try {
@@ -172,12 +179,7 @@ export const awardBadges = async (pullRequestNumber = null, test = false) => {
             }
 
             if (badgeAwarded) {
-                //await octokit.rest.issues.createComment({
-                //    owner: repoOwner,
-                //    repo: repoName,
-                //    issue_number: pullRequestNumber || contributor.lastPR,
-                //    body: `🎉 Congratulations @${contributor.username}, you''ve earned the ${badgeAwarded}! 🎉\n\n![Badge](${domain}/images/${badgeImage})`,
-                //});
+                // Log the awarded badge (commented out GitHub API call)
                 console.log(`🎉 Congratulations @${contributor.username}, you''ve earned the ${badgeAwarded}! 🎉\n\n![Badge](${domain}/images/${badgeImage})`);
 
                 results.push({ username: contributor.username, badge: badgeAwarded, badgeImage: badgeImage });
@@ -216,6 +218,7 @@ export const awardBadges = async (pullRequestNumber = null, test = false) => {
     return results;
 };
 
+// Get the top contributors based on PR count
 export const getTopContributors = async () => {
     let contributors;
     if (process.env.NODE_ENV === 'production') {
@@ -234,6 +237,7 @@ export const getTopContributors = async () => {
     return contributors;
 };
 
+// Get the top reviewers based on review count
 export const getTopReviewers = async () => {
     let reviewers;
     if (process.env.NODE_ENV === 'production') {
@@ -252,6 +256,7 @@ export const getTopReviewers = async () => {
     return reviewers;
 };
 
+// Award bills and vonettes to contributors based on their contributions
 export const awardBillsAndVonettes = async (pullRequestNumber = null, test = false) => {
     const results = [];
     try {
@@ -301,12 +306,7 @@ export const awardBillsAndVonettes = async (pullRequestNumber = null, test = fal
             }
 
             if (billsValue > 0) {
-                //await octokit.rest.issues.createComment({
-                //    owner: repoOwner,
-                //    repo: repoName,
-                //    issue_number: pullRequestNumber || contributor.lastPR,
-                //    body: `🎉 Congratulations @${contributor.username}, you've earned ${billsValue} ${billsAwarded}(s)! 🎉\n\n![${billsAwarded}](${domain}/images/${billsImage})`,
-                //});
+                // Log the awarded bills and vonettes (commented out GitHub API call)
                 console.log(`🎉 Congratulations @${contributor.username}, you've earned ${billsValue} ${billsAwarded}(s)! 🎉\n\n![${billsAwarded}](${domain}/images/${billsImage})`);
 
                 results.push({ username: contributor.username, bills: billsAwarded, billsImage: billsImage });
