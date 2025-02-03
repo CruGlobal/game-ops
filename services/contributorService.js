@@ -154,27 +154,43 @@ export const awardBadges = async (pullRequestNumber = null, test = false) => {
                 contributor.firstReviewAwarded = true;
             } else if (contributor.prCount >= 10 && !contributor.first10PrsAwarded) {
                 badgeAwarded = '10 PRs badge';
-                badgeImage = '10th_pr_badge.png';
+                badgeImage = '10_pr_badge.png';
                 contributor.first10PrsAwarded = true;
             } else if (contributor.reviewCount >= 10 && !contributor.first10ReviewsAwarded) {
                 badgeAwarded = '10 Reviews badge';
-                badgeImage = '10th_review_badge.png';
+                badgeImage = '10_review_badge.png';
                 contributor.first10ReviewsAwarded = true;
+            } else if (contributor.prCount >= 50 && !contributor.first50PrsAwarded) {
+                badgeAwarded = '50 PRs badge';
+                badgeImage = '50_prs_badge.png';
+                contributor.first50PrsAwarded = true;
+            } else if (contributor.reviewCount >= 50 && !contributor.first50ReviewsAwarded) {
+                badgeAwarded = '50 Reviews badge';
+                badgeImage = '50_reviews_badge.png';
+                contributor.first50ReviewsAwarded = true;
+            } else if (contributor.prCount >= 100 && !contributor.first100PrsAwarded) {
+                badgeAwarded = '100 PRs badge';
+                badgeImage = '100_prs_badge.png';
+                contributor.first100PrsAwarded = true;
+            } else if (contributor.reviewCount >= 100 && !contributor.first100ReviewsAwarded) {
+                badgeAwarded = '100 Reviews badge';
+                badgeImage = '100_reviews_badge.png';
+                contributor.first100ReviewsAwarded = true;
             } else if (contributor.prCount >= 500 && !contributor.first500PrsAwarded) {
                 badgeAwarded = '500 PRs badge';
-                badgeImage = '500th_pr_badge.png';
+                badgeImage = '500_prs_badge.png';
                 contributor.first500PrsAwarded = true;
             } else if (contributor.reviewCount >= 500 && !contributor.first500ReviewsAwarded) {
                 badgeAwarded = '500 Reviews badge';
-                badgeImage = '500th_review_badge.png';
+                badgeImage = '500_reviews_badge.png';
                 contributor.first500ReviewsAwarded = true;
             } else if (contributor.prCount >= 1000 && !contributor.first1000PrsAwarded) {
                 badgeAwarded = '1000 PRs badge';
-                badgeImage = '1000th_pr_badge.png';
+                badgeImage = '1000_prs_badge.png';
                 contributor.first1000PrsAwarded = true;
             } else if (contributor.reviewCount >= 1000 && !contributor.first1000ReviewsAwarded) {
                 badgeAwarded = '1000 Reviews badge';
-                badgeImage = '1000th_reviews_badge.png';
+                badgeImage = '1000_reviews_badge.png';
                 contributor.first1000ReviewsAwarded = true;
             }
 
@@ -196,6 +212,10 @@ export const awardBadges = async (pullRequestNumber = null, test = false) => {
                             ':firstReviewAwarded': contributor.firstReviewAwarded,
                             ':first10PrsAwarded': contributor.first10PrsAwarded,
                             ':first10ReviewsAwarded': contributor.first10ReviewsAwarded,
+                            ':first50PrsAwarded': contributor.first50PrsAwarded,
+                            ':first50ReviewsAwarded': contributor.first50ReviewsAwarded,
+                            ':first100PrsAwarded': contributor.first100PrsAwarded,
+                            ':first100ReviewsAwarded': contributor.first100ReviewsAwarded,
                             ':first500PrsAwarded': contributor.first500PrsAwarded,
                             ':first500ReviewsAwarded': contributor.first500ReviewsAwarded,
                             ':first1000PrsAwarded': contributor.first1000PrsAwarded,
