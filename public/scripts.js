@@ -1,7 +1,10 @@
+// Wait for the DOM to be fully loaded before executing the script
 document.addEventListener('DOMContentLoaded', async () => {
+    // Get the elements where top contributors and top reviewers will be displayed
     const topContributorsList = document.getElementById('top-contributors');
     const topReviewersList = document.getElementById('top-reviewers');
 
+    // Function to fetch the top contributors from the server
     const fetchTopContributors = async () => {
         const response = await fetch('/api/top-contributors');
         if (!response.ok) {
@@ -10,6 +13,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         return response.json();
     };
 
+    // Function to fetch the top reviewers from the server
     const fetchTopReviewers = async () => {
         const response = await fetch('/api/top-reviewers');
         if (!response.ok) {
@@ -18,6 +22,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         return response.json();
     };
 
+    // Function to create a list item for a contributor
     const createContributorListItem = (contributor) => {
         const listItem = document.createElement('li');
         listItem.className = 'list-item';
@@ -35,6 +40,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         return listItem;
     };
 
+    // Function to create a list item for a reviewer
     const createReviewerListItem = (reviewer) => {
         const listItem = document.createElement('li');
         listItem.className = 'list-item';
@@ -53,16 +59,20 @@ document.addEventListener('DOMContentLoaded', async () => {
     };
 
     try {
+        // Fetch the top contributors and top reviewers concurrently
         const [topContributors, topReviewers] = await Promise.all([fetchTopContributors(), fetchTopReviewers()]);
 
+        // Populate the top contributors list
         topContributors.forEach(contributor => {
             topContributorsList.appendChild(createContributorListItem(contributor));
         });
 
+        // Populate the top reviewers list
         topReviewers.forEach(reviewer => {
             topReviewersList.appendChild(createReviewerListItem(reviewer));
         });
     } catch (error) {
+        // Log any errors that occur during the fetch operations
         console.error('Error fetching contributors or reviewers:', error);
     }
 
@@ -70,16 +80,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     const tabButtons = document.querySelectorAll('.tab-button');
     const tabContents = document.querySelectorAll('.tab-content');
 
+    // Add click event listeners to each tab button
     tabButtons.forEach(button => {
         button.addEventListener('click', () => {
+            // Remove the active class from all tab buttons and contents
             tabButtons.forEach(btn => btn.classList.remove('active'));
             tabContents.forEach(content => content.classList.remove('active'));
 
+            // Add the active class to the clicked tab button and corresponding content
             button.classList.add('active');
             document.getElementById(button.dataset.tab).classList.add('active');
         });
     });
 
-    // Show the default tab
+    // Show the default tab (contributors tab)
     document.querySelector('.tab-button[data-tab="contributors"]').click();
 });

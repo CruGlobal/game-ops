@@ -1,59 +1,65 @@
 import { awardBillsAndVonettes, fetchPullRequests, fetchReviews, awardBadges, getTopContributors, getTopReviewers } from '../services/contributorService.js';
 
+// Controller to fetch pull requests and update contributors' PR counts
 export const fetchPRs = async (req, res) => {
     try {
-        await fetchPullRequests();
+        await fetchPullRequests(); // Fetch pull requests and update data
         res.status(200).send('Pull requests fetched and data updated.');
     } catch (err) {
-        res.status(500).send('Error fetching pull requests.');
+        res.status(500).send('Error fetching pull requests.'); // Handle errors
     }
 };
 
+// Controller to fetch reviews and update contributors' review counts
 export const fetchReviewsData = async (req, res) => {
     try {
-        await fetchReviews();
+        await fetchReviews(); // Fetch reviews and update data
         res.status(200).send('Reviews fetched and data updated.');
     } catch (err) {
-        res.status(500).send('Error fetching reviews.');
+        res.status(500).send('Error fetching reviews.'); // Handle errors
     }
 };
 
+// Controller to award badges to contributors based on their contributions
 export const awardContributorBadges = async (req, res) => {
-    const pullRequestNumber = req.query.pull_request_number;
-    const test = req.query.test === 'true';
+    const pullRequestNumber = req.query.pull_request_number; // Get pull request number from query
+    const test = req.query.test === 'true'; // Check if test mode is enabled
     try {
-        const results = await awardBadges(pullRequestNumber, test);
+        const results = await awardBadges(pullRequestNumber, test); // Award badges
         res.status(200).json({ message: 'Badges awarded successfully.', results });
     } catch (err) {
-        res.status(500).json({ message: 'Error awarding badges.' });
+        res.status(500).json({ message: 'Error awarding badges.' }); // Handle errors
     }
 };
 
+// Controller to get the top contributors based on PR count
 export const topContributors = async (req, res) => {
     try {
-        const contributors = await getTopContributors();
+        const contributors = await getTopContributors(); // Get top contributors
         res.json(contributors);
     } catch (err) {
-        res.status(500).json({ error: 'Internal Server Error' });
+        res.status(500).json({ error: 'Internal Server Error' }); // Handle errors
     }
 };
 
+// Controller to get the top reviewers based on review count
 export const topReviewers = async (req, res) => {
     try {
-        const reviewers = await getTopReviewers();
+        const reviewers = await getTopReviewers(); // Get top reviewers
         res.json(reviewers);
     } catch (err) {
-        res.status(500).json({ error: 'Internal Server Error' });
+        res.status(500).json({ error: 'Internal Server Error' }); // Handle errors
     }
 };
 
+// Controller to award bills and vonettes to contributors based on their contributions
 export const awardBillsAndVonettesController = async (req, res) => {
-    const pullRequestNumber = req.query.pull_request_number;
-    const test = req.query.test === 'true';
+    const pullRequestNumber = req.query.pull_request_number; // Get pull request number from query
+    const test = req.query.test === 'true'; // Check if test mode is enabled
     try {
-        const results = await awardBillsAndVonettes(pullRequestNumber, test);
+        const results = await awardBillsAndVonettes(pullRequestNumber, test); // Award bills and vonettes
         res.status(200).json({ message: 'Bills and Vonettes awarded successfully.', results });
     } catch (err) {
-        res.status(500).json({ message: 'Error awarding Bills and Vonettes.' });
+        res.status(500).json({ message: 'Error awarding Bills and Vonettes.' }); // Handle errors
     }
 };
