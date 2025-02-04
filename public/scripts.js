@@ -4,18 +4,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     const topContributorsList = document.getElementById('top-contributors');
     const topReviewersList = document.getElementById('top-reviewers');
 
-    // Function to fetch the top contributors from the server
-    const fetchTopContributors = async () => {
-        const response = await fetch('/api/top-contributors');
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        return response.json();
-    };
-
-    // Function to fetch the top reviewers from the server
-    const fetchTopReviewers = async () => {
-        const response = await fetch('/api/top-reviewers');
+    // Reusable function to fetch data from a given URL
+    const fetchData = async (url) => {
+        const response = await fetch(url);
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
@@ -59,8 +50,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     };
 
     try {
-        // Fetch the top contributors and top reviewers concurrently
-        const [topContributors, topReviewers] = await Promise.all([fetchTopContributors(), fetchTopReviewers()]);
+        // Fetch the top contributors and top reviewers concurrently using the reusable fetchData function
+        const [topContributors, topReviewers] = await Promise.all([
+            fetchData('/api/top-contributors'),
+            fetchData('/api/top-reviewers')
+        ]);
 
         // Populate the top contributors list
         topContributors.forEach(contributor => {
