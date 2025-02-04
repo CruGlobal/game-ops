@@ -7,11 +7,15 @@ import cors from 'cors';
 import cron from 'node-cron';
 import contributorRoutes from './routes/contributorRoutes.js';
 import { awardBillsAndVonettesController, fetchPRs, fetchReviewsData, awardContributorBadges } from './controllers/contributorController.js';
+import { errorHandler } from './middleware/errorHandler.js';
+
 
 dotenv.config();
 
 const app = express();
 const port = 3000;
+
+app.use(errorHandler);
 
 app.use(express.json());
 
