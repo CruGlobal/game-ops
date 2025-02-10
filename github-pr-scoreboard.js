@@ -63,15 +63,15 @@ cron.schedule('0 * * * *', async () => {
     }
 });
 
-//cron.schedule('0 0 * * *', async () => {
-//    console.log('Running a task daily to award badges');
-//    try {
-//        await awardContributorBadges();
-//        console.log('Badges awarded successfully');
-//    } catch (error) {
-//        console.error('Error awarding badges:', error);
-//    }
-//});
+cron.schedule('0 0 * * *', async () => {
+    console.log('Running a task daily to award badges');
+    try {
+        await awardContributorBadges();
+        console.log('Badges awarded successfully');
+    } catch (error) {
+        console.error('Error awarding badges:', error);
+    }
+});
 
 //cron.schedule('0 0 * * *', async () => {
 //    console.log('Running a task daily to award Bills and Vonettes');

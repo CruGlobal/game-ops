@@ -1,34 +1,14 @@
+// adminController.js
 import Contributor from '../models/contributor.js';
 import { body, validationResult } from 'express-validator';
-
-// Retrieve the admin password from environment variables
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
-
-// Admin login function
-export const adminLogin = [
-    body('password').isString().trim().notEmpty(),
-    (req, res) => {
-        const errors = validationResult(req);
-        if (!errors.isEmpty()) {
-            return res.status(400).json({ errors: errors.array() });
-        }
-
-        const { password } = req.body; // Extract password from request body
-        if (password === ADMIN_PASSWORD) { // Check if the provided password matches the admin password
-            res.status(200).send('Login successful'); // Send success response if passwords match
-        } else {
-            res.status(401).send('Invalid password'); // Send unauthorized response if passwords do not match
-        }
-    }
-];
 
 // Function to get all contributors
 export const getContributors = async (req, res) => {
     try {
-        const contributors = await Contributor.find(); // Fetch all contributors from the database
-        res.status(200).json(contributors); // Send the list of contributors as a JSON response
+        const contributors = await Contributor.find();
+        res.status(200).json(contributors);
     } catch (err) {
-        res.status(500).send('Error fetching contributors'); // Send error response if fetching fails
+        res.status(500).send('Error fetching contributors');
     }
 };
 
@@ -41,13 +21,12 @@ export const resetContributor = [
             return res.status(400).json({ errors: errors.array() });
         }
 
-        const { username } = req.body; // Extract username from request body
+        const { username } = req.body;
         try {
-            const contributor = await Contributor.findOne({ username }); // Find the contributor by username
+            const contributor = await Contributor.findOne({ username });
             if (!contributor) {
-                return res.status(404).send('Contributor not found'); // Send not found response if contributor does not exist
+                return res.status(404).send('Contributor not found');
             }
-            // Reset all award flags and badges for the contributor
             contributor.firstPrAwarded = false;
             contributor.firstReviewAwarded = false;
             contributor.first10PrsAwarded = false;
@@ -61,10 +40,10 @@ export const resetContributor = [
             contributor.first1000PrsAwarded = false;
             contributor.first1000ReviewsAwarded = false;
             contributor.badges = [];
-            await contributor.save(); // Save the updated contributor to the database
-            res.status(200).send('Contributor reset successfully'); // Send success response
+            await contributor.save();
+            res.status(200).send('Contributor reset successfully');
         } catch (err) {
-            res.status(500).send('Error resetting contributor'); // Send error response if resetting fails
+            res.status(500).send('Error resetting contributor');
         }
     }
 ];
@@ -72,7 +51,6 @@ export const resetContributor = [
 // Function to reset all contributors' awards and badges
 export const resetAllContributors = async (req, res) => {
     try {
-        // Update all contributors to reset their award flags and badges
         await Contributor.updateMany({}, {
             firstPrAwarded: false,
             firstReviewAwarded: false,
@@ -88,8 +66,8 @@ export const resetAllContributors = async (req, res) => {
             first1000ReviewsAwarded: false,
             badges: []
         });
-        res.status(200).send('All contributors reset successfully'); // Send success response
+        res.status(200).send('All contributors reset successfully');
     } catch (err) {
-        res.status(500).send('Error resetting all contributors'); // Send error response if resetting fails
+        res.status(500).send('Error resetting all contributors');
     }
 };

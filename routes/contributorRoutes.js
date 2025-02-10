@@ -11,20 +11,23 @@ import {
     topReviewers,
     awardBillsAndVonettesController
 } from '../controllers/contributorController.js';
-import { adminLogin, getContributors, resetContributor, resetAllContributors } from '../controllers/adminController.js';
+import { getContributors, resetContributor, resetAllContributors } from '../controllers/adminController.js';
+import { authenticate } from '../middleware/authMiddleware.js';
+import { login } from '../controllers/authController.js';
+
 
 const router = express.Router();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Route to fetch pull requests
-router.get('/fetch-pull-requests', fetchPRs);
+router.get('/fetch-pull-requests', authenticate, fetchPRs);
 
 // Route to fetch review data
-router.get('/fetch-reviews', fetchReviewsData);
+router.get('/fetch-reviews', authenticate, fetchReviewsData);
 
 // Route to award badges to contributors
-router.get('/award-badges', awardContributorBadges);
+router.get('/award-badges', authenticate, awardContributorBadges);
 
 // Route to get the top contributors
 router.get('/top-contributors', topContributors);
@@ -33,19 +36,19 @@ router.get('/top-contributors', topContributors);
 router.get('/top-reviewers', topReviewers);
 
 // Route to award Bills and Vonettes
-router.get('/award-bills-vonettes', awardBillsAndVonettesController);
+router.get('/award-bills-vonettes', authenticate, awardBillsAndVonettesController);
 
 // Admin login route
-router.post('/admin/login', adminLogin);
+router.post('/admin/login', login);
 
 // Route to get all contributors
-router.get('/admin/contributors', getContributors);
+router.get('/admin/contributors', authenticate, getContributors);
 
 // Route to reset a specific contributor
-router.post('/admin/reset-contributor', resetContributor);
+router.post('/admin/reset-contributor', authenticate, resetContributor);
 
 // Route to reset all contributors
-router.post('/admin/reset-all', resetAllContributors);
+router.post('/admin/reset-all', authenticate, resetAllContributors);
 
 // Route to get the list of badge images
 router.get('/badges', (req, res) => {
