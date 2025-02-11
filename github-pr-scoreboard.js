@@ -5,15 +5,24 @@ import helmet from 'helmet';
 import mongoSanitize from 'express-mongo-sanitize';
 import cors from 'cors';
 import cron from 'node-cron';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import contributorRoutes from './routes/contributorRoutes.js';
 import { awardBillsAndVonettesController, fetchPRs, fetchReviewsData, awardContributorBadges } from './controllers/contributorController.js';
 import { errorHandler } from './middleware/errorHandler.js';
+import session from 'express-session';
+import passport from './config/passport.js';
+import jwt from 'jsonwebtoken';
+import { ensureAuthenticated } from './middleware/ensureAuthenticated.js';
 
 
 dotenv.config();
 
 const app = express();
 const port = 3000;
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 app.use(errorHandler);
 
@@ -44,9 +53,38 @@ app.use((req, res, next) => {
 
 const limiter = rateLimit({
     windowMs: 15 * 60 * 1000,
-    max: 100,
+    max: 500,
 });
 app.use(limiter);
+
+app.use(session({
+    secret: process.env.GITHUB_CLIENT_SECRET,
+    resave: false,
+    saveUninitialized: false
+}));
+
+app.use(passport.initialize());
+app.use(passport.session());
+
+// Routes for GitHub authentication
+app.get('/auth/github', passport.authenticate('github', { scope: ['user:email'] }));
+
+app.get('/auth/github/callback',
+    passport.authenticate('github', { failureRedirect: '/' }),
+    (req, res) => {
+        if (!req.user) {
+            console.error('Failed to obtain access token');
+            return res.redirect('/');
+        }
+        const token = jwt.sign({ username: req.user.username }, process.env.JWT_SECRET, { expiresIn: '1h' });
+        res.redirect(`/admin.html?token=${token}`);
+    }
+);
+
+// Protect the admin route
+app.get('/admin.html', ensureAuthenticated, (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'admin.html'));
+});
 
 app.use(express.static('public'));
 app.use('/api', contributorRoutes);
@@ -82,6 +120,7 @@ cron.schedule('0 0 * * *', async () => {
 //        console.error('Error awarding Bills and Vonettes:', error);
 //    }
 //});
+
 
 app.listen(port, () => {
     console.log(`GitHub PR Scoreboard app listening on http://localhost:${port}`);

@@ -14,6 +14,7 @@ import {
 import { getContributors, resetContributor, resetAllContributors } from '../controllers/adminController.js';
 import { authenticate } from '../middleware/authMiddleware.js';
 import { login } from '../controllers/authController.js';
+import { ensureAuthenticated } from '../middleware/ensureAuthenticated.js';
 
 
 const router = express.Router();
@@ -60,6 +61,14 @@ router.get('/badges', (req, res) => {
         const badges = files.filter(file => file.endsWith('.png'));
         res.json(badges);
     });
+});
+
+router.get('/auth/status', (req, res) => {
+    if (req.isAuthenticated()) {
+        res.json({ isAuthenticated: true, username: req.user.username });
+    } else {
+        res.json({ isAuthenticated: false });
+    }
 });
 
 export default router;
