@@ -111,3 +111,33 @@ h1 {
     border-radius: 50%; /* Circular image */
     margin-right: 10px; /* Margin to the right of the image */
 }
+
+/* Styles for the contributors list */
+#contributors-list {
+    list-style-type: none;
+    padding: 0;
+}
+
+/* Styles for individual list items */
+#contributors-list li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px;
+    border-bottom: 1px solid #ccc;
+}
+
+/* Styles for the reset button */
+#contributors-list li button {
+    background-color: #f44336;
+    color: white;
+    border: none;
+    padding: 5px 10px;
+    cursor: pointer;
+    border-radius: 3px;
+}
+
+/* Hover effect for the reset button */
+#contributors-list li button:hover {
+    background-color: #d32f2f;
+}
