@@ -8,7 +8,7 @@ import cron from 'node-cron';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import contributorRoutes from './routes/contributorRoutes.js';
-import { awardBillsAndVonettesController, fetchPRs, fetchReviewsData, awardContributorBadges } from './controllers/contributorController.js';
+import { awardBillsAndVonettesController, fetchPRs, fetchPRsCron, fetchReviewsData, fetchReviewsDataCron, awardContributorBadges, awardContributorBadgesCron } from './controllers/contributorController.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import session from 'express-session';
 import passport from './config/passport.js';
@@ -93,18 +93,18 @@ app.use('/api', contributorRoutes);
 cron.schedule('0 * * * *', async () => {
     console.log('Running a task every hour to fetch PRs and reviews');
     try {
-        await fetchPRs();
-        await fetchReviewsData();
+        await fetchPRsCron();
+        await fetchReviewsDataCron();
         console.log('Data fetched successfully');
     } catch (error) {
         console.error('Error fetching data:', error);
     }
 });
 
-cron.schedule('0 0 * * *', async () => {
-    console.log('Running a task daily to award badges');
+cron.schedule('0 * * * *', async () => {
+    console.log('Running a task every hour to award badges');
     try {
-        await awardContributorBadges();
+        await awardContributorBadgesCron();
         console.log('Badges awarded successfully');
     } catch (error) {
         console.error('Error awarding badges:', error);

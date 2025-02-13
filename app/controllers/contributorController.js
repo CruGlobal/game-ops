@@ -10,6 +10,36 @@ export const fetchPRs = async (req, res) => {
     }
 };
 
+// Function to fetch pull requests for the cron job
+export const fetchPRsCron = async () => {
+    try {
+        await fetchPullRequests(); // Fetch pull requests and update data
+        console.log('Pull requests fetched and data updated.');
+    } catch (err) {
+        console.error('Error fetching pull requests:', err); // Handle errors
+    }
+};
+
+// Function to fetch reviews for the cron job
+export const fetchReviewsDataCron = async () => {
+    try {
+        await fetchReviews(); // Fetch reviews and update data
+        console.log('Reviews fetched and data updated.');
+    } catch (err) {
+        console.error('Error fetching reviews.'); // Handle errors
+    }
+};
+
+// Function to award badges for the cron job
+export const awardContributorBadgesCron = async (pullRequestNumber) => {
+    try {
+        const results = await awardBadges(pullRequestNumber); // Award badges
+        console.log({ message: 'Badges awarded successfully.', results });
+    } catch (err) {
+        console.error({ message: 'Error awarding badges.' }); // Handle errors
+    }
+};
+
 // Controller to fetch reviews and update contributors' review counts
 export const fetchReviewsData = async (req, res) => {
     try {

@@ -125,7 +125,7 @@ export const fetchReviews = async () => {
 };
 
 // Award badges to contributors based on their contributions
-export const awardBadges = async (pullRequestNumber = null, test = false) => {
+export const awardBadges = async (pullRequestNumber = null) => {
     const results = [];
     try {
         let contributors;
