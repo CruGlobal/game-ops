@@ -1,9 +1,9 @@
-FROM node:18
+FROM node:23-alpine
 WORKDIR /app
-COPY package*.json ./
+COPY app/package*.json ./
 # install node modules
 RUN npm install
-COPY . .
+COPY app ./
 EXPOSE 3000
 
 # Run the web service on container startup
