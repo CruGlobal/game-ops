@@ -1,11 +1,11 @@
 {
-  "name": "github-pr-scoreboard",
+  "name": "scoreboard",
   "version": "1.0.0",
   "description": "A GitHub pull request scoreboard application",
-  "main": "github-pr-scoreboard.js",
+  "main": "scoreboard.js",
   "type": "module",
   "scripts": {
-    "start": "node github-pr-scoreboard.js",
+    "start": "node scoreboard.js",
     "test": "echo \"No tests specified\" && exit 1"
   },
   "dependencies": {

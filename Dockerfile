@@ -8,4 +8,4 @@ EXPOSE 3000
 
 # Run the web service on container startup
 CMD ["npm", "start"]
-#CMD [ "node", "github-pr-scoreboard.js" ]
+#CMD [ "node", "scoreboard.js" ]
