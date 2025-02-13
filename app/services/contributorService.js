@@ -308,13 +308,13 @@ export const awardBillsAndVonettes = async (pullRequestNumber = null, test = fal
                 billsImage = '1_bill_57X27.png';
                 billsValue += 1;
                 contributor.first10ReviewsAwarded = true;
-            } else if ((contributor.prCount >= 500 || contributor.reviewCount >= 500) && (!contributor.first500PrsAwarded || !contributor.first500ReviewsAwarded)) {
+           }  else if ((contributor.prCount >= 500 && !contributor.first500PrsAwarded) || (contributor.reviewCount >= 500 && !contributor.first500ReviewsAwarded)) {
                 billsAwarded = 'Vonette';
                 billsImage = '5_vonett_57_25.png';
                 billsValue += 5;
                 if (contributor.prCount >= 500) contributor.first500PrsAwarded = true;
                 if (contributor.reviewCount >= 500) contributor.first500ReviewsAwarded = true;
-            }
+           }
 
             const totalContributions = contributor.prCount + contributor.reviewCount;
             const newBills = Math.floor(totalContributions / 100) - (contributor.totalBillsAwarded || 0);
