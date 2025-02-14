@@ -77,35 +77,10 @@ export const fetchPullRequests = async () => {
         });
 
         for (const pr of pullRequests) {
-            await updateContributor(pr.user.login, 'prCount'); // Update the PR count for the contributor
-            if (pr.reviews) {
-                for (const review of pr.reviews) {
-                    await updateContributor(review.user.login, 'reviewCount'); // Update the review count for the contributor
-                }
-            }
-        }
+            const username = pr.user.login;
+            const date = new Date(pr.updated_at);
+            await updateContributor(username, 'prCount', date); // Pass the date to updateContributor
 
-        await updateLastFetchDate(new Date()); // Update the last fetch date
-    } catch (err) {
-        console.error('Error fetching pull requests', err); // Log any errors
-    }
-};
-
-// Fetch reviews and update contributors' review counts
-export const fetchReviews = async () => {
-    try {
-        const lastFetchDate = await getLastFetchDate();
-        const { data: pullRequests } = await octokit.rest.pulls.list({
-            owner: repoOwner,
-            repo: repoName,
-            state: 'all',
-            per_page: 100,
-            sort: 'updated',
-            direction: 'desc',
-            since: lastFetchDate.toISOString(),
-        });
-
-        for (const pr of pullRequests) {
             const { data: reviews } = await octokit.rest.pulls.listReviews({
                 owner: repoOwner,
                 repo: repoName,
@@ -114,13 +89,15 @@ export const fetchReviews = async () => {
             });
 
             for (const review of reviews) {
-                await updateContributor(review.user.login, 'reviewCount'); // Update the review count for the contributor
+                const reviewUsername = review.user.login;
+                const reviewDate = new Date(review.submitted_at);
+                await updateContributor(reviewUsername, 'reviewCount', reviewDate); // Pass the date to updateContributor
             }
         }
 
         await updateLastFetchDate(new Date()); // Update the last fetch date
     } catch (err) {
-        console.error('Error fetching reviews', err); // Log any errors
+        console.error('Error fetching pull requests', err); // Log any errors
     }
 };
 

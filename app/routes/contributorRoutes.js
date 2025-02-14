@@ -5,7 +5,6 @@ import { fileURLToPath } from 'url';
 import Contributor from '../models/contributor.js';
 import {
     fetchPRs,
-    fetchReviewsData,
     awardContributorBadges,
     topContributors,
     topReviewers,
@@ -21,11 +20,11 @@ const router = express.Router();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Route to initialize the database
+router.get('/initialize-database', authenticate, initializeDatabaseController);
+
 // Route to fetch pull requests
 router.get('/fetch-pull-requests', authenticate, fetchPRs);
-
-// Route to fetch review data
-router.get('/fetch-reviews', authenticate, fetchReviewsData);
 
 // Route to award badges to contributors
 router.get('/award-badges', authenticate, awardContributorBadges);

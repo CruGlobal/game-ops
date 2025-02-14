@@ -94,7 +94,6 @@ cron.schedule('0 * * * *', async () => {
     console.log('Running a task every hour to fetch PRs and reviews');
     try {
         await fetchPRsCron();
-        await fetchReviewsDataCron();
         console.log('Data fetched successfully');
     } catch (error) {
         console.error('Error fetching data:', error);

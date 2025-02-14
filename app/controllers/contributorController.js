@@ -20,16 +20,6 @@ export const fetchPRsCron = async () => {
     }
 };
 
-// Function to fetch reviews for the cron job
-export const fetchReviewsDataCron = async () => {
-    try {
-        await fetchReviews(); // Fetch reviews and update data
-        console.log('Reviews fetched and data updated.');
-    } catch (err) {
-        console.error('Error fetching reviews.'); // Handle errors
-    }
-};
-
 // Function to award badges for the cron job
 export const awardContributorBadgesCron = async (pullRequestNumber) => {
     try {
@@ -37,16 +27,6 @@ export const awardContributorBadgesCron = async (pullRequestNumber) => {
         console.log({ message: 'Badges awarded successfully.', results });
     } catch (err) {
         console.error({ message: 'Error awarding badges.' }); // Handle errors
-    }
-};
-
-// Controller to fetch reviews and update contributors' review counts
-export const fetchReviewsData = async (req, res) => {
-    try {
-        await fetchReviews(); // Fetch reviews and update data
-        res.status(200).send('Reviews fetched and data updated.');
-    } catch (err) {
-        res.status(500).send('Error fetching reviews.'); // Handle errors
     }
 };
 
