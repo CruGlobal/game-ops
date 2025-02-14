@@ -8,7 +8,7 @@ import cron from 'node-cron';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import contributorRoutes from './routes/contributorRoutes.js';
-import { awardBillsAndVonettesController, fetchPRs, fetchPRsCron, fetchReviewsData, fetchReviewsDataCron, awardContributorBadges, awardContributorBadgesCron } from './controllers/contributorController.js';
+import { awardBillsAndVonettesController, fetchPRs, fetchPRsCron, awardContributorBadges, awardContributorBadgesCron } from './controllers/contributorController.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import session from 'express-session';
 import passport from './config/passport.js';

@@ -17,8 +17,43 @@ const repoOwner = process.env.REPO_OWNER;
 const repoName = process.env.REPO_NAME;
 const domain = process.env.DOMAIN;
 
-// Update contributor's PR or review count
-export const updateContributor = async (username, type) => {
+// Function to initialize the database
+export const initializeDatabase = async () => {
+    try {
+        const { data: pullRequests } = await octokit.rest.pulls.list({
+            owner: repoOwner,
+            repo: repoName,
+            state: 'all',
+            per_page: 100,
+            sort: 'updated',
+            direction: 'desc',
+        });
+
+        for (const pr of pullRequests) {
+            const prDate = new Date(pr.updated_at);
+            await updateContributor(pr.user.login, 'prCount', prDate);
+
+            const { data: reviews } = await octokit.rest.pulls.listReviews({
+                owner: repoOwner,
+                repo: repoName,
+                pull_number: pr.number,
+                per_page: 100,
+            });
+
+            for (const review of reviews) {
+                const reviewDate = new Date(review.submitted_at);
+                await updateContributor(review.user.login, 'reviewCount', reviewDate);
+            }
+        }
+
+        console.log('Database initialized successfully');
+    } catch (err) {
+        console.error('Error initializing database', err);
+    }
+};
+
+// Update contributor's PR or review count with date
+export const updateContributor = async (username, type, date) => {
     if (!['prCount', 'reviewCount'].includes(type)) {
         throw new Error('Invalid type'); // Throw an error if the type is invalid
     }
@@ -26,16 +61,24 @@ export const updateContributor = async (username, type) => {
         username: username
     });
 
+    const updateExpression = type === 'prCount' ?
+            `set prCount = prCount + :val, avatarUrl = :avatarUrl, lastUpdated = :lastUpdated, contributions = list_append(if_not_exists(contributions, :empty_list), :new_entry)` :
+            `set reviewCount = reviewCount + :val, avatarUrl = :avatarUrl, lastUpdated = :lastUpdated, reviews = list_append(if_not_exists(reviews, :empty_list), :new_entry)`;
+
+    const expressionAttributeValues = {
+        ':val': 1,
+        ':avatarUrl': userData.avatar_url,
+        ':lastUpdated': new Date().toISOString(),
+        ':empty_list': [],
+        ':new_entry': [{ date: date.toISOString(), count: 1 }],
+    };
+
     if (process.env.NODE_ENV === 'production') {
         const params = {
             TableName: 'Contributors',
             Key: { username: username },
-            UpdateExpression: `set ${type} = ${type} + :val, avatarUrl = :avatarUrl, lastUpdated = :lastUpdated`,
-            ExpressionAttributeValues: {
-                ':val': 1,
-                ':avatarUrl': userData.avatar_url,
-                ':lastUpdated': new Date().toISOString(),
-            },
+            UpdateExpression: updateExpression,
+            ExpressionAttributeValues:expressionAttributeValues,
             ReturnValues: 'ALL_NEW'
         };
         await dbClient.update(params).promise(); // Update the contributor in the database
@@ -47,6 +90,11 @@ export const updateContributor = async (username, type) => {
         contributor[type] += 1;
         contributor.avatarUrl = userData.avatar_url;
         contributor.lastUpdated = Date.now();
+        if (type === 'prCount') {
+            contributor.contributions.push({ date: date, count: 1 });
+        } else {
+            contributor.reviews.push({ date: date, count: 1 });
+        }
         await contributor.save(); // Save the contributor to the database
     }
 };
@@ -213,6 +261,72 @@ export const awardBadges = async (pullRequestNumber = null) => {
         console.error('Error awarding badges', err); // Log any errors
     }
     return results;
+};
+
+// Function to get top contributors within a date range
+export const getTopContributorsDateRange = async (startDate, endDate) => {
+    let contributors;
+    const query = {
+        contributions: {
+            $elemMatch: {
+                date: { $gte: startDate, $lte: endDate }
+            }
+        },
+        username: { $not: /\[bot\]$/ }
+    };
+
+    if (process.env.NODE_ENV === 'production') {
+        const params = {
+            TableName: 'Contributors',
+            KeyConditionExpression: 'contributions.date BETWEEN :startDate AND :endDate',
+            FilterExpression: 'NOT contains(username, :bot)',
+            ExpressionAttributeValues: {
+                ':startDate': startDate.toISOString(),
+                ':endDate': endDate.toISOString(),
+                ':bot': '[bot]'
+            },
+            ProjectionExpression: 'username, prCount, avatarUrl, badges, totalBillsAwarded',
+            Limit: 50,
+        };
+        const data = await dbClient.query(params).promise();
+        contributors = data.Items.sort((a, b) => b.prCount - a.prCount);
+    } else {
+        contributors = await Contributor.find(query).sort({ 'contributions.count': -1 }).limit(50).select('username prCount avatarUrl badges totalBillsAwarded');
+    }
+    return contributors;
+};
+
+// Function to get top reviewers within a date range
+export const getTopReviewersDateRage = async (startDate, endDate) => {
+    let reviewers;
+    const query = {
+        reviews: {
+            $elemMatch: {
+                date: { $gte: startDate, $lte: endDate }
+            }
+        },
+        username: { $not: /\[bot\]$/ }
+    };
+
+    if (process.env.NODE_ENV === 'production') {
+        const params = {
+            TableName: 'Contributors',
+            KeyConditionExpression: 'reviews.date BETWEEN :startDate AND :endDate',
+            FilterExpression: 'NOT contains(username, :bot)',
+            ExpressionAttributeValues: {
+                ':startDate': startDate.toISOString(),
+                ':endDate': endDate.toISOString(),
+                ':bot': '[bot]'
+            },
+            ProjectionExpression: 'username, reviewCount, avatarUrl, badges, totalBillsAwarded',
+            Limit: 50,
+        };
+        const data = await dbClient.query(params).promise();
+        reviewers = data.Items.sort((a, b) => b.reviewCount - a.reviewCount);
+    } else {
+        reviewers = await Contributor.find(query).sort({ 'reviews.count': -1 }).limit(50).select('username reviewCount avatarUrl badges totalBillsAwarded');
+    }
+    return reviewers;
 };
 
 // Get the top contributors based on PR count

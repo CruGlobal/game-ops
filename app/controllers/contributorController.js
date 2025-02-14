@@ -1,4 +1,14 @@
-import { awardBillsAndVonettes, fetchPullRequests, fetchReviews, awardBadges, getTopContributors, getTopReviewers } from '../services/contributorService.js';
+import { awardBillsAndVonettes, fetchPullRequests, awardBadges, getTopContributors, getTopReviewers, getTopContributorsDateRange, getTopReviewersDateRage, initializeDatabase } from '../services/contributorService.js';
+
+// Controller to initialize the database
+export const initializeDatabaseController = async (req, res) => {
+    try {
+        await initializeDatabase(); // Call the initializeDatabase function
+        res.status(200).send('Database initialized successfully.');
+    } catch (err) {
+        res.status(500).send('Error initializing database.'); // Handle errors
+    }
+};
 
 // Controller to fetch pull requests and update contributors' PR counts
 export const fetchPRs = async (req, res) => {
@@ -39,6 +49,36 @@ export const awardContributorBadges = async (req, res) => {
         res.status(200).json({ message: 'Badges awarded successfully.', results });
     } catch (err) {
         res.status(500).json({ message: 'Error awarding badges.' }); // Handle errors
+    }
+};
+
+// Controller to get the top contributors based on PR count within a date range
+export const topContributorsDateRange = async (req, res) => {
+    const { days } = req.query;
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setDate(endDate.getDate() - parseInt(days, 10));
+
+    try {
+        const contributors = await getTopContributorsDateRange(startDate, endDate);
+        res.json(contributors);
+    } catch (err) {
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+};
+
+// Controller to get the top reviewers based on review count within a date range
+export const topReviewersDateRange = async (req, res) => {
+    const { days } = req.query;
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setDate(endDate.getDate() - parseInt(days, 10));
+
+    try {
+        const reviewers = await getTopReviewersDateRage(startDate, endDate);
+        res.json(reviewers);
+    } catch (err) {
+        res.status(500).json({ error: 'Internal Server Error' });
     }
 };
 

@@ -4,10 +4,13 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import Contributor from '../models/contributor.js';
 import {
+    initializeDatabaseController,
     fetchPRs,
     awardContributorBadges,
     topContributors,
     topReviewers,
+    topReviewersDateRange,
+    topContributorsDateRange,
     awardBillsAndVonettesController
 } from '../controllers/contributorController.js';
 import { getContributors, resetContributor, resetAllContributors } from '../controllers/adminController.js';
@@ -69,5 +72,11 @@ router.get('/auth/status', (req, res) => {
         res.json({ isAuthenticated: false });
     }
 });
+
+// Route to get the top contributors within a date range
+router.get('/top-contributors-date-range', topContributorsDateRange);
+
+// Route to get the top reviewers within a date range
+router.get('/top-reviewers-date-range', topReviewersDateRange);
 
 export default router;

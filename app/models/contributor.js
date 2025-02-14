@@ -29,6 +29,16 @@ const ContributorSchema = new mongoose.Schema({
     badges: { type: Array, default: [] },
     // Total number of bills awarded to the contributor
     totalBillsAwarded: { type: Number, default: 0 },
+    // Array of contributions with date
+    contributions: [{
+        date: { type: Date, required: true },
+        count: { type: Number, default: 0 }
+    }],
+    // Array of reviews with date
+    reviews: [{
+        date: { type: Date, required: true },
+        count: { type: Number, default: 0 }
+    }]
 });
 
 // Create a model for the Contributor schema
