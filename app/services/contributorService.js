@@ -285,8 +285,7 @@ export const awardBadges = async (pullRequestNumber = null) => {
     return results;
 };
 
-// Function to get top contributors within a date range
-export const getTopContributorsDateRange = async (startDate, endDate) => {
+export const getTopContributorsDateRange = async (startDate, endDate, page, limit) => {
     let contributors;
     const query = {
         contributions: {
@@ -307,19 +306,40 @@ export const getTopContributorsDateRange = async (startDate, endDate) => {
                 ':endDate': endDate.toISOString(),
                 ':bot': '[bot]'
             },
-            ProjectionExpression: 'username, prCount, avatarUrl, badges, totalBillsAwarded',
-            Limit: 50,
+            ProjectionExpression: 'username, contributions, avatarUrl, badges, totalBillsAwarded',
+            Limit: limit,
+            ExclusiveStartKey: (page - 1) * limit
         };
         const data = await dbClient.query(params).promise();
-        contributors = data.Items.sort((a, b) => b.prCount - a.prCount);
+        contributors = data.Items;
     } else {
-        contributors = await Contributor.find(query).sort({ 'contributions.count': -1 }).limit(50).select('username prCount avatarUrl badges totalBillsAwarded');
+        contributors = await Contributor.find(query)
+            .sort({ 'contributions.count': -1 })
+            .skip((page - 1) * limit)
+            .limit(limit)
+            .select('username contributions avatarUrl badges totalBillsAwarded');
     }
-    return contributors;
+
+    // Calculate total pull requests for each contributor in the given date range
+    contributors = contributors.map(contributor => {
+        const totalPrCount = contributor.contributions
+            .filter(contribution => contribution.date >= startDate && contribution.date <= endDate)
+            .reduce((total, contribution) => total + contribution.count, 0);
+        return { ...contributor.toObject(), totalPrCount };
+    });
+
+    // Sort contributors by totalPrCount
+    contributors.sort((a, b) => b.totalPrCount - a.totalPrCount);
+
+    // Calculate total pull requests in the given date range
+    const totalPullRequests = contributors.reduce((total, contributor) => {
+        return total + contributor.totalPrCount;
+    }, 0);
+
+    return { contributors, totalPullRequests };
 };
 
-// Function to get top reviewers within a date range
-export const getTopReviewersDateRage = async (startDate, endDate) => {
+export const getTopReviewersDateRange = async (startDate, endDate, page, limit) => {
     let reviewers;
     const query = {
         reviews: {
@@ -340,15 +360,37 @@ export const getTopReviewersDateRage = async (startDate, endDate) => {
                 ':endDate': endDate.toISOString(),
                 ':bot': '[bot]'
             },
-            ProjectionExpression: 'username, reviewCount, avatarUrl, badges, totalBillsAwarded',
-            Limit: 50,
+            ProjectionExpression: 'username, reviews, avatarUrl, badges, totalBillsAwarded',
+            Limit: limit,
+            ExclusiveStartKey: (page - 1) * limit
         };
         const data = await dbClient.query(params).promise();
-        reviewers = data.Items.sort((a, b) => b.reviewCount - a.reviewCount);
+        reviewers = data.Items;
     } else {
-        reviewers = await Contributor.find(query).sort({ 'reviews.count': -1 }).limit(50).select('username reviewCount avatarUrl badges totalBillsAwarded');
+        reviewers = await Contributor.find(query)
+            .sort({ 'reviews.count': -1 })
+            .skip((page - 1) * limit)
+            .limit(limit)
+            .select('username reviews avatarUrl badges totalBillsAwarded');
     }
-    return reviewers;
+
+    // Calculate total reviews for each reviewer in the given date range
+    reviewers = reviewers.map(reviewer => {
+        const totalReviewCount = reviewer.reviews
+            .filter(review => review.date >= startDate && review.date <= endDate)
+            .reduce((total, review) => total + review.count, 0);
+        return { ...reviewer.toObject(), totalReviewCount };
+    });
+
+    // Sort reviewers by totalReviewCount
+    reviewers.sort((a, b) => b.totalReviewCount - a.totalReviewCount);
+
+    // Calculate total reviews in the given date range
+    const totalReviews = reviewers.reduce((total, reviewer) => {
+        return total + reviewer.totalReviewCount;
+    }, 0);
+
+    return { reviewers, totalReviews };
 };
 
 // Get the top contributors based on PR count

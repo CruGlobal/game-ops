@@ -54,31 +54,37 @@ export const awardContributorBadges = async (req, res) => {
 
 // Controller to get the top contributors based on PR count within a date range
 export const topContributorsDateRange = async (req, res) => {
-    const { days } = req.query;
-    const endDate = new Date();
-    const startDate = new Date();
-    startDate.setDate(endDate.getDate() - parseInt(days, 10));
-
     try {
-        const contributors = await getTopContributorsDateRange(startDate, endDate);
-        res.json(contributors);
-    } catch (err) {
-        res.status(500).json({ error: 'Internal Server Error' });
+        const { range, page = 1, limit = 10 } = req.query;
+        if (!range) {
+            return res.status(400).json({ error: 'Range parameter is required' });
+        }
+        const endDate = new Date();
+        const startDate = new Date();
+        startDate.setDate(endDate.getDate() - parseInt(range, 10));
+        const { contributors, totalPullRequests } = await getTopContributorsDateRange(startDate, endDate, parseInt(page), parseInt(limit));
+        res.json({ contributors, totalPullRequests });
+    } catch (error) {
+        console.error('Error fetching top contributors:', error);
+        res.status(500).send('Internal Server Error');
     }
 };
 
 // Controller to get the top reviewers based on review count within a date range
 export const topReviewersDateRange = async (req, res) => {
-    const { days } = req.query;
-    const endDate = new Date();
-    const startDate = new Date();
-    startDate.setDate(endDate.getDate() - parseInt(days, 10));
-
     try {
-        const reviewers = await getTopReviewersDateRage(startDate, endDate);
-        res.json(reviewers);
-    } catch (err) {
-        res.status(500).json({ error: 'Internal Server Error' });
+        const { range, page = 1, limit = 10 } = req.query;
+        if (!range) {
+            return res.status(400).json({ error: 'Range parameter is required' });
+        }
+        const endDate = new Date();
+        const startDate = new Date();
+        startDate.setDate(endDate.getDate() - parseInt(range, 10));
+        const { reviewers, totalReviews } = await getTopReviewersDateRange(startDate, endDate, parseInt(page), parseInt(limit));
+        res.json({ reviewers, totalReviews });
+    } catch (error) {
+        console.error('Error fetching top reviewers:', error);
+        res.status(500).send('Internal Server Error');
     }
 };
 

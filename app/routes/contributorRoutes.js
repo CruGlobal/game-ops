@@ -72,10 +72,10 @@ router.get('/auth/status', (req, res) => {
     }
 });
 
-// Route to get the top contributors within a date range
+// Route to get the top contributors within a date range with pagination
 router.get('/top-contributors-date-range', topContributorsDateRange);
 
-// Route to get the top reviewers within a date range
+// Route to get the top reviewers within a date range with pagination
 router.get('/top-reviewers-date-range', topReviewersDateRange);
 
 export default router;
