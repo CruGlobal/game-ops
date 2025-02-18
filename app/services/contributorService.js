@@ -62,7 +62,7 @@ export const initializeDatabase = async () => {
                     await updateContributor(review.user.login, 'reviewCount', reviewDate);
                 }
                 // Throttle requests to avoid hitting rate limits
-                await sleep(1000); // Sleep for 1 second between each pull request
+                await sleep(5000); // Sleep for 5 second between each pull request
             }
 
             page += 1;
