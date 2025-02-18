@@ -17,33 +17,55 @@ const repoOwner = process.env.REPO_OWNER;
 const repoName = process.env.REPO_NAME;
 const domain = process.env.DOMAIN;
 
+// Function to sleep for a specified number of milliseconds
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
 // Function to initialize the database
 export const initializeDatabase = async () => {
     try {
-        const { data: pullRequests } = await octokit.rest.pulls.list({
-            owner: repoOwner,
-            repo: repoName,
-            state: 'all',
-            per_page: 100,
-            sort: 'updated',
-            direction: 'desc',
-        });
+        // Clear existing data
+        await Contributor.deleteMany({});
 
-        for (const pr of pullRequests) {
-            const prDate = new Date(pr.updated_at);
-            await updateContributor(pr.user.login, 'prCount', prDate);
+        let page = 1;
+        let per_page = 100;
+        let hasMorePages = true;
 
-            const { data: reviews } = await octokit.rest.pulls.listReviews({
+        while (hasMorePages) {
+            const { data: pullRequests } = await octokit.rest.pulls.list({
                 owner: repoOwner,
                 repo: repoName,
-                pull_number: pr.number,
-                per_page: 100,
+                state: 'all',
+                per_page: per_page,
+                page: page,
+                sort: 'updated',
+                direction: 'desc',
             });
 
-            for (const review of reviews) {
-                const reviewDate = new Date(review.submitted_at);
-                await updateContributor(review.user.login, 'reviewCount', reviewDate);
+            if (pullRequests.length === 0) {
+                hasMorePages = false;
+                break;
             }
+
+            for (const pr of pullRequests) {
+                const prDate = new Date(pr.updated_at);
+                await updateContributor(pr.user.login, 'prCount', prDate);
+
+                const { data: reviews } = await octokit.rest.pulls.listReviews({
+                    owner: repoOwner,
+                    repo: repoName,
+                    pull_number: pr.number,
+                    per_page: per_page,
+                });
+
+                for (const review of reviews) {
+                    const reviewDate = new Date(review.submitted_at);
+                    await updateContributor(review.user.login, 'reviewCount', reviewDate);
+                }
+                // Throttle requests to avoid hitting rate limits
+                await sleep(1000); // Sleep for 1 second between each pull request
+            }
+
+            page += 1;
         }
 
         console.log('Database initialized successfully');

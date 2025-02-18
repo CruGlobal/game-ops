@@ -18,7 +18,6 @@ import { authenticate } from '../middleware/authMiddleware.js';
 import { login } from '../controllers/authController.js';
 import { ensureAuthenticated } from '../middleware/ensureAuthenticated.js';
 
-
 const router = express.Router();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

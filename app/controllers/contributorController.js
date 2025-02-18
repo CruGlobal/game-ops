@@ -1,4 +1,4 @@
-import { awardBillsAndVonettes, fetchPullRequests, awardBadges, getTopContributors, getTopReviewers, getTopContributorsDateRange, getTopReviewersDateRage, initializeDatabase } from '../services/contributorService.js';
+import { awardBillsAndVonettes, fetchPullRequests, awardBadges, getTopContributors, getTopReviewers, getTopContributorsDateRange, getTopReviewersDateRange, initializeDatabase } from '../services/contributorService.js';
 
 // Controller to initialize the database
 export const initializeDatabaseController = async (req, res) => {
