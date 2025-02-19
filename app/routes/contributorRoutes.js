@@ -11,7 +11,8 @@ import {
     topReviewers,
     topReviewersDateRange,
     topContributorsDateRange,
-    awardBillsAndVonettesController
+    awardBillsAndVonettesController,
+    fetchActivityController
 } from '../controllers/contributorController.js';
 import { getContributors, resetContributor, resetAllContributors } from '../controllers/adminController.js';
 import { authenticate } from '../middleware/authMiddleware.js';
@@ -77,5 +78,8 @@ router.get('/top-contributors-date-range', topContributorsDateRange);
 
 // Route to get the top reviewers within a date range with pagination
 router.get('/top-reviewers-date-range', topReviewersDateRange);
+
+// Route to get the activity data
+router.get('/activity', fetchActivityController);
 
 export default router;

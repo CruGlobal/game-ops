@@ -1,4 +1,4 @@
-import { awardBillsAndVonettes, fetchPullRequests, awardBadges, getTopContributors, getTopReviewers, getTopContributorsDateRange, getTopReviewersDateRange, initializeDatabase } from '../services/contributorService.js';
+import { awardBillsAndVonettes, fetchActivityData, fetchPullRequests, awardBadges, getTopContributors, getTopReviewers, getTopContributorsDateRange, getTopReviewersDateRange, initializeDatabase } from '../services/contributorService.js';
 
 // Controller to initialize the database
 export const initializeDatabaseController = async (req, res) => {
@@ -117,5 +117,16 @@ export const awardBillsAndVonettesController = async (req, res) => {
         res.status(200).json({ message: 'Bills and Vonettes awarded successfully.', results });
     } catch (err) {
         res.status(500).json({ message: 'Error awarding Bills and Vonettes.' }); // Handle errors
+    }
+};
+
+// Controller to fetch activity data
+export const fetchActivityController = async (req, res) => {
+    const { prFrom, prTo } = req.query;
+    try {
+        const data = await fetchActivityData(parseInt(prFrom), parseInt(prTo));
+        res.json(data);
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to fetch activity data' });
     }
 };

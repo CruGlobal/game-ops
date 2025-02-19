@@ -508,3 +508,106 @@ export const awardBillsAndVonettes = async (pullRequestNumber = null, test = fal
     }
     return results;
 };
+
+// function to fetch activity data
+export const fetchActivityData = async (prFrom, prTo) => {
+    const headers = {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${process.env.GITHUB_TOKEN}`
+    };
+
+    const stats = [];
+    const blocked = [];
+
+    for (let i = prFrom; i <= prTo; i++) {
+        try {
+            const url = `https://api.github.com/repos/${repoOwner}/${repoName}/pulls/${i}`;
+            const response = await fetch(url, { headers });
+            if (!response.ok) {
+                if (response.status === 404) {
+                    console.warn(`Pull request ${i} not found.`);
+                    continue; // Skip to the next pull request
+                }
+                throw new Error(`Failed to fetch pull request ${i}: ${response.statusText}`);
+            }
+            const prData = await response.json();
+            updateStats(stats, prData.user.login, "pr");
+
+            const reviewsUrl = `https://api.github.com/repos/${repoOwner}/${repoName}/pulls/${i}/reviews`;
+            const reviewsResponse = await fetch(reviewsUrl, { headers });
+            if (!reviewsResponse.ok) {
+                throw new Error(`Failed to fetch reviews for pull request ${i}: ${reviewsResponse.statusText}`);
+            }
+            const reviewsData = await reviewsResponse.json();
+
+            for (const review of reviewsData) {
+                if (review.state === "APPROVED") {
+                    updateStats(stats, review.user.login, "approved");
+                } else if (review.state === "COMMENTED") {
+                    updateStats(stats, review.user.login, "commented");
+                } else if (review.state === "CHANGES_REQUESTED") {
+                    updateStats(stats, review.user.login, "change");
+                    updateChange(blocked, prData.user.login, review.user.login, "change");
+                } else if (review.state === "DISMISSED") {
+                    updateStats(stats, review.user.login, "dismissed");
+                }
+            }
+        } catch (error) {
+            console.error(`Error fetching activity data for pull request ${i}:`, error);
+        }
+    }
+
+    return { stats, blocked };
+};
+
+function updateStats(stats, user, statType) {
+    let found = false;
+    for (const stat of stats) {
+        if (stat[0] === user) {
+            if (statType === "approved") {
+                stat[1] += 1;
+            } else if (statType === "commented") {
+                stat[2] += 1;
+            } else if (statType === "change") {
+                stat[3] += 1;
+            } else if (statType === "dismissed") {
+                stat[4] += 1;
+            } else if (statType === "pr") {
+                stat[5] += 1;
+            }
+            found = true;
+            break;
+        }
+    }
+    if (!found) {
+        if (statType === "approved") {
+            stats.push([user, 1, 0, 0, 0, 0]);
+        } else if (statType === "commented") {
+            stats.push([user, 0, 1, 0, 0, 0]);
+        } else if (statType === "change") {
+            stats.push([user, 0, 0, 1, 0, 0]);
+        } else if (statType === "dismissed") {
+            stats.push([user, 0, 0, 0, 1, 0]);
+        } else if (statType === "pr") {
+            stats.push([user, 0, 0, 0, 0, 1]);
+        }
+    }
+}
+
+function updateChange(blocked, userRaised, user, changeType) {
+    let found = false;
+    for (const block of blocked) {
+        if (block[0] === user && block[1] === userRaised) {
+            if (changeType === "change") {
+                block[2] += 1;
+            }
+            found = true;
+            break;
+        }
+    }
+    if (!found) {
+        if (changeType === "change") {
+            blocked.push([user, userRaised, 1, 0]);
+        }
+    }
+}
