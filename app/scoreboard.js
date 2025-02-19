@@ -32,7 +32,7 @@ app.use(helmet({
     contentSecurityPolicy: {
         directives: {
             defaultSrc: ["'self'"],
-            scriptSrc: ["'self'"],
+            scriptSrc: ["'self'", "https://cdn.jsdelivr.net", "'nonce-lexicostatistics'"],
             imgSrc: ["'self'", "data:", "https://github.com", "https://avatars.githubusercontent.com"]
         }
     }
