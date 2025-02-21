@@ -14,8 +14,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (response.ok) {
             const data = await response.json();
-            // Redirect to admin.html with the token as a query parameter
-            window.location.href = `/admin.html?token=${data.token}`;
+            // Redirect to admin with the token as a query parameter
+            window.location.href = `/admin?token=${data.token}`;
         } else {
             alert('Invalid credentials');
         }

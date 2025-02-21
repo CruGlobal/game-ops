@@ -9,6 +9,10 @@
 <body>
 <div class="container">
     <h1>Admin Page</h1>
+    <div class="hamburger-menu">
+        <button class="hamburger-button">&#9776;</button>
+        <%- include('partials/nav') %>
+    </div>
     <div id="auth-status"></div>
     <div id="admin-content" style="display:none;">
         <h2>Contributors</h2>
@@ -16,7 +20,7 @@
         <ul id="contributors-list"></ul>
     </div>
 </div>
-<script src="admin.js"></script>
-<script src="init.js"></script>
+<script src="/admin.js"></script>
+<script src="/init.js"></script>
 </body>
 </html>

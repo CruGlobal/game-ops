@@ -28,7 +28,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const token = urlParams.get('token');
     if (token) {
         setToken(token);
-        window.history.replaceState({}, document.title, "/admin.html"); // Remove token from URL
+        window.history.replaceState({}, document.title, "/admin"); // Remove token from URL
     }
 
     //const storedToken = getToken();

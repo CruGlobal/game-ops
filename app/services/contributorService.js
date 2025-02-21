@@ -23,14 +23,27 @@ const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 // Function to initialize the database
 export const initializeDatabase = async () => {
     try {
-        // Clear existing data
         await Contributor.deleteMany({});
 
         let page = 1;
         let per_page = 100;
         let hasMorePages = true;
+        let totalProcessed = 0;
 
         while (hasMorePages) {
+            // Check rate limit
+            const rateLimit = await octokit.rateLimit.get();
+            const remainingRequests = rateLimit.data.rate.remaining;
+            const resetTime = rateLimit.data.rate.reset * 1000; // Convert to milliseconds
+
+            console.log(`Remaining API requests: ${remainingRequests}`);
+
+            if (remainingRequests <= 15) {
+                const waitTime = resetTime - Date.now();
+                console.log(`Rate limit is low. Waiting for ${waitTime / 1000} seconds until reset.`);
+                await sleep(waitTime);
+            }
+
             const { data: pullRequests } = await octokit.rest.pulls.list({
                 owner: repoOwner,
                 repo: repoName,
@@ -61,8 +74,12 @@ export const initializeDatabase = async () => {
                     const reviewDate = new Date(review.submitted_at);
                     await updateContributor(review.user.login, 'reviewCount', reviewDate);
                 }
+
                 // Throttle requests to avoid hitting rate limits
-                await sleep(5000); // Sleep for 5 second between each pull request
+                await sleep(2000); // Sleep for 2 seconds between each pull request
+
+                totalProcessed++;
+                console.log(`Processed ${totalProcessed} pull requests`);
             }
 
             page += 1;

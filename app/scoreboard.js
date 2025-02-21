@@ -66,6 +66,30 @@ app.use(session({
 app.use(passport.initialize());
 app.use(passport.session());
 
+// Set the view engine to EJS
+app.set('view engine', 'ejs');
+app.set('views', path.join(__dirname, 'views'));
+
+// Root route to render the index.ejs template
+app.get('/', (req, res) => {
+    res.render('index');
+});
+
+// Route to render the activity.ejs template
+app.get('/activity', (req, res) => {
+    res.render('activity');
+});
+
+// Route to render the charts.ejs template
+app.get('/charts', (req, res) => {
+    res.render('charts');
+});
+
+// Route to render the top-cat.ejs template
+app.get('/top-cat', (req, res) => {
+    res.render('top-cat');
+});
+
 // Routes for GitHub authentication
 app.get('/auth/github', passport.authenticate('github', { scope: ['user:email'] }));
 
@@ -77,19 +101,19 @@ app.get('/auth/github/callback',
             return res.redirect('/');
         }
         const token = jwt.sign({ username: req.user.username }, process.env.JWT_SECRET, { expiresIn: '1h' });
-        res.redirect(`/admin.html?token=${token}`);
+        res.redirect(`/admin?token=${token}`);
     }
 );
 
 // Protect the admin route
-app.get('/admin.html', ensureAuthenticated, (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'admin.html'));
+app.get('/admin', ensureAuthenticated, (req, res) => {
+    res.render('admin', { user: req.user });
 });
 
 app.use(express.static('public'));
 app.use('/api', contributorRoutes);
 
-// Schedule tasks to be run on the server
+//Schedule tasks to be run on the server
 cron.schedule('0 * * * *', async () => {
     console.log('Running a task every hour to fetch PRs and reviews');
     try {
