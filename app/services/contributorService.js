@@ -38,7 +38,7 @@ export const initializeDatabase = async () => {
 
             console.log(`Remaining API requests: ${remainingRequests}`);
 
-            if (remainingRequests <= 15) {
+            if (remainingRequests <= 100) {
                 const waitTime = resetTime - Date.now();
                 console.log(`Rate limit is low. Waiting for ${waitTime / 1000} seconds until reset.`);
                 await sleep(waitTime);
@@ -61,7 +61,8 @@ export const initializeDatabase = async () => {
 
             for (const pr of pullRequests) {
                 const prDate = new Date(pr.updated_at);
-                await updateContributor(pr.user.login, 'prCount', prDate);
+                const merged = !!pr.merged_at; // Check if the PR is merged
+                await updateContributor(pr.user.login, 'prCount', prDate, merged);
 
                 const { data: reviews } = await octokit.rest.pulls.listReviews({
                     owner: repoOwner,
@@ -87,12 +88,19 @@ export const initializeDatabase = async () => {
 
         console.log('Database initialized successfully');
     } catch (err) {
+        if (err.status === 403 && err.response && err.response.headers['x-ratelimit-reset']) {
+            const resetTime = parseInt(err.response.headers['x-ratelimit-reset'], 10) * 1000;
+            const waitTime = resetTime - Date.now();
+            console.log(`Rate limit exceeded. Waiting for ${waitTime / 1000} seconds until reset.`);
+            await sleep(waitTime);
+        } else {
         console.error('Error initializing database', err);
+        }
     }
 };
 
 // Update contributor's PR or review count with date
-export const updateContributor = async (username, type, date) => {
+export const updateContributor = async (username, type, date, merged = false) => {
     if (!['prCount', 'reviewCount'].includes(type)) {
         throw new Error('Invalid type'); // Throw an error if the type is invalid
     }
@@ -109,7 +117,7 @@ export const updateContributor = async (username, type, date) => {
         ':avatarUrl': userData.avatar_url,
         ':lastUpdated': new Date().toISOString(),
         ':empty_list': [],
-        ':new_entry': [{ date: date.toISOString(), count: 1 }],
+        ':new_entry': [{ date: date.toISOString(), count: 1, merged: merged }],
     };
 
     if (process.env.NODE_ENV === 'production') {
@@ -130,7 +138,7 @@ export const updateContributor = async (username, type, date) => {
         contributor.avatarUrl = userData.avatar_url;
         contributor.lastUpdated = Date.now();
         if (type === 'prCount') {
-            contributor.contributions.push({ date: date, count: 1 });
+            contributor.contributions.push({ date: date, count: 1, merged: merged });
         } else {
             contributor.reviews.push({ date: date, count: 1 });
         }
@@ -164,9 +172,11 @@ export const fetchPullRequests = async () => {
         });
 
         for (const pr of pullRequests) {
+          if (pr.merged_at || pr.state === 'closed' && pr.merge_commit_sha) {
             const username = pr.user.login;
             const date = new Date(pr.updated_at);
-            await updateContributor(username, 'prCount', date); // Pass the date to updateContributor
+            const merged = !!pr.merged_at; // Check if the PR is merged
+            await updateContributor(username, 'prCount', date, merged); // Pass the date to updateContributor
 
             const { data: reviews } = await octokit.rest.pulls.listReviews({
                 owner: repoOwner,
@@ -180,6 +190,7 @@ export const fetchPullRequests = async () => {
                 const reviewDate = new Date(review.submitted_at);
                 await updateContributor(reviewUsername, 'reviewCount', reviewDate); // Pass the date to updateContributor
             }
+          }
         }
 
         await updateLastFetchDate(new Date()); // Update the last fetch date
@@ -307,7 +318,8 @@ export const getTopContributorsDateRange = async (startDate, endDate, page, limi
     const query = {
         contributions: {
             $elemMatch: {
-                date: { $gte: startDate, $lte: endDate }
+                date: { $gte: startDate, $lte: endDate },
+                merged: true // Filter for merged contributions
             }
         },
         username: { $not: /\[bot\]$/ }
@@ -321,7 +333,8 @@ export const getTopContributorsDateRange = async (startDate, endDate, page, limi
             ExpressionAttributeValues: {
                 ':startDate': startDate.toISOString(),
                 ':endDate': endDate.toISOString(),
-                ':bot': '[bot]'
+                ':bot': '[bot]',
+                ':merged': true
             },
             ProjectionExpression: 'username, contributions, avatarUrl, badges, totalBillsAwarded',
             Limit: limit,

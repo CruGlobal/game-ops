@@ -32,7 +32,8 @@ const ContributorSchema = new mongoose.Schema({
     // Array of contributions with date
     contributions: [{
         date: { type: Date, required: true },
-        count: { type: Number, default: 0 }
+        count: { type: Number, default: 0 },
+        merged: { type: Boolean, default: false } // Added merged attribute
     }],
     // Array of reviews with date
     reviews: [{
