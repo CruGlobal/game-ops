@@ -25,6 +25,15 @@
     <button id="fetchButton">Fetch Top Scores</button>
 </div>
 <div>
+    <label for="monthlyRange">Select Monthly Range:</label>
+    <select id="monthlyRange" name="monthlyRange">
+        <option value="1">1 Month</option>
+        <option value="3">3 Months</option>
+        <option value="6">6 Months</option>
+        <option value="12">12 Months</option>
+    </select>
+</div>
+<div>
     <label for="displayType">Display Type:</label>
     <select id="displayType" name="displayType">
         <option value="barChart">Bar Chart</option>
@@ -32,9 +41,13 @@
         <option value="dataTable">Data Table</option>
         <option value="lineChart">Line Chart</option>
         <option value="bubbleChart">Bubble Chart</option>
+        <option value="monthlyAggregatedChart">Monthly Aggregated Chart</option> <!-- New option -->
     </select>
 </div>
 <div id="top-scores-results">
+</div>
+<div class="chart-container">
+  <canvas id="monthlyAggregatedChart"></canvas>
 </div>
 <script src="/charts.js"></script>
 </body>

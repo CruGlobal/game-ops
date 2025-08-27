@@ -8,8 +8,10 @@ import cron from 'node-cron';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import contributorRoutes from './routes/contributorRoutes.js';
+import healthRoutes from './routes/healthRoutes.js';
 import { awardBillsAndVonettesController, fetchPRs, fetchPRsCron, awardContributorBadges, awardContributorBadgesCron } from './controllers/contributorController.js';
 import { errorHandler } from './middleware/errorHandler.js';
+import logger from './utils/logger.js';
 import session from 'express-session';
 import passport from './config/passport.js';
 import jwt from 'jsonwebtoken';
@@ -97,7 +99,7 @@ app.get('/auth/github/callback',
     passport.authenticate('github', { failureRedirect: '/' }),
     (req, res) => {
         if (!req.user) {
-            console.error('Failed to obtain access token');
+            logger.error('Failed to obtain access token during GitHub OAuth callback');
             return res.redirect('/');
         }
         const token = jwt.sign({ username: req.user.username }, process.env.JWT_SECRET, { expiresIn: '1h' });
@@ -112,39 +114,54 @@ app.get('/admin', ensureAuthenticated, (req, res) => {
 
 app.use(express.static('public'));
 app.use('/api', contributorRoutes);
+app.use('/api', healthRoutes);
 
 //Schedule tasks to be run on the server
 cron.schedule('0 * * * *', async () => {
-    console.log('Running a task every hour to fetch PRs and reviews');
+    logger.info('Running hourly task to fetch PRs and reviews');
     try {
-        await fetchPRsCron();
-        console.log('Data fetched successfully');
+        //await fetchPRsCron();
+        logger.info('Data fetched successfully');
     } catch (error) {
-        console.error('Error fetching data:', error);
+        logger.error('Error fetching data', { error: error.message });
     }
 });
 
 cron.schedule('0 * * * *', async () => {
-    console.log('Running a task every hour to award badges');
+    logger.info('Running hourly task to award badges');
     try {
-        await awardContributorBadgesCron();
-        console.log('Badges awarded successfully');
+        //await awardContributorBadgesCron();
+        logger.info('Badges awarded successfully');
     } catch (error) {
-        console.error('Error awarding badges:', error);
+        logger.error('Error awarding badges', { error: error.message });
     }
 });
 
-//cron.schedule('0 0 * * *', async () => {
-//    console.log('Running a task daily to award Bills and Vonettes');
-//    try {
-//        await awardBillsAndVonettes();
-//        console.log('Bills and Vonettes awarded successfully');
-//    } catch (error) {
-//        console.error('Error awarding Bills and Vonettes:', error);
-//    }
-//});
+cron.schedule('0 0 * * *', async () => {
+    logger.info('Running daily task to award Bills and Vonettes');
+    try {
+        //await awardBillsAndVonettes();
+        logger.info('Bills and Vonettes awarded successfully');
+    } catch (error) {
+        logger.error('Error awarding Bills and Vonettes', { error: error.message });
+    }
+});
 
+// Graceful shutdown handling
+process.on('SIGTERM', () => {
+    logger.info('SIGTERM received, shutting down gracefully');
+    process.exit(0);
+});
+
+process.on('SIGINT', () => {
+    logger.info('SIGINT received, shutting down gracefully');
+    process.exit(0);
+});
 
 app.listen(port, () => {
-    console.log(`GitHub PR Scoreboard app listening on http://localhost:${port}`);
+    logger.info('GitHub PR Scoreboard app started', { 
+        port,
+        environment: process.env.NODE_ENV || 'development',
+        url: `http://localhost:${port}`
+    });
 });

@@ -6,7 +6,12 @@
   "type": "module",
   "scripts": {
     "start": "node scoreboard.js",
-    "test": "echo \"No tests specified\" && exit 1"
+    "dev": "nodemon scoreboard.js",
+    "test": "jest",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "dependencies": {
     "aws-sdk": "^2.1048.0",
@@ -26,6 +31,20 @@
     "passport-github2": "^0.1.12",
     "express-session": "^1.17.3",
     "ejs": "^3.1.8"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2",
+    "eslint": "^8.57.0",
+    "prettier": "^3.1.1",
+    "jest": "^29.7.0",
+    "husky": "^8.0.3",
+    "lint-staged": "^15.2.0"
+  },
+  "lint-staged": {
+    "*.js": [
+      "eslint --fix",
+      "prettier --write"
+    ]
   },
   "author": "Luis Rodriguez",
   "license": "MIT"

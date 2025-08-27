@@ -15,10 +15,14 @@ async function fetchTopScores() {
     const reviewersResponse = await fetch(`/api/top-reviewers-date-range?range=${range}&page=${page}&limit=${limit}`);
     const reviewersData = await reviewersResponse.json();
 
-    displayResults(contributorsData, reviewersData);
+    // Fetch monthly aggregated data with the selected range
+    const monthlyAggregatedResponse = await fetch(`/api/monthly-aggregated-data?range=${monthlyRange}`);
+    const monthlyAggregatedData = await monthlyAggregatedResponse.json();
+
+    displayResults(contributorsData, reviewersData, monthlyAggregatedData);
 }
 
-function displayResults(contributorsData, reviewersData) {
+function displayResults(contributorsData, reviewersData, monthlyAggregatedData) {
     const displayType = document.getElementById('displayType').value;
     const resultsDiv = document.getElementById('top-scores-results');
     resultsDiv.innerHTML = ''; // Clear previous results
@@ -38,6 +42,9 @@ function displayResults(contributorsData, reviewersData) {
             break;
         case 'bubbleChart':
             createBubbleChart(contributorsData, reviewersData);
+            break;
+        case 'monthlyAggregatedChart':
+            createMonthlyAggregatedChart(monthlyAggregatedData);
             break;
         default:
             break;
@@ -222,3 +229,36 @@ function createDataTable(contributorsData, reviewersData) {
 
     document.getElementById('top-scores-results').appendChild(table);
 }
+
+function createMonthlyAggregatedChart(data) {
+    const ctx = document.getElementById('monthlyAggregatedChart');
+    if (ctx) {
+        const context = ctx.getContext('2d');
+        if (context) {
+            new Chart(context, {
+                type: 'bar',
+                data: {
+                    labels: data.labels,
+                    datasets: [{
+                        label: 'Monthly Aggregated Data',
+                        data: data.values,
+                        backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                        borderColor: 'rgba(75, 192, 192, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        } else {
+            console.error('Failed to get 2D context');
+        }
+    } else {
+        console.error('Element with ID "monthlyAggregatedChart" not found');
+        }
+    }

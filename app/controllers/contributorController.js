@@ -1,4 +1,5 @@
 import { awardBillsAndVonettes, fetchActivityData, fetchPullRequests, awardBadges, getTopContributors, getTopReviewers, getTopContributorsDateRange, getTopReviewersDateRange, initializeDatabase } from '../services/contributorService.js';
+import Contributor from '../models/contributor.js';
 
 // Controller to initialize the database
 export const initializeDatabaseController = async (req, res) => {
@@ -128,5 +129,44 @@ export const fetchActivityController = async (req, res) => {
         res.json(data);
     } catch (err) {
         res.status(500).json({ error: 'Failed to fetch activity data' });
+    }
+};
+
+// Get monthly aggregated data
+export const getMonthlyAggregatedData = async (req, res) => {
+    const range = parseInt(req.query.range, 10) || 1; // Default to 1 month if no range is provided
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setMonth(endDate.getMonth() - range);
+
+    try {
+        const data = await Contributor.aggregate([
+            { $unwind: '$contributions' },
+            { $match: { 'contributions.date': { $gte: startDate, $lte: endDate } } }, // Filter by date range
+            {
+                $group: {
+                    _id: {
+                        year: { $year: '$contributions.date' },
+                        month: { $month: '$contributions.date' }
+                    },
+                    totalPRs: { $sum: '$contributions.count' },
+                    totalReviews: { $sum: '$reviews.count' }
+                }
+            },
+            {
+                $project: {
+                    _id: 0,
+                    year: '$_id.year',
+                    month: '$_id.month',
+                    totalPRs: 1,
+                    totalReviews: 1
+                }
+            },
+            { $sort: { year: 1, month: 1 } }
+        ]);
+
+        res.json(data);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
     }
 };

@@ -1,0 +1,574 @@
+[
+  {
+    "_id": "67b39a742d1295ed5e3043f2",
+    "username": "mikealbert",
+    "prCount": 161,
+    "avatarUrl": "https://avatars.githubusercontent.com/u/355817?v=4",
+    "badges": [
+      {
+        "badge": "1st PR badge",
+        "date": "2025-02-17T21:00:00.650Z"
+      }
+    ],
+    "totalBillsAwarded": 0
+  },
+  {
+    "_id": "67b39a692d1295ed5e3042d7",
+    "username": "jeffboehlke",
+    "prCount": 146,
+    "avatarUrl": "https://avatars.githubusercontent.com/u/56264891?v=4",
+    "badges": [
+      {
+        "badge": "1st PR badge",
+        "date": "2025-02-17T21:00:00.572Z"
+      }
+    ],
+    "totalBillsAwarded": 0
+  },
+  {
+    "_id": "67b39a6a2d1295ed5e3042e3",
+    "username": "cru-Luis-Rodriguez",
+    "prCount": 143,
+    "avatarUrl": "https://avatars.githubusercontent.com/u/6875635?v=4",
+    "badges": [
+      {
+        "badge": "1st PR badge",
+        "date": "2025-02-17T21:00:00.591Z"
+      }
+    ],
+    "totalBillsAwarded": 0
+  },
+  {
+    "_id": "67b39a692d1295ed5e3042df",
+    "username": "samuko",
+    "prCount": 98,
+    "avatarUrl": "https://avatars.githubusercontent.com/u/7061783?v=4",
+    "badges": [
+      {
+        "badge": "1st PR badge",
+        "date": "2025-02-17T21:00:00.582Z"
+      }
+    ],
+    "totalBillsAwarded": 0
+  },
+  {
+    "_id": "67b39a6b2d1295ed5e3042fb",
+    "username": "davidhollenberger",
+    "prCount": 95,
+    "avatarUrl": "https://avatars.githubusercontent.com/u/7061698?v=4",
+    "badges": [
+      {
+        "badge": "1st PR badge",
+        "date": "2025-02-17T21:00:00.615Z"
+      }
+    ],
+    "totalBillsAwarded": 0
+  },
+  {
+    "_id": "67b39a6b2d1295ed5e3042ff",
+    "username": "Omicron7",
+    "prCount": 91,
+    "avatarUrl": "https://avatars.githubusercontent.com/u/302915?v=4",
+    "badges": [
+      {
+        "badge": "1st PR badge",
+        "date": "2025-02-17T21:00:00.623Z"
+      }
+    ],
+    "totalBillsAwarded": 0
+  },
+  {
+    "_id": "67b39a6b2d1295ed5e3042f7",
+    "username": "JasonBuckner",
+    "prCount": 84,
+    "avatarUrl": "https://avatars.githubusercontent.com/u/19961846?v=4",
+    "badges": [
+      {
+        "badge": "1st PR badge",
+        "date": "2025-02-17T21:00:00.610Z"
+      }
+    ],
+    "totalBillsAwarded": 0
+  },
+  {
+    "_id": "67b39a6a2d1295ed5e3042ef",
+    "username": "hal9000jw",
+    "prCount": 49,
+    "avatarUrl": "https://avatars.githubusercontent.com/u/98484684?v=4",
+    "badges": [
+      {
+        "badge": "1st PR badge",
+        "date": "2025-02-17T21:00:00.607Z"
+      }
+    ],
+    "totalBillsAwarded": 0
+  },
+  {
+    "_id": "67b39a702d1295ed5e30438e",
+    "username": "clonge",
+    "prCount": 41,
+    "avatarUrl": "https://avatars.githubusercontent.com/u/3642266?v=4",
+    "badges": [
+      {
+        "badge": "1st PR badge",
+        "date": "2025-02-17T21:00:00.642Z"
+      }
+    ],
+    "totalBillsAwarded": 0
+  },
+  {
+    "_id": "67b39a692d1295ed5e3042d3",
+    "username": "trentschaller",
+    "prCount": 31,
+    "avatarUrl": "https://avatars.githubusercontent.com/u/2749576?v=4",
+    "badges": [
+      {
+        "badge": "1st PR badge",
+        "date": "2025-02-17T21:00:00.569Z"
+      }
+    ],
+    "totalBillsAwarded": 0
+  },
+  {
+    "_id": "67b39a712d1295ed5e3043ad",
+    "username": "MayWorkman",
+    "prCount": 22,
+    "avatarUrl": "https://avatars.githubusercontent.com/u/2749638?v=4",
+    "badges": [
+      {
+        "badge": "1st PR badge",
+        "date": "2025-02-17T21:00:00.646Z"
+      }
+    ],
+    "totalBillsAwarded": 0
+  },
+  {
+    "_id": "67b39a6c2d1295ed5e304313",
+    "username": "ncasebolt",
+    "prCount": 21,
+    "avatarUrl": "https://avatars.githubusercontent.com/u/91500738?v=4",
+    "badges": [
+      {
+        "badge": "1st PR badge",
+        "date": "2025-02-17T21:00:00.638Z"
+      }
+    ],
+    "totalBillsAwarded": 0
+  },
+  {
+    "_id": "67b39ab72d1295ed5e3065e5",
+    "username": "wrandall22",
+    "prCount": 15,
+    "avatarUrl": "https://avatars.githubusercontent.com/u/2905714?v=4",
+    "badges": [
+      {
+        "badge": "1st PR badge",
+        "date": "2025-02-17T21:00:00.674Z"
+      }
+    ],
+    "totalBillsAwarded": 0
+  },
+  {
+    "_id": "67b39a7d2d1295ed5e3045cf",
+    "username": "Benjamin-deVries",
+    "prCount": 14,
+    "avatarUrl": "https://avatars.githubusercontent.com/u/70020583?v=4",
+    "badges": [
+      {
+        "badge": "1st PR badge",
+        "date": "2025-02-17T21:00:00.668Z"
+      }
+    ],
+    "totalBillsAwarded": 0
+  },
+  {
+    "_id": "67b39ae32d1295ed5e3096fe",
+    "username": "jbirdjavi",
+    "prCount": 14,
+    "avatarUrl": "https://avatars.githubusercontent.com/u/59860?v=4",
+    "badges": [
+      {
+        "badge": "1st PR badge",
+        "date": "2025-02-17T21:00:00.683Z"
+      }
+    ],
+    "totalBillsAwarded": 0
+  },
+  {
+    "_id": "67b39a722d1295ed5e3043bc",
+    "username": "alvin664",
+    "prCount": 12,
+    "avatarUrl": "https://avatars.githubusercontent.com/u/11392282?v=4",
+    "badges": [
+      {
+        "badge": "1st PR badge",
+        "date": "2025-02-17T21:00:00.647Z"
+      }
+    ],
+    "totalBillsAwarded": 0
+  },
+  {
+    "_id": "67b39aa12d1295ed5e3056f8",
+    "username": "cklineFL",
+    "prCount": 12,
+    "avatarUrl": "https://avatars.githubusercontent.com/u/30089150?v=4",
+    "badges": [
+      {
+        "badge": "1st PR badge",
+        "date": "2025-02-17T21:00:00.672Z"
+      }
+    ],
+    "totalBillsAwarded": 0
+  },
+  {
+    "_id": "67b39bbc2d1295ed5e326c80",
+    "username": "jcwatson11",
+    "prCount": 12,
+    "avatarUrl": "https://avatars.githubusercontent.com/u/2907918?v=4",
+    "badges": [
+      {
+        "badge": "1st PR badge",
+        "date": "2025-02-17T21:00:00.690Z"
+      }
+    ],
+    "totalBillsAwarded": 0
+  },
+  {
+    "_id": "67b39a6a2d1295ed5e3042e7",
+    "username": "dkopffl",
+    "prCount": 10,
+    "avatarUrl": "https://avatars.githubusercontent.com/u/37881394?v=4",
+    "badges": [
+      {
+        "badge": "1st PR badge",
+        "date": "2025-02-17T21:00:00.605Z"
+      }
+    ],
+    "totalBillsAwarded": 0
+  },
+  {
+    "_id": "67b39a6d2d1295ed5e304327",
+    "username": "knutsenm",
+    "prCount": 9,
+    "avatarUrl": "https://avatars.githubusercontent.com/u/8645901?v=4",
+    "badges": [
+      {
+        "badge": "1st PR badge",
+        "date": "2025-02-17T21:00:00.640Z"
+      }
+    ],
+    "totalBillsAwarded": 0
+  },
+  {
+    "_id": "67b39a7b2d1295ed5e30458e",
+    "username": "thomasosborne",
+    "prCount": 9,
+    "avatarUrl": "https://avatars.githubusercontent.com/u/98030298?v=4",
+    "badges": [
+      {
+        "badge": "1st PR badge",
+        "date": "2025-02-17T21:00:00.665Z"
+      }
+    ],
+    "totalBillsAwarded": 0
+  },
+  {
+    "_id": "67b39ac92d1295ed5e307614",
+    "username": "scottinthebooth",
+    "prCount": 9,
+    "avatarUrl": "https://avatars.githubusercontent.com/u/14078762?v=4",
+    "badges": [
+      {
+        "badge": "1st PR badge",
+        "date": "2025-02-17T21:00:00.679Z"
+      }
+    ],
+    "totalBillsAwarded": 0
+  },
+  {
+    "_id": "67b39b9d2d1295ed5e3213c2",
+    "username": "bbakercru",
+    "prCount": 9,
+    "avatarUrl": "https://avatars.githubusercontent.com/u/16959696?v=4",
+    "badges": [
+      {
+        "badge": "1st PR badge",
+        "date": "2025-02-17T21:00:00.688Z"
+      }
+    ],
+    "totalBillsAwarded": 0
+  },
+  {
+    "_id": "67b39a762d1295ed5e30444c",
+    "username": "dr-bizz",
+    "prCount": 8,
+    "avatarUrl": "https://avatars.githubusercontent.com/u/56281168?v=4",
+    "badges": [
+      {
+        "badge": "1st PR badge",
+        "date": "2025-02-17T21:00:00.663Z"
+      }
+    ],
+    "totalBillsAwarded": 0
+  },
+  {
+    "_id": "67b39a752d1295ed5e304428",
+    "username": "mattdrees",
+    "prCount": 7,
+    "avatarUrl": "https://avatars.githubusercontent.com/u/58439?v=4",
+    "badges": [
+      {
+        "badge": "1st PR badge",
+        "date": "2025-02-17T21:00:00.662Z"
+      }
+    ],
+    "totalBillsAwarded": 0
+  },
+  {
+    "_id": "67b39a7c2d1295ed5e3045b5",
+    "username": "canac",
+    "prCount": 7,
+    "avatarUrl": "https://avatars.githubusercontent.com/u/3740187?v=4",
+    "badges": [
+      {
+        "badge": "1st PR badge",
+        "date": "2025-02-17T21:00:00.667Z"
+      }
+    ],
+    "totalBillsAwarded": 0
+  },
+  {
+    "_id": "67b39a932d1295ed5e3050be",
+    "username": "jeff-clay",
+    "prCount": 7,
+    "avatarUrl": "https://avatars.githubusercontent.com/u/91073628?v=4",
+    "badges": [
+      {
+        "badge": "1st PR badge",
+        "date": "2025-02-17T21:00:00.669Z"
+      }
+    ],
+    "totalBillsAwarded": 0
+  },
+  {
+    "_id": "67b39a732d1295ed5e3043ee",
+    "username": "andrewroth",
+    "prCount": 6,
+    "avatarUrl": "https://avatars.githubusercontent.com/u/13490?v=4",
+    "badges": [
+      {
+        "badge": "1st PR badge",
+        "date": "2025-02-17T21:00:00.649Z"
+      }
+    ],
+    "totalBillsAwarded": 0
+  },
+  {
+    "_id": "67b39abe2d1295ed5e306c3e",
+    "username": "50-Cal",
+    "prCount": 6,
+    "avatarUrl": "https://avatars.githubusercontent.com/u/11665419?v=4",
+    "badges": [
+      {
+        "badge": "1st PR badge",
+        "date": "2025-02-17T21:00:00.677Z"
+      }
+    ],
+    "totalBillsAwarded": 0
+  },
+  {
+    "_id": "67b39ad12d1295ed5e30814a",
+    "username": "EJTison",
+    "prCount": 6,
+    "avatarUrl": "https://avatars.githubusercontent.com/u/97046400?v=4",
+    "badges": [
+      {
+        "badge": "1st PR badge",
+        "date": "2025-02-17T21:00:00.681Z"
+      }
+    ],
+    "totalBillsAwarded": 0
+  },
+  {
+    "_id": "67b39a712d1295ed5e3043a9",
+    "username": "tony-guan-cru",
+    "prCount": 5,
+    "avatarUrl": "https://avatars.githubusercontent.com/u/125295537?v=4",
+    "badges": [
+      {
+        "badge": "1st PR badge",
+        "date": "2025-02-17T21:00:00.644Z"
+      }
+    ],
+    "totalBillsAwarded": 0
+  },
+  {
+    "_id": "67b39ad82d1295ed5e30880f",
+    "username": "apratt86",
+    "prCount": 5,
+    "avatarUrl": "https://avatars.githubusercontent.com/u/45212233?v=4",
+    "badges": [
+      {
+        "badge": "1st PR badge",
+        "date": "2025-02-17T21:00:00.682Z"
+      }
+    ],
+    "totalBillsAwarded": 0
+  },
+  {
+    "_id": "67b39b122d1295ed5e30db5b",
+    "username": "frett",
+    "prCount": 5,
+    "avatarUrl": "https://avatars.githubusercontent.com/u/47818?v=4",
+    "badges": [
+      {
+        "badge": "1st PR badge",
+        "date": "2025-02-17T21:00:00.684Z"
+      }
+    ],
+    "totalBillsAwarded": 0
+  },
+  {
+    "_id": "67b39ab32d1295ed5e306355",
+    "username": "tataihono",
+    "prCount": 4,
+    "avatarUrl": "https://avatars.githubusercontent.com/u/802117?v=4",
+    "badges": [
+      {
+        "badge": "1st PR badge",
+        "date": "2025-02-17T21:00:00.673Z"
+      }
+    ],
+    "totalBillsAwarded": 0
+  },
+  {
+    "_id": "67b39a942d1295ed5e3050da",
+    "username": "hlbraddock",
+    "prCount": 3,
+    "avatarUrl": "https://avatars.githubusercontent.com/u/2084351?v=4",
+    "badges": [
+      {
+        "badge": "1st PR badge",
+        "date": "2025-02-17T21:00:00.670Z"
+      }
+    ],
+    "totalBillsAwarded": 0
+  },
+  {
+    "_id": "67b39a9f2d1295ed5e3055a7",
+    "username": "PhyllisHelton",
+    "prCount": 3,
+    "avatarUrl": "https://avatars.githubusercontent.com/u/7818590?v=4",
+    "badges": [
+      {
+        "badge": "1st PR badge",
+        "date": "2025-02-17T21:00:00.671Z"
+      }
+    ],
+    "totalBillsAwarded": 0
+  },
+  {
+    "_id": "67b39abe2d1295ed5e306bf1",
+    "username": "dbenton9",
+    "prCount": 1,
+    "avatarUrl": "https://avatars.githubusercontent.com/u/25228573?v=4",
+    "badges": [
+      {
+        "badge": "1st PR badge",
+        "date": "2025-02-17T21:00:00.676Z"
+      }
+    ],
+    "totalBillsAwarded": 0
+  },
+  {
+    "_id": "67b39ac82d1295ed5e3075bc",
+    "username": "wjames111",
+    "prCount": 1,
+    "avatarUrl": "https://avatars.githubusercontent.com/u/39811085?v=4",
+    "badges": [
+      {
+        "badge": "1st PR badge",
+        "date": "2025-02-17T21:00:00.678Z"
+      }
+    ],
+    "totalBillsAwarded": 0
+  },
+  {
+    "_id": "67b39b422d1295ed5e3125ef",
+    "username": "azatkooman",
+    "prCount": 1,
+    "avatarUrl": "https://avatars.githubusercontent.com/u/5259884?v=4",
+    "badges": [
+      {
+        "badge": "1st PR badge",
+        "date": "2025-02-17T21:00:00.685Z"
+      }
+    ],
+    "totalBillsAwarded": 0
+  },
+  {
+    "_id": "67b39b492d1295ed5e3135a2",
+    "username": "rguinee",
+    "prCount": 1,
+    "avatarUrl": "https://avatars.githubusercontent.com/u/140213519?v=4",
+    "badges": [
+      {
+        "badge": "1st PR badge",
+        "date": "2025-02-17T21:00:00.686Z"
+      }
+    ],
+    "totalBillsAwarded": 0
+  },
+  {
+    "_id": "67b39b6c2d1295ed5e317fa3",
+    "username": "cru-atlantis",
+    "prCount": 1,
+    "avatarUrl": "https://avatars.githubusercontent.com/u/58007000?v=4",
+    "badges": [
+      {
+        "badge": "1st PR badge",
+        "date": "2025-02-17T21:00:00.686Z"
+      }
+    ],
+    "totalBillsAwarded": 0
+  },
+  {
+    "_id": "67b39bba2d1295ed5e32680b",
+    "username": "twinge",
+    "prCount": 1,
+    "avatarUrl": "https://avatars.githubusercontent.com/u/23668?v=4",
+    "badges": [
+      {
+        "badge": "1st PR badge",
+        "date": "2025-02-17T21:00:00.689Z"
+      }
+    ],
+    "totalBillsAwarded": 0
+  },
+  {
+    "_id": "67b39cd72d1295ed5e36ca75",
+    "username": "levieggertcru",
+    "prCount": 1,
+    "avatarUrl": "https://avatars.githubusercontent.com/u/59846460?v=4",
+    "badges": [
+      {
+        "badge": "1st PR badge",
+        "date": "2025-02-17T21:00:00.691Z"
+      }
+    ],
+    "totalBillsAwarded": 0
+  },
+  {
+    "_id": "67b39b9b2d1295ed5e320c20",
+    "username": "jamieburch",
+    "prCount": 0,
+    "avatarUrl": "https://avatars.githubusercontent.com/u/146959615?v=4",
+    "badges": [
+      {
+        "badge": "1st Review badge",
+        "date": "2025-02-17T21:00:00.687Z"
+      }
+    ],
+    "totalBillsAwarded": 0
+  }
+]

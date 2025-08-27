@@ -17,73 +17,30 @@ const repoOwner = process.env.REPO_OWNER;
 const repoName = process.env.REPO_NAME;
 const domain = process.env.DOMAIN;
 
-// Function to sleep for a specified number of milliseconds
-const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-
 // Function to initialize the database
 export const initializeDatabase = async () => {
     try {
-        await Contributor.deleteMany({});
+        const { data: pullRequests } = await octokit.rest.pulls.list({
+            owner: repoOwner,
+            repo: repoName,
+            state: 'all',
+            per_page: 100,
+            sort: 'updated',
+            direction: 'desc',
+        });
 
-        let page = 1;
-        let per_page = 100;
-        let hasMorePages = true;
-        let totalProcessed = 0;
-
-        while (hasMorePages) {
-            // Check rate limit
-            const rateLimit = await octokit.rateLimit.get();
-            const remainingRequests = rateLimit.data.rate.remaining;
-            const resetTime = rateLimit.data.rate.reset * 1000; // Convert to milliseconds
-
-            console.log(`Remaining API requests: ${remainingRequests}`);
-
-            if (remainingRequests <= 1000) {
-                const waitTime = resetTime - Date.now();
-                console.log(`Rate limit is low. Waiting for ${waitTime / 1000} seconds until reset.`);
-                await sleep(waitTime);
-            }
-
-            const { data: pullRequests } = await octokit.rest.pulls.list({
+        for (const pr of pullRequests) {
+            await updateContributor(pr.user.login, 'prCount');
+            const { data: reviews } = await octokit.rest.pulls.listReviews({
                 owner: repoOwner,
                 repo: repoName,
-                state: 'all',
-                per_page: per_page,
-                page: page,
-                sort: 'updated',
-                direction: 'desc',
+                pull_number: pr.number,
+                per_page: 100,
             });
 
-            if (pullRequests.length === 0) {
-                hasMorePages = false;
-                break;
+            for (const review of reviews) {
+                await updateContributor(review.user.login, 'reviewCount');
             }
-
-            for (const pr of pullRequests) {
-                const prDate = new Date(pr.updated_at);
-                const merged = !!pr.merged_at; // Check if the PR is merged
-                await updateContributor(pr.user.login, 'prCount', prDate, merged);
-
-                const { data: reviews } = await octokit.rest.pulls.listReviews({
-                    owner: repoOwner,
-                    repo: repoName,
-                    pull_number: pr.number,
-                    per_page: per_page,
-                });
-
-                for (const review of reviews) {
-                    const reviewDate = new Date(review.submitted_at);
-                    await updateContributor(review.user.login, 'reviewCount', reviewDate);
-                }
-
-                // Throttle requests to avoid hitting rate limits
-                await sleep(3000); // Sleep for 3 seconds between each pull request
-
-                totalProcessed++;
-                console.log(`Processed ${totalProcessed} pull requests`);
-            }
-
-            page += 1;
         }
 
         console.log('Database initialized successfully');
@@ -92,8 +49,8 @@ export const initializeDatabase = async () => {
     }
 };
 
-// Update contributor's PR or review count with date
-export const updateContributor = async (username, type, date, merged = false) => {
+// Update contributor's PR or review count
+export const updateContributor = async (username, type) => {
     if (!['prCount', 'reviewCount'].includes(type)) {
         throw new Error('Invalid type'); // Throw an error if the type is invalid
     }
@@ -101,24 +58,16 @@ export const updateContributor = async (username, type, date, merged = false) =>
         username: username
     });
 
-    const updateExpression = type === 'prCount' ?
-            `set prCount = prCount + :val, avatarUrl = :avatarUrl, lastUpdated = :lastUpdated, contributions = list_append(if_not_exists(contributions, :empty_list), :new_entry)` :
-            `set reviewCount = reviewCount + :val, avatarUrl = :avatarUrl, lastUpdated = :lastUpdated, reviews = list_append(if_not_exists(reviews, :empty_list), :new_entry)`;
-
-    const expressionAttributeValues = {
-        ':val': 1,
-        ':avatarUrl': userData.avatar_url,
-        ':lastUpdated': new Date().toISOString(),
-        ':empty_list': [],
-        ':new_entry': [{ date: date.toISOString(), count: 1, merged: merged }],
-    };
-
     if (process.env.NODE_ENV === 'production') {
         const params = {
             TableName: 'Contributors',
             Key: { username: username },
-            UpdateExpression: updateExpression,
-            ExpressionAttributeValues:expressionAttributeValues,
+            UpdateExpression: `set ${type} = ${type} + :val, avatarUrl = :avatarUrl, lastUpdated = :lastUpdated`,
+            ExpressionAttributeValues: {
+                ':val': 1,
+                ':avatarUrl': userData.avatar_url,
+                ':lastUpdated': new Date().toISOString(),
+            },
             ReturnValues: 'ALL_NEW'
         };
         await dbClient.update(params).promise(); // Update the contributor in the database
@@ -130,11 +79,6 @@ export const updateContributor = async (username, type, date, merged = false) =>
         contributor[type] += 1;
         contributor.avatarUrl = userData.avatar_url;
         contributor.lastUpdated = Date.now();
-        if (type === 'prCount') {
-            contributor.contributions.push({ date: date, count: 1, merged: merged });
-        } else {
-            contributor.reviews.push({ date: date, count: 1 });
-        }
         await contributor.save(); // Save the contributor to the database
     }
 };
@@ -165,25 +109,12 @@ export const fetchPullRequests = async () => {
         });
 
         for (const pr of pullRequests) {
-          if (pr.merged_at || pr.state === 'closed' && pr.merge_commit_sha) {
-            const username = pr.user.login;
-            const date = new Date(pr.updated_at);
-            const merged = !!pr.merged_at; // Check if the PR is merged
-            await updateContributor(username, 'prCount', date, merged); // Pass the date to updateContributor
-
-            const { data: reviews } = await octokit.rest.pulls.listReviews({
-                owner: repoOwner,
-                repo: repoName,
-                pull_number: pr.number,
-                per_page: 100,
-            });
-
-            for (const review of reviews) {
-                const reviewUsername = review.user.login;
-                const reviewDate = new Date(review.submitted_at);
-                await updateContributor(reviewUsername, 'reviewCount', reviewDate); // Pass the date to updateContributor
+            await updateContributor(pr.user.login, 'prCount'); // Update the PR count for the contributor
+            if (pr.reviews) {
+                for (const review of pr.reviews) {
+                    await updateContributor(review.user.login, 'reviewCount'); // Update the review count for the contributor
+                }
             }
-          }
         }
 
         await updateLastFetchDate(new Date()); // Update the last fetch date
@@ -192,9 +123,44 @@ export const fetchPullRequests = async () => {
     }
 };
 
+// Fetch reviews and update contributors' review counts
+export const fetchReviews = async () => {
+    try {
+        const lastFetchDate = await getLastFetchDate();
+        const { data: pullRequests } = await octokit.rest.pulls.list({
+            owner: repoOwner,
+            repo: repoName,
+            state: 'all',
+            per_page: 100,
+            sort: 'updated',
+            direction: 'desc',
+            since: lastFetchDate.toISOString(),
+        });
+
+        for (const pr of pullRequests) {
+            const { data: reviews } = await octokit.rest.pulls.listReviews({
+                owner: repoOwner,
+                repo: repoName,
+                pull_number: pr.number,
+                per_page: 100,
+            });
+
+            for (const review of reviews) {
+                await updateContributor(review.user.login, 'reviewCount'); // Update the review count for the contributor
+            }
+        }
+
+        await updateLastFetchDate(new Date()); // Update the last fetch date
+    } catch (err) {
+        console.error('Error fetching reviews', err); // Log any errors
+    }
+};
+
 // Award badges to contributors based on their contributions
 export const awardBadges = async (pullRequestNumber = null) => {
     const results = [];
+    const isDevelopment = process.env.NODE_ENV === 'development'; // Check if NODE_ENV is set to development
+
     try {
         let contributors;
         if (process.env.NODE_ENV === 'production') {
@@ -263,8 +229,21 @@ export const awardBadges = async (pullRequestNumber = null) => {
             }
 
             if (badgeAwarded) {
-                // Log the awarded badge (commented out GitHub API call)
-                console.log(`🎉 Congratulations @${contributor.username}, you've earned the ${badgeAwarded}! 🎉\n\n![Badge](${domain}/images/${badgeImage})`);
+                if (isDevelopment) {
+                    // Log the awarded badge in development mode
+                    console.log(`Development mode: @${contributor.username} would earn the ${badgeAwarded}.`);
+                } else {
+                    // Log the awarded badge and add a comment to the pull request or review
+                    console.log(`🎉 Congratulations @${contributor.username}, you've earned the ${badgeAwarded}! 🎉\n\n![Badge](${domain}/images/${badgeImage})`);
+
+                    // Add a comment to the pull request
+                    await octokit.rest.issues.createComment({
+                        owner: repoOwner,
+                        repo: repoName,
+                        issue_number: pullRequestNumber,
+                        body: `🎉 Congratulations @${contributor.username}, you've earned the ${badgeAwarded}! 🎉\n\n![Badge](${domain}/images/${badgeImage})`
+                    });
+                }
 
                 results.push({ username: contributor.username, badge: badgeAwarded, badgeImage: badgeImage });
 
@@ -306,116 +285,6 @@ export const awardBadges = async (pullRequestNumber = null) => {
     return results;
 };
 
-export const getTopContributorsDateRange = async (startDate, endDate, page, limit) => {
-    let contributors;
-    const query = {
-        contributions: {
-            $elemMatch: {
-                date: { $gte: startDate, $lte: endDate },
-                merged: true // Filter for merged contributions
-            }
-        },
-        username: { $not: /\[bot\]$/ }
-    };
-
-    if (process.env.NODE_ENV === 'production') {
-        const params = {
-            TableName: 'Contributors',
-            KeyConditionExpression: 'contributions.date BETWEEN :startDate AND :endDate',
-            FilterExpression: 'NOT contains(username, :bot)',
-            ExpressionAttributeValues: {
-                ':startDate': startDate.toISOString(),
-                ':endDate': endDate.toISOString(),
-                ':bot': '[bot]',
-                ':merged': true
-            },
-            ProjectionExpression: 'username, contributions, avatarUrl, badges, totalBillsAwarded',
-            Limit: limit,
-            ExclusiveStartKey: (page - 1) * limit
-        };
-        const data = await dbClient.query(params).promise();
-        contributors = data.Items;
-    } else {
-        contributors = await Contributor.find(query)
-            .sort({ 'contributions.count': -1 })
-            .skip((page - 1) * limit)
-            .limit(limit)
-            .select('username contributions avatarUrl badges totalBillsAwarded');
-    }
-
-    // Calculate total pull requests for each contributor in the given date range
-    contributors = contributors.map(contributor => {
-        const totalPrCount = contributor.contributions
-            .filter(contribution => contribution.date >= startDate && contribution.date <= endDate)
-            .reduce((total, contribution) => total + contribution.count, 0);
-        return { ...contributor.toObject(), totalPrCount };
-    });
-
-    // Sort contributors by totalPrCount
-    contributors.sort((a, b) => b.totalPrCount - a.totalPrCount);
-
-    // Calculate total pull requests in the given date range
-    const totalPullRequests = contributors.reduce((total, contributor) => {
-        return total + contributor.totalPrCount;
-    }, 0);
-
-    return { contributors, totalPullRequests };
-};
-
-export const getTopReviewersDateRange = async (startDate, endDate, page, limit) => {
-    let reviewers;
-    const query = {
-        reviews: {
-            $elemMatch: {
-                date: { $gte: startDate, $lte: endDate }
-            }
-        },
-        username: { $not: /\[bot\]$/ }
-    };
-
-    if (process.env.NODE_ENV === 'production') {
-        const params = {
-            TableName: 'Contributors',
-            KeyConditionExpression: 'reviews.date BETWEEN :startDate AND :endDate',
-            FilterExpression: 'NOT contains(username, :bot)',
-            ExpressionAttributeValues: {
-                ':startDate': startDate.toISOString(),
-                ':endDate': endDate.toISOString(),
-                ':bot': '[bot]'
-            },
-            ProjectionExpression: 'username, reviews, avatarUrl, badges, totalBillsAwarded',
-            Limit: limit,
-            ExclusiveStartKey: (page - 1) * limit
-        };
-        const data = await dbClient.query(params).promise();
-        reviewers = data.Items;
-    } else {
-        reviewers = await Contributor.find(query)
-            .sort({ 'reviews.count': -1 })
-            .skip((page - 1) * limit)
-            .limit(limit)
-            .select('username reviews avatarUrl badges totalBillsAwarded');
-    }
-
-    // Calculate total reviews for each reviewer in the given date range
-    reviewers = reviewers.map(reviewer => {
-        const totalReviewCount = reviewer.reviews
-            .filter(review => review.date >= startDate && review.date <= endDate)
-            .reduce((total, review) => total + review.count, 0);
-        return { ...reviewer.toObject(), totalReviewCount };
-    });
-
-    // Sort reviewers by totalReviewCount
-    reviewers.sort((a, b) => b.totalReviewCount - a.totalReviewCount);
-
-    // Calculate total reviews in the given date range
-    const totalReviews = reviewers.reduce((total, reviewer) => {
-        return total + reviewer.totalReviewCount;
-    }, 0);
-
-    return { reviewers, totalReviews };
-};
-
 // Get the top contributors based on PR count
 export const getTopContributors = async () => {
     let contributors;
@@ -455,8 +324,10 @@ export const getTopReviewers = async () => {
 };
 
 // Award bills and vonettes to contributors based on their contributions
-export const awardBillsAndVonettes = async (pullRequestNumber = null, test = false) => {
+export const awardBillsAndVonettes = async (pullRequestNumber = null) => {
     const results = [];
+    const isDevelopment = process.env.NODE_ENV === 'development'; // Check if NODE_ENV is set to development
+
     try {
         let contributors;
         if (process.env.NODE_ENV === 'production') {
@@ -486,13 +357,13 @@ export const awardBillsAndVonettes = async (pullRequestNumber = null, test = fal
                 billsImage = '1_bill_57X27.png';
                 billsValue += 1;
                 contributor.first10ReviewsAwarded = true;
-           }  else if ((contributor.prCount >= 500 && !contributor.first500PrsAwarded) || (contributor.reviewCount >= 500 && !contributor.first500ReviewsAwarded)) {
+            } else if ((contributor.prCount >= 500 || contributor.reviewCount >= 500) && (!contributor.first500PrsAwarded || !contributor.first500ReviewsAwarded)) {
                 billsAwarded = 'Vonette';
                 billsImage = '5_vonett_57_25.png';
                 billsValue += 5;
                 if (contributor.prCount >= 500) contributor.first500PrsAwarded = true;
                 if (contributor.reviewCount >= 500) contributor.first500ReviewsAwarded = true;
-           }
+            }
 
             const totalContributions = contributor.prCount + contributor.reviewCount;
             const newBills = Math.floor(totalContributions / 100) - (contributor.totalBillsAwarded || 0);
@@ -504,8 +375,22 @@ export const awardBillsAndVonettes = async (pullRequestNumber = null, test = fal
             }
 
             if (billsValue > 0) {
-                // Log the awarded bills and vonettes (commented out GitHub API call)
-                console.log(`🎉 Congratulations @${contributor.username}, you've earned ${billsValue} ${billsAwarded}(s)! 🎉\n\n![${billsAwarded}](${domain}/images/${billsImage})`);
+                if (isDevelopment) {
+                    // Log the awarded bills and vonettes in development mode
+                    console.log(`Development mode: @${contributor.username} would earn ${billsValue} ${billsAwarded}(s).`);
+                } else {
+                    // Log the awarded bills and vonettes (commented out GitHub API call)
+                    console.log(`🎉 Congratulations @${contributor.username}, you've earned ${billsValue} ${billsAwarded}(s)! 🎉\n\n![${billsAwarded}](${domain}/images/${billsImage})`);
+
+                    // Add a comment to the pull request
+                    await octokit.rest.issues.createComment({
+                        owner: repoOwner,
+                        repo: repoName,
+                        issue_number: pullRequestNumber,
+                        body: `🎉 Congratulations @${contributor.username}, you've earned ${billsValue} ${billsAwarded}(s)! 🎉\n\n![${billsAwarded}](${domain}/images/${billsImage})`
+                    });
+                }
+                }
 
                 results.push({ username: contributor.username, bills: billsAwarded, billsImage: billsImage });
 
@@ -525,112 +410,9 @@ export const awardBillsAndVonettes = async (pullRequestNumber = null, test = fal
                     await contributor.save(); // Save the contributor to the database
                 }
             }
-        }
+
     } catch (err) {
         console.error('Error awarding Bills and Vonettes', err); // Log any errors
     }
     return results;
 };
-
-// function to fetch activity data
-export const fetchActivityData = async (prFrom, prTo) => {
-    const headers = {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${process.env.GITHUB_TOKEN}`
-    };
-
-    const stats = [];
-    const blocked = [];
-
-    for (let i = prFrom; i <= prTo; i++) {
-        try {
-            const url = `https://api.github.com/repos/${repoOwner}/${repoName}/pulls/${i}`;
-            const response = await fetch(url, { headers });
-            if (!response.ok) {
-                if (response.status === 404) {
-                    console.warn(`Pull request ${i} not found.`);
-                    continue; // Skip to the next pull request
-                }
-                throw new Error(`Failed to fetch pull request ${i}: ${response.statusText}`);
-            }
-            const prData = await response.json();
-            updateStats(stats, prData.user.login, "pr");
-
-            const reviewsUrl = `https://api.github.com/repos/${repoOwner}/${repoName}/pulls/${i}/reviews`;
-            const reviewsResponse = await fetch(reviewsUrl, { headers });
-            if (!reviewsResponse.ok) {
-                throw new Error(`Failed to fetch reviews for pull request ${i}: ${reviewsResponse.statusText}`);
-            }
-            const reviewsData = await reviewsResponse.json();
-
-            for (const review of reviewsData) {
-                if (review.state === "APPROVED") {
-                    updateStats(stats, review.user.login, "approved");
-                } else if (review.state === "COMMENTED") {
-                    updateStats(stats, review.user.login, "commented");
-                } else if (review.state === "CHANGES_REQUESTED") {
-                    updateStats(stats, review.user.login, "change");
-                    updateChange(blocked, prData.user.login, review.user.login, "change");
-                } else if (review.state === "DISMISSED") {
-                    updateStats(stats, review.user.login, "dismissed");
-                }
-            }
-        } catch (error) {
-            console.error(`Error fetching activity data for pull request ${i}:`, error);
-        }
-    }
-
-    return { stats, blocked };
-};
-
-function updateStats(stats, user, statType) {
-    let found = false;
-    for (const stat of stats) {
-        if (stat[0] === user) {
-            if (statType === "approved") {
-                stat[1] += 1;
-            } else if (statType === "commented") {
-                stat[2] += 1;
-            } else if (statType === "change") {
-                stat[3] += 1;
-            } else if (statType === "dismissed") {
-                stat[4] += 1;
-            } else if (statType === "pr") {
-                stat[5] += 1;
-            }
-            found = true;
-            break;
-        }
-    }
-    if (!found) {
-        if (statType === "approved") {
-            stats.push([user, 1, 0, 0, 0, 0]);
-        } else if (statType === "commented") {
-            stats.push([user, 0, 1, 0, 0, 0]);
-        } else if (statType === "change") {
-            stats.push([user, 0, 0, 1, 0, 0]);
-        } else if (statType === "dismissed") {
-            stats.push([user, 0, 0, 0, 1, 0]);
-        } else if (statType === "pr") {
-            stats.push([user, 0, 0, 0, 0, 1]);
-        }
-    }
-}
-
-function updateChange(blocked, userRaised, user, changeType) {
-    let found = false;
-    for (const block of blocked) {
-        if (block[0] === user && block[1] === userRaised) {
-            if (changeType === "change") {
-                block[2] += 1;
-            }
-            found = true;
-            break;
-        }
-    }
-    if (!found) {
-        if (changeType === "change") {
-            blocked.push([user, userRaised, 1, 0]);
-        }
-    }
-}

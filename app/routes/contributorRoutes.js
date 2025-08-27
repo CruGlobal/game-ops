@@ -3,6 +3,7 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import Contributor from '../models/contributor.js';
+import { validateDateRange, validatePagination, validateRequest } from '../utils/validation.js';
 import {
     initializeDatabaseController,
     fetchPRs,
@@ -12,7 +13,8 @@ import {
     topReviewersDateRange,
     topContributorsDateRange,
     awardBillsAndVonettesController,
-    fetchActivityController
+    fetchActivityController,
+    getMonthlyAggregatedData
 } from '../controllers/contributorController.js';
 import { getContributors, resetContributor, resetAllContributors } from '../controllers/adminController.js';
 import { authenticate } from '../middleware/authMiddleware.js';
@@ -81,5 +83,9 @@ router.get('/top-reviewers-date-range', topReviewersDateRange);
 
 // Route to get the activity data
 router.get('/activity', fetchActivityController);
+
+// Route to get monthly aggregated data
+router.get('/monthly-aggregated-data', getMonthlyAggregatedData);
+
 
 export default router;
