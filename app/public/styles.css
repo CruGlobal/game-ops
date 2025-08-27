@@ -1,0 +1,231 @@
+/* Container for the main content, centered with a width of 80% of the viewport */
+.container {
+    width: 80%;
+    margin: 0 auto;
+}
+
+/* Container for the tab buttons, centered horizontally */
+.tabs {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 20px;
+}
+
+/* Styles for individual tab buttons */
+.tab-button {
+    padding: 10px 20px; /* Padding inside the button */
+    cursor: pointer; /* Cursor changes to pointer on hover */
+    border: none; /* No border */
+    background-color: #f4f4f4; /* Light grey background */
+    margin: 0 5px; /* Margin between buttons */
+    font-size: 16px; /* Font size of the button text */
+}
+
+/* Styles for the active tab button */
+.tab-button.active {
+    background-color: #ddd; /* Slightly darker grey background */
+    font-weight: bold; /* Bold text */
+}
+
+/* Centered heading styles */
+h1 {
+    text-align: center; /* Centered text */
+}
+
+/* Card component styles */
+.card {
+    background-color: #fff; /* White background */
+    padding: 20px; /* Padding inside the card */
+    border-radius: 5px; /* Rounded corners */
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1); /* Subtle shadow for depth */
+}
+
+/* Centered heading inside card */
+.card h2 {
+    text-align: center; /* Centered text */
+}
+
+/* Styles for list headers and items, with space between elements */
+.list-header, .list-item {
+    display: flex; /* Flexbox layout */
+    justify-content: space-between; /* Space between elements */
+    padding: 10px 0; /* Padding above and below */
+    border-bottom: 1px solid #ddd; /* Bottom border */
+}
+
+/* Bold text for list headers */
+.list-header {
+    font-weight: bold; /* Bold text */
+}
+
+/* Column styles for profile, PR count, review count, and total bills */
+.profile-column, .pr-count-column, .review-count-column, .total-bills-column {
+    display: flex; /* Flexbox layout */
+    flex-direction: column; /* Column layout */
+    flex: 1; /* Flex-grow to fill space */
+    align-items: center; /* Centered content */
+}
+
+/* Column styles for badges, with wrapping and centered content */
+.badges-column {
+    display: flex; /* Flexbox layout */
+    flex-wrap: wrap; /* Wrap content to new lines */
+    flex-direction: row; /* Row layout */
+    justify-content: center; /* Centered content */
+    flex: 1; /* Flex-grow to fill space */
+    align-items: center; /* Centered content */
+}
+
+/* Styles for badge images */
+.badges-column img {
+    width: 25px; /* Width of the badge image */
+    height: 25px; /* Height of the badge image */
+    margin: 5px; /* Margin around the badge image */
+    transition: transform 0.5s ease; /* Smooth scaling transition */
+}
+
+/* Hover effect for badge images, scaling up */
+.badges-column img:hover {
+    transform: scale(4); /* Scale up the image */
+    z-index: 10; /* Bring the image to the front */
+}
+
+/* Profile section styles */
+.profile {
+    display: flex; /* Flexbox layout */
+    align-items: center; /* Centered content */
+}
+
+/* Styles for profile images */
+.profile img {
+    border-radius: 50%; /* Circular image */
+    margin-right: 10px; /* Margin to the right of the image */
+}
+
+/* Styles for the contributors list */
+#contributors-list {
+    list-style-type: none;
+    padding: 0;
+}
+
+/* Styles for individual list items */
+#contributors-list li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px;
+    border-bottom: 1px solid #ccc;
+}
+
+/* Styles for the reset button */
+#contributors-list li button {
+    background-color: #f44336;
+    color: white;
+    border: none;
+    padding: 5px 10px;
+    cursor: pointer;
+    border-radius: 3px;
+}
+
+/* Hover effect for the reset button */
+#contributors-list li button:hover {
+    background-color: #d32f2f;
+}
+
+.hamburger-menu {
+    position: relative;
+    display: inline-block;
+}
+
+.hamburger-button {
+    background-color: #f4f4f4;
+    color: #444;
+    cursor: pointer;
+    padding: 10px 20px;
+    border: none;
+    font-size: 24px;
+    transition: background-color 0.3s;
+}
+
+.hamburger-button:hover {
+    background-color: #ddd;
+}
+
+.hamburger-content {
+    display: none;
+    position: absolute;
+    background-color: #f4f4f4;
+    min-width: 160px;
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+    z-index: 1;
+}
+
+.hamburger-content .nav-list {
+    list-style-type: none;
+    padding: 0;
+    margin: 0;
+}
+
+.hamburger-content .nav-list li {
+    padding: 12px 16px;
+}
+
+.hamburger-content .nav-list li a {
+    text-decoration: none;
+    color: #007bff;
+    display: block;
+}
+
+.hamburger-content .nav-list li a:hover {
+    background-color: #ddd;
+}
+
+/* Hamburger menu styles */
+.hamburger-menu:hover .hamburger-content,
+.hamburger-menu.active .hamburger-content {
+    display: block;
+}
+
+/* Ensure tab content display logic is not affected */
+.tab-content {
+    display: none; /* Hidden by default */
+}
+
+.tab-content.active {
+    display: block; /* Displayed when active */
+}
+
+.nav-list {
+    list-style-type: none;
+    padding: 0;
+    margin: 0;
+}
+
+.nav-list > li {
+    position: relative;
+}
+
+.nav-list li a:hover {
+    background-color: #ddd;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); /* Light shadow */
+}
+
+.admin-submenu {
+    display: none;
+    position: absolute;
+    left: 100%;
+    top: 0;
+    list-style-type: none;
+    padding: 0;
+    margin: 0;
+    background-color: white;
+    border: 1px solid #ccc;
+}
+
+.admin-menu:hover .admin-submenu {
+    display: block;
+}
+
+.admin-menu > span {
+    cursor: default;
+}

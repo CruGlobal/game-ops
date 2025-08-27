@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Top Cat</title>
+    <link rel="stylesheet" href="top-cat.css">
+    <script nonce="randomNonce" src="top-cat.js"></script>
+</head>
+<body>
+<div class="container">
+    <h1>Top Score by Range</h1>
+    <div class="hamburger-menu">
+            <button class="hamburger-button">&#9776;</button>
+            <%- include('partials/nav') %>
+    </div>
+    <div>
+        <label for="range">Select Range:</label>
+        <select id="range" name="range">
+            <option value="1">1 Day</option>
+            <option value="7">7 Days</option>
+            <option value="30">30 Days</option>
+            <option value="60">60 Days</option>
+            <option value="90">90 Days</option>
+        </select>
+        <button id="fetchButton" style="display: none;">Fetch Top Scores</button>
+    </div>
+    <div class="tabs">
+        <button class="tab-button active" data-tab="contributors">Top Contributors</button>
+        <button class="tab-button" data-tab="reviewers">Top Reviewers</button>
+    </div>
+    <div class="tab-content active" id="contributors">
+        <div id="top-scores-results-contributors">
+            <!-- Results will be displayed here -->
+        </div>
+    </div>
+    <div class="tab-content" id="reviewers">
+        <div id="top-scores-results-reviewers">
+            <!-- Results will be displayed here -->
+        </div>
+    </div>
+</div>
+<script nonce="lexicostatistics">
+    function updateTitle() {
+        const range = document.getElementById('range').value;
+        let title;
+        switch (range) {
+            case '1':
+                title = "Today's Top Cat";
+                break;
+            case '7':
+                title = "This Week's Top Cat";
+                break;
+            case '30':
+                title = "This Month's Top Cat";
+                break;
+            case '60':
+                title = "Top Cat Past 60 days";
+                break;
+            case '90':
+                title = "Top Cat Past 90 days";
+                break;
+            default:
+                title = "Top Cat by Range";
+        }
+        document.title = title;
+        document.querySelector('h1').textContent = title;
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        const rangeElement = document.getElementById('range');
+        rangeElement.addEventListener('change', function() {
+            updateTitle();
+            fetchTopScores();
+        });
+        updateTitle();
+        document.getElementById('fetchButton').click();
+
+        // Tab switching logic
+        const tabButtons = document.querySelectorAll('.tab-button');
+        const tabContents = document.querySelectorAll('.tab-content');
+
+        tabButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                tabButtons.forEach(btn => btn.classList.remove('active'));
+                tabContents.forEach(content => content.classList.remove('active'));
+
+                button.classList.add('active');
+                document.getElementById(button.dataset.tab).classList.add('active');
+            });
+        });
+
+        // Show the default tab (contributors tab)
+    });
+</script>
+</body>
+</html>

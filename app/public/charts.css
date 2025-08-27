@@ -1,0 +1,43 @@
+/* Existing styles from top_score_by_range_style.css */
+body {
+    font-family: Arial, sans-serif;
+    margin: 20px;
+}
+
+h1 {
+    text-align: center;
+}
+
+div {
+    margin-bottom: 20px;
+}
+
+label {
+    margin-right: 10px;
+}
+
+input, select {
+    margin-right: 10px;
+}
+
+button {
+    padding: 5px 10px;
+}
+
+/* New styles for GitHub Stars page */
+#top-scores-results {
+    display: flex;
+    justify-content: space-around;
+}
+
+/* Styles for data table */
+table {
+    border-collapse: collapse;
+    width: 100%;
+}
+
+th, td {
+    border: 1px solid black;
+    padding: 8px;
+    text-align: left;
+}
