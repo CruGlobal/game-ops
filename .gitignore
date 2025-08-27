@@ -36,6 +36,11 @@ pids/
 
 # Coverage directory used by tools like istanbul
 coverage/
+*.lcov
+
+# Test outputs
+test-results/
+junit.xml
 
 # Legacy files
 .architect

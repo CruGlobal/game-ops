@@ -1,6 +1,6 @@
 import logger from '../utils/logger.js';
 
-export const errorHandler = (err, req, res) => {
+export const errorHandler = (err, req, res, next) => {
     // Log error with context
     logger.error('Unhandled error', {
         error: err.message,
