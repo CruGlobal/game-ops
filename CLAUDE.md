@@ -22,11 +22,24 @@ docker-compose up --build
 ```
 
 ### Environment Setup
-- Copy `.env` file to app directory with required variables:
+- Copy `.env.example` to `.env` in app directory and populate with actual values:
   - `GITHUB_TOKEN`: GitHub personal access token
   - `MONGO_URI`: MongoDB connection string
   - `NODE_ENV`: 'development' or 'production'
   - AWS credentials for production (DynamoDB)
+
+## ⚠️ CRITICAL SECURITY REQUIREMENTS
+
+**NEVER COMMIT SECRETS TO GITHUB:**
+- All sensitive values (tokens, passwords, keys) must be in `.env` files only
+- `.env` files are gitignored and should never be committed
+- Use `.env.example` with placeholder values for documentation
+- Before any commit, verify no secrets are included:
+  ```bash
+  git diff --cached  # Check staged changes for secrets
+  ```
+- If secrets are accidentally committed, they must be rotated immediately
+- Use `git log --oneline -p` to check commit history for exposed secrets
 
 ## Architecture Overview
 
