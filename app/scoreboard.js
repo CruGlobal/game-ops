@@ -20,6 +20,7 @@ import jwt from 'jsonwebtoken';
 import { ensureAuthenticated } from './middleware/ensureAuthenticated.js';
 import { socketConfig, SOCKET_EVENTS } from './config/websocket-config.js';
 import { setSocketIO } from './utils/socketEmitter.js';
+import testRoutes from './routes/testRoutes.js';
 
 
 dotenv.config();
@@ -146,6 +147,12 @@ app.get('/admin', ensureAuthenticated, (req, res) => {
 app.use(express.static('public'));
 app.use('/api', contributorRoutes);
 app.use('/api', healthRoutes);
+
+// Test routes (development only)
+if (process.env.NODE_ENV !== 'production') {
+    app.use('/api', testRoutes);
+    logger.info('Test routes enabled for WebSocket testing');
+}
 
 //Schedule tasks to be run on the server
 cron.schedule('0 * * * *', async () => {
