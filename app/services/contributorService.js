@@ -4,6 +4,7 @@ import Contributor from '../models/contributor.js';
 import FetchDate from '../models/fetchDate.js';
 import mongoSanitize from 'express-mongo-sanitize';
 import fetch from 'node-fetch';
+import { emitPRUpdate, emitBadgeAwarded, emitLeaderboardUpdate, emitReviewUpdate } from '../utils/socketEmitter.js';
 
 // Initialize Octokit with GitHub token and custom fetch
 const octokit = new Octokit({
@@ -136,6 +137,19 @@ export const updateContributor = async (username, type, date, merged = false) =>
             contributor.reviews.push({ date: date, count: 1 });
         }
         await contributor.save(); // Save the contributor to the database
+
+        // Emit socket event for real-time updates
+        if (type === 'prCount') {
+            emitPRUpdate({
+                username: contributor.username,
+                prCount: contributor.prCount
+            });
+        } else {
+            emitReviewUpdate({
+                username: contributor.username,
+                reviewCount: contributor.reviewCount
+            });
+        }
     }
 };
 
@@ -267,6 +281,13 @@ export const awardBadges = async (pullRequestNumber = null) => {
                 console.log(`🎉 Congratulations @${contributor.username}, you've earned the ${badgeAwarded}! 🎉\n\n![Badge](${domain}/images/${badgeImage})`);
 
                 results.push({ username: contributor.username, badge: badgeAwarded, badgeImage: badgeImage });
+
+                // Emit socket event for badge notification
+                emitBadgeAwarded({
+                    username: contributor.username,
+                    badgeName: badgeAwarded,
+                    badgeType: 'achievement'
+                });
 
                 if (process.env.NODE_ENV === 'production') {
                     const updateParams = {
