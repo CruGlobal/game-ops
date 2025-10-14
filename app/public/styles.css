@@ -229,3 +229,74 @@ h1 {
 .admin-menu > span {
     cursor: default;
 }
+
+/* Toast Notification System */
+#toast-container {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.toast {
+    padding: 15px 20px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    color: white;
+    font-size: 14px;
+    max-width: 350px;
+    opacity: 0;
+    transform: translateX(400px);
+    transition: all 0.3s ease;
+}
+
+.toast.show {
+    opacity: 1;
+    transform: translateX(0);
+}
+
+.toast-success {
+    background: #10b981;
+}
+
+.toast-info {
+    background: #3b82f6;
+}
+
+.toast-warning {
+    background: #f59e0b;
+}
+
+.toast-error {
+    background: #ef4444;
+}
+
+/* Highlight animation for updated values */
+.highlight-update {
+    animation: highlight 2s ease;
+}
+
+@keyframes highlight {
+    0% { background-color: transparent; }
+    50% { background-color: rgba(59, 130, 246, 0.3); }
+    100% { background-color: transparent; }
+}
+
+/* Activity feed new item animation */
+.activity-item.new {
+    animation: slideIn 0.5s ease;
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
