@@ -7,6 +7,8 @@ import cors from 'cors';
 import cron from 'node-cron';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { createServer } from 'http';
+import { Server } from 'socket.io';
 import contributorRoutes from './routes/contributorRoutes.js';
 import healthRoutes from './routes/healthRoutes.js';
 import { awardBillsAndVonettesController, fetchPRs, fetchPRsCron, awardContributorBadges, awardContributorBadgesCron } from './controllers/contributorController.js';
@@ -16,6 +18,8 @@ import session from 'express-session';
 import passport from './config/passport.js';
 import jwt from 'jsonwebtoken';
 import { ensureAuthenticated } from './middleware/ensureAuthenticated.js';
+import { socketConfig, SOCKET_EVENTS } from './config/websocket-config.js';
+import { setSocketIO } from './utils/socketEmitter.js';
 
 
 dotenv.config();
@@ -35,7 +39,8 @@ app.use(helmet({
         directives: {
             defaultSrc: ["'self'"],
             scriptSrc: ["'self'", "https://cdn.jsdelivr.net", "'nonce-lexicostatistics'"],
-            imgSrc: ["'self'", "data:", "https://github.com", "https://avatars.githubusercontent.com"]
+            imgSrc: ["'self'", "data:", "https://github.com", "https://avatars.githubusercontent.com"],
+            connectSrc: ["'self'", "ws://localhost:3000", "wss://localhost:3000"]
         }
     }
 }));
@@ -67,6 +72,32 @@ app.use(session({
 
 app.use(passport.initialize());
 app.use(passport.session());
+
+// Create HTTP server and initialize Socket.IO
+const httpServer = createServer(app);
+const io = new Server(httpServer, socketConfig);
+
+// Set Socket.IO instance for use in other modules
+setSocketIO(io);
+
+// Socket.IO connection handling
+io.on(SOCKET_EVENTS.CONNECTION, (socket) => {
+    logger.info('Client connected', { socketId: socket.id });
+
+    socket.on(SOCKET_EVENTS.SUBSCRIBE_UPDATES, () => {
+        socket.join('scoreboard-updates');
+        logger.info('Client subscribed to updates', { socketId: socket.id });
+    });
+
+    socket.on(SOCKET_EVENTS.UNSUBSCRIBE_UPDATES, () => {
+        socket.leave('scoreboard-updates');
+        logger.info('Client unsubscribed from updates', { socketId: socket.id });
+    });
+
+    socket.on(SOCKET_EVENTS.DISCONNECT, () => {
+        logger.info('Client disconnected', { socketId: socket.id });
+    });
+});
 
 // Set the view engine to EJS
 app.set('view engine', 'ejs');
@@ -158,10 +189,11 @@ process.on('SIGINT', () => {
     process.exit(0);
 });
 
-app.listen(port, () => {
-    logger.info('GitHub PR Scoreboard app started', { 
+httpServer.listen(port, () => {
+    logger.info('GitHub PR Scoreboard app started', {
         port,
         environment: process.env.NODE_ENV || 'development',
-        url: `http://localhost:${port}`
+        url: `http://localhost:${port}`,
+        websocket: 'enabled'
     });
 });
