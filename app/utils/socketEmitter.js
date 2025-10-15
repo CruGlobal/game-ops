@@ -67,3 +67,73 @@ export const emitContributorActivity = (data) => {
         timestamp: new Date()
     });
 };
+
+// Emit streak update event
+export const emitStreakUpdate = (data) => {
+    if (!ioInstance) return;
+
+    ioInstance.to('scoreboard-updates').emit(SOCKET_EVENTS.STREAK_UPDATE, {
+        username: data.username,
+        currentStreak: data.currentStreak,
+        longestStreak: data.longestStreak,
+        timestamp: new Date()
+    });
+};
+
+// Emit achievement unlocked event
+export const emitAchievementUnlocked = (data) => {
+    if (!ioInstance) return;
+
+    ioInstance.to('scoreboard-updates').emit(SOCKET_EVENTS.ACHIEVEMENT_UNLOCKED, {
+        username: data.username,
+        achievementId: data.achievementId,
+        achievementName: data.achievementName,
+        description: data.description,
+        category: data.category,
+        points: data.points,
+        timestamp: new Date()
+    });
+};
+
+// Emit points awarded event
+export const emitPointsAwarded = (data) => {
+    if (!ioInstance) return;
+
+    ioInstance.to('scoreboard-updates').emit(SOCKET_EVENTS.POINTS_AWARDED, {
+        username: data.username,
+        points: data.points,
+        totalPoints: data.totalPoints,
+        reason: data.reason,
+        prNumber: data.prNumber,
+        timestamp: new Date()
+    });
+};
+
+// Emit challenge progress event
+export const emitChallengeProgress = (data) => {
+    if (!ioInstance) return;
+
+    ioInstance.to('scoreboard-updates').emit(SOCKET_EVENTS.CHALLENGE_PROGRESS, {
+        username: data.username,
+        challengeId: data.challengeId,
+        challengeName: data.challengeName,
+        progress: data.progress,
+        target: data.target,
+        percentComplete: data.percentComplete,
+        timestamp: new Date()
+    });
+};
+
+// Emit challenge completed event
+export const emitChallengeCompleted = (data) => {
+    if (!ioInstance) return;
+
+    ioInstance.to('scoreboard-updates').emit(SOCKET_EVENTS.CHALLENGE_COMPLETED, {
+        username: data.username,
+        challengeId: data.challengeId,
+        challengeName: data.challengeName,
+        reward: data.reward,
+        totalPoints: data.totalPoints,
+        timestamp: new Date()
+    });
+};
