@@ -58,6 +58,34 @@
         addActivityToFeed(data);
     });
 
+    // Gamification event handlers
+    socket.on('streak-update', (data) => {
+        console.log('Streak Update:', data);
+        showToast(`🔥 ${data.username} has a ${data.currentStreak}-day streak!`, 'success');
+        updateStreakDisplay(data);
+    });
+
+    socket.on('achievement-unlocked', (data) => {
+        console.log('Achievement Unlocked:', data);
+        showToast(`🏆 ${data.username} unlocked: ${data.achievementName}!`, 'success', 5000);
+        showAchievementModal(data);
+    });
+
+    socket.on('points-awarded', (data) => {
+        console.log('Points Awarded:', data);
+        updatePointsDisplay(data.username, data.totalPoints);
+    });
+
+    socket.on('challenge-progress', (data) => {
+        console.log('Challenge Progress:', data);
+        updateChallengeProgressBar(data);
+    });
+
+    socket.on('challenge-completed', (data) => {
+        console.log('Challenge Completed:', data);
+        showToast(`🎉 ${data.username} completed: ${data.challengeName}! (+${data.reward} points)`, 'success', 5000);
+    });
+
     // Helper functions
     function updateContributorPRCount(username, prCount) {
         const element = document.querySelector(`[data-username="${username}"] .pr-count`);
@@ -144,6 +172,59 @@
             toast.classList.remove('show');
             setTimeout(() => toast.remove(), 300);
         }, duration);
+    }
+
+    // Gamification helper functions
+    function updateStreakDisplay(data) {
+        const element = document.querySelector(`[data-username="${data.username}"] .streak-count`);
+        if (element) {
+            element.textContent = data.currentStreak;
+            element.classList.add('highlight-update');
+            setTimeout(() => element.classList.remove('highlight-update'), 2000);
+        }
+    }
+
+    function updatePointsDisplay(username, totalPoints) {
+        const element = document.querySelector(`[data-username="${username}"] .points-count`);
+        if (element) {
+            element.textContent = totalPoints;
+            element.classList.add('highlight-update');
+            setTimeout(() => element.classList.remove('highlight-update'), 2000);
+        }
+    }
+
+    function showAchievementModal(data) {
+        // Simple achievement notification modal
+        const modal = document.createElement('div');
+        modal.className = 'achievement-modal';
+        modal.innerHTML = `
+            <div class="achievement-modal-content">
+                <div class="achievement-icon">🏆</div>
+                <h2>Achievement Unlocked!</h2>
+                <h3>${data.achievementName}</h3>
+                <p>${data.description}</p>
+                <p class="achievement-points">+${data.points} points</p>
+                <button onclick="this.parentElement.parentElement.remove()">Awesome!</button>
+            </div>
+        `;
+        document.body.appendChild(modal);
+
+        setTimeout(() => modal.classList.add('show'), 10);
+
+        // Auto-remove after 10 seconds
+        setTimeout(() => {
+            modal.classList.remove('show');
+            setTimeout(() => modal.remove(), 300);
+        }, 10000);
+    }
+
+    function updateChallengeProgressBar(data) {
+        const element = document.querySelector(`[data-challenge-id="${data.challengeId}"] .progress-bar`);
+        if (element) {
+            const percent = data.percentComplete;
+            element.style.width = `${percent}%`;
+            element.textContent = `${Math.round(percent)}%`;
+        }
     }
 
     // Expose socket for debugging
