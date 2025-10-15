@@ -5,6 +5,10 @@ import FetchDate from '../models/fetchDate.js';
 import mongoSanitize from 'express-mongo-sanitize';
 import fetch from 'node-fetch';
 import { emitPRUpdate, emitBadgeAwarded, emitLeaderboardUpdate, emitReviewUpdate } from '../utils/socketEmitter.js';
+import { updateStreak, checkStreakBadges } from './streakService.js';
+import { calculatePoints, awardPoints, awardReviewPoints } from './pointsService.js';
+import { checkAndAwardAchievements } from './achievementService.js';
+import { updateChallengeProgress } from './challengeService.js';
 
 // Initialize Octokit with GitHub token and custom fetch
 const octokit = new Octokit({
@@ -185,6 +189,36 @@ export const fetchPullRequests = async () => {
             const merged = !!pr.merged_at; // Check if the PR is merged
             await updateContributor(username, 'prCount', date, merged); // Pass the date to updateContributor
 
+            // Gamification: Update streak, award points, check achievements
+            try {
+                const contributor = await Contributor.findOne({ username });
+                if (contributor && merged) {
+                    // Update streak
+                    await updateStreak(contributor, pr.merged_at);
+                    await checkStreakBadges(contributor);
+
+                    // Award points based on PR labels
+                    const pointsData = calculatePoints(pr, contributor);
+                    await awardPoints(contributor, pointsData.points, 'PR Merged', pr.number);
+
+                    // Update challenge progress
+                    if (contributor.activeChallenges && contributor.activeChallenges.length > 0) {
+                        for (const activeChallenge of contributor.activeChallenges) {
+                            const challenge = await import('../models/challenge.js').then(m => m.default.findById(activeChallenge.challengeId));
+                            if (challenge && challenge.type === 'pr-merge') {
+                                await updateChallengeProgress(username, challenge._id.toString(), 1);
+                            }
+                        }
+                    }
+
+                    // Check and award achievements
+                    await checkAndAwardAchievements(contributor);
+                }
+            } catch (gamificationError) {
+                console.error('Gamification error for PR:', pr.number, gamificationError);
+                // Don't fail the whole process if gamification fails
+            }
+
             const { data: reviews } = await octokit.rest.pulls.listReviews({
                 owner: repoOwner,
                 repo: repoName,
@@ -196,6 +230,28 @@ export const fetchPullRequests = async () => {
                 const reviewUsername = review.user.login;
                 const reviewDate = new Date(review.submitted_at);
                 await updateContributor(reviewUsername, 'reviewCount', reviewDate); // Pass the date to updateContributor
+
+                // Gamification: Award review points and check achievements
+                try {
+                    const reviewer = await Contributor.findOne({ username: reviewUsername });
+                    if (reviewer) {
+                        await awardReviewPoints(reviewer);
+
+                        // Update challenge progress for reviews
+                        if (reviewer.activeChallenges && reviewer.activeChallenges.length > 0) {
+                            for (const activeChallenge of reviewer.activeChallenges) {
+                                const challenge = await import('../models/challenge.js').then(m => m.default.findById(activeChallenge.challengeId));
+                                if (challenge && challenge.type === 'review') {
+                                    await updateChallengeProgress(reviewUsername, challenge._id.toString(), 1);
+                                }
+                            }
+                        }
+
+                        await checkAndAwardAchievements(reviewer);
+                    }
+                } catch (gamificationError) {
+                    console.error('Gamification error for review:', review.id, gamificationError);
+                }
             }
           }
         }
