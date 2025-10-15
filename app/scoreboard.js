@@ -11,7 +11,9 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import contributorRoutes from './routes/contributorRoutes.js';
 import healthRoutes from './routes/healthRoutes.js';
+import challengeRoutes from './routes/challengeRoutes.js';
 import { awardBillsAndVonettesController, fetchPRs, fetchPRsCron, awardContributorBadges, awardContributorBadgesCron } from './controllers/contributorController.js';
+import { generateWeeklyChallenges, checkExpiredChallenges } from './services/challengeService.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import logger from './utils/logger.js';
 import session from 'express-session';
@@ -147,6 +149,7 @@ app.get('/admin', ensureAuthenticated, (req, res) => {
 app.use(express.static('public'));
 app.use('/api', contributorRoutes);
 app.use('/api', healthRoutes);
+app.use('/api/challenges', challengeRoutes);
 
 // Test routes (development only)
 if (process.env.NODE_ENV !== 'production') {
@@ -182,6 +185,30 @@ cron.schedule('0 0 * * *', async () => {
         logger.info('Bills and Vonettes awarded successfully');
     } catch (error) {
         logger.error('Error awarding Bills and Vonettes', { error: error.message });
+    }
+});
+
+// Gamification Cron Jobs
+
+// Generate new challenges every Monday at midnight
+cron.schedule('0 0 * * 1', async () => {
+    logger.info('Running weekly task to generate challenges');
+    try {
+        const challenges = await generateWeeklyChallenges();
+        logger.info('Weekly challenges generated', { count: challenges.length });
+    } catch (error) {
+        logger.error('Error generating weekly challenges', { error: error.message });
+    }
+});
+
+// Check expired challenges daily at midnight
+cron.schedule('0 0 * * *', async () => {
+    logger.info('Running daily task to check expired challenges');
+    try {
+        const count = await checkExpiredChallenges();
+        logger.info('Expired challenges checked', { updatedCount: count });
+    } catch (error) {
+        logger.error('Error checking expired challenges', { error: error.message });
     }
 });
 

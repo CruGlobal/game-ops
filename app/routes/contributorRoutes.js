@@ -14,7 +14,15 @@ import {
     topContributorsDateRange,
     awardBillsAndVonettesController,
     fetchActivityController,
-    getMonthlyAggregatedData
+    getMonthlyAggregatedData,
+    getAllAchievementsController,
+    getUserAchievementsController,
+    getAchievementProgressController,
+    getPointsLeaderboardController,
+    getPointsHistoryController,
+    getPointsSummaryController,
+    getStreakLeaderboardController,
+    getStreakStatsController
 } from '../controllers/contributorController.js';
 import { getContributors, resetContributor, resetAllContributors } from '../controllers/adminController.js';
 import { authenticate } from '../middleware/authMiddleware.js';
@@ -87,5 +95,20 @@ router.get('/activity', fetchActivityController);
 // Route to get monthly aggregated data
 router.get('/monthly-aggregated-data', getMonthlyAggregatedData);
 
+// Gamification Routes
+
+// Achievement routes
+router.get('/achievements', getAllAchievementsController);
+router.get('/:username/achievements', getUserAchievementsController);
+router.get('/:username/achievement-progress', getAchievementProgressController);
+
+// Points routes
+router.get('/leaderboard/points', getPointsLeaderboardController);
+router.get('/:username/points-history', getPointsHistoryController);
+router.get('/:username/points-summary', getPointsSummaryController);
+
+// Streak routes
+router.get('/leaderboard/streaks', getStreakLeaderboardController);
+router.get('/:username/streak', getStreakStatsController);
 
 export default router;
