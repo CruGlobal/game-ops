@@ -39,7 +39,93 @@ const ContributorSchema = new mongoose.Schema({
     reviews: [{
         date: { type: Date, required: true },
         count: { type: Number, default: 0 }
-    }]
+    }],
+
+    // Streak tracking
+    currentStreak: {
+        type: Number,
+        default: 0
+    },
+    lastContributionDate: {
+        type: Date,
+        default: null
+    },
+    longestStreak: {
+        type: Number,
+        default: 0
+    },
+
+    // Points system
+    totalPoints: {
+        type: Number,
+        default: 0
+    },
+    pointsHistory: [{
+        points: Number,
+        reason: String,
+        prNumber: Number,
+        timestamp: {
+            type: Date,
+            default: Date.now
+        }
+    }],
+
+    // Achievement system
+    achievements: [{
+        achievementId: String,
+        name: String,
+        description: String,
+        earnedAt: {
+            type: Date,
+            default: Date.now
+        },
+        category: String
+    }],
+
+    // Challenge participation
+    activeChallenges: [{
+        challengeId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'Challenge'
+        },
+        progress: {
+            type: Number,
+            default: 0
+        },
+        target: Number,
+        joined: {
+            type: Date,
+            default: Date.now
+        }
+    }],
+    completedChallenges: [{
+        challengeId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'Challenge'
+        },
+        completedAt: Date,
+        reward: Number
+    }],
+
+    // Streak badges
+    streakBadges: {
+        sevenDay: {
+            type: Boolean,
+            default: false
+        },
+        thirtyDay: {
+            type: Boolean,
+            default: false
+        },
+        ninetyDay: {
+            type: Boolean,
+            default: false
+        },
+        yearLong: {
+            type: Boolean,
+            default: false
+        }
+    }
 });
 
 // Create a model for the Contributor schema
