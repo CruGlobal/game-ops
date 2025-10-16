@@ -244,6 +244,21 @@ h1 {
     cursor: default;
 }
 
+/* Submenu divider styling */
+.admin-submenu .submenu-divider {
+    padding: 0;
+    margin: 5px 0;
+    color: #ccc;
+    font-size: 10px;
+    text-align: center;
+    pointer-events: none;
+    user-select: none;
+}
+
+.admin-submenu .submenu-divider:hover {
+    background: none;
+}
+
 /* Toast Notification System - Enhanced */
 #toast-container {
     position: fixed;
