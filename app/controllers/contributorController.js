@@ -27,10 +27,12 @@ export const fetchPRs = async (req, res) => {
 // Function to fetch pull requests for the cron job
 export const fetchPRsCron = async () => {
     try {
-        await fetchPullRequests(); // Fetch pull requests and update data
+        const result = await fetchPullRequests(); // Fetch pull requests and update data
         console.log('Pull requests fetched and data updated.');
+        return result || 'Completed';
     } catch (err) {
         console.error('Error fetching pull requests:', err); // Handle errors
+        throw err;
     }
 };
 
@@ -39,8 +41,10 @@ export const awardContributorBadgesCron = async (pullRequestNumber) => {
     try {
         const results = await awardBadges(pullRequestNumber); // Award badges
         console.log({ message: 'Badges awarded successfully.', results });
+        return results;
     } catch (err) {
         console.error({ message: 'Error awarding badges.' }); // Handle errors
+        throw err;
     }
 };
 

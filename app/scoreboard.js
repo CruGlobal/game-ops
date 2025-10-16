@@ -13,7 +13,8 @@ import contributorRoutes from './routes/contributorRoutes.js';
 import healthRoutes from './routes/healthRoutes.js';
 import challengeRoutes from './routes/challengeRoutes.js';
 import analyticsRoutes from './routes/analyticsRoutes.js';
-import { awardBillsAndVonettesController, fetchPRs, fetchPRsCron, awardContributorBadges, awardContributorBadgesCron } from './controllers/contributorController.js';
+import { fetchPRsCron, awardContributorBadgesCron } from './controllers/contributorController.js';
+import { awardBillsAndVonettes } from './services/contributorService.js';
 import { generateWeeklyChallenges, checkExpiredChallenges } from './services/challengeService.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import logger from './utils/logger.js';
@@ -173,8 +174,8 @@ if (process.env.NODE_ENV !== 'production') {
 cron.schedule('0 * * * *', async () => {
     logger.info('Running hourly task to fetch PRs and reviews');
     try {
-        //await fetchPRsCron();
-        logger.info('Data fetched successfully');
+        const result = await fetchPRsCron();
+        logger.info('Data fetched successfully', { result });
     } catch (error) {
         logger.error('Error fetching data', { error: error.message });
     }
@@ -183,8 +184,8 @@ cron.schedule('0 * * * *', async () => {
 cron.schedule('0 * * * *', async () => {
     logger.info('Running hourly task to award badges');
     try {
-        //await awardContributorBadgesCron();
-        logger.info('Badges awarded successfully');
+        const result = await awardContributorBadgesCron();
+        logger.info('Badges awarded successfully', { badgesCount: result?.length || 0 });
     } catch (error) {
         logger.error('Error awarding badges', { error: error.message });
     }
@@ -193,8 +194,8 @@ cron.schedule('0 * * * *', async () => {
 cron.schedule('0 0 * * *', async () => {
     logger.info('Running daily task to award Bills and Vonettes');
     try {
-        //await awardBillsAndVonettes();
-        logger.info('Bills and Vonettes awarded successfully');
+        const results = await awardBillsAndVonettes();
+        logger.info('Bills and Vonettes awarded successfully', { billsCount: results?.length || 0, results });
     } catch (error) {
         logger.error('Error awarding Bills and Vonettes', { error: error.message });
     }
