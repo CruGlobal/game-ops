@@ -9,6 +9,14 @@ let activityChart = null;
 
 // Initialize page
 document.addEventListener('DOMContentLoaded', async () => {
+    // Add back button event listener
+    const backButton = document.getElementById('backButton');
+    if (backButton) {
+        backButton.addEventListener('click', () => {
+            window.location.href = '/leaderboard';
+        });
+    }
+
     await loadProfileData();
     initializeSocketIO();
 });
@@ -57,8 +65,11 @@ function populateProfileHeader() {
     usernameH1.textContent = contributorData.username;
 
     // Calculate rank (requires fetching all contributors)
-    fetch('/api/contributors')
-        .then(res => res.json())
+    fetch('/api/top-contributors')
+        .then(res => {
+            if (!res.ok) throw new Error('Failed to fetch contributors');
+            return res.json();
+        })
         .then(allContributors => {
             const sortedByPRs = allContributors.sort((a, b) => b.prCount - a.prCount);
             const rank = sortedByPRs.findIndex(c => c.username === contributorData.username) + 1;
@@ -103,38 +114,47 @@ function populateBadgeShowcase() {
         return;
     }
 
-    // Badge metadata mapping
+    // Badge metadata mapping (images are in /images/badges/)
     const badgeMetadata = {
-        'first-pr': { name: 'First PR', image: '/badges/first-pr.png' },
-        'first-review': { name: 'First Review', image: '/badges/first-review.png' },
-        '10-prs': { name: '10 PRs', image: '/badges/10-prs.png' },
-        '10-reviews': { name: '10 Reviews', image: '/badges/10-reviews.png' },
-        '50-prs': { name: '50 PRs', image: '/badges/50-prs.png' },
-        '50-reviews': { name: '50 Reviews', image: '/badges/50-reviews.png' },
-        '100-prs': { name: '100 PRs', image: '/badges/100-prs.png' },
-        '100-reviews': { name: '100 Reviews', image: '/badges/100-reviews.png' },
-        '500-prs': { name: '500 PRs', image: '/badges/500-prs.png' },
-        '500-reviews': { name: '500 Reviews', image: '/badges/500-reviews.png' },
-        '1000-prs': { name: '1000 PRs', image: '/badges/1000-prs.png' },
-        '1000-reviews': { name: '1000 Reviews', image: '/badges/1000-reviews.png' },
-        'week-warrior': { name: 'Week Warrior', image: '/badges/week-warrior.png' },
-        'monthly-master': { name: 'Monthly Master', image: '/badges/monthly-master.png' },
-        'quarter-champion': { name: 'Quarter Champion', image: '/badges/quarter-champion.png' },
-        'year-hero': { name: 'Year-Long Hero', image: '/badges/year-hero.png' }
+        'first-pr': { name: 'First PR', image: '/images/badges/1st_pr_badge.png' },
+        'first-review': { name: 'First Review', image: '/images/badges/1st_review_badge.png' },
+        '10-prs': { name: '10 PRs', image: '/images/badges/10_prs_badge.png' },
+        '10-reviews': { name: '10 Reviews', image: '/images/badges/10_reviews_badge.png' },
+        '50-prs': { name: '50 PRs', image: '/images/badges/50_prs_badge.png' },
+        '50-reviews': { name: '50 Reviews', image: '/images/badges/50_reviews_badge.png' },
+        '100-prs': { name: '100 PRs', image: '/images/badges/100_prs_badge.png' },
+        '100-reviews': { name: '100 Reviews', image: '/images/badges/100_reviews_badge.png' },
+        '500-prs': { name: '500 PRs', image: '/images/badges/500_prs_badge.png' },
+        '500-reviews': { name: '500 Reviews', image: '/images/badges/500_reviews_badge.png' },
+        '1000-prs': { name: '1000 PRs', image: '/images/badges/1000_prs_badge.png' },
+        '1000-reviews': { name: '1000 Reviews', image: '/images/badges/1000_reviews_badge.png' },
+        'week-warrior': { name: 'Week Warrior', image: '/images/badges/50_prs_badge.png' },
+        'monthly-master': { name: 'Monthly Master', image: '/images/badges/100_prs_badge.png' },
+        'quarter-champion': { name: 'Quarter Champion', image: '/images/badges/500_prs_badge.png' },
+        'year-hero': { name: 'Year-Long Hero', image: '/images/badges/1000_prs_badge.png' }
     };
 
     badgeShowcase.innerHTML = '';
 
     contributorData.badges.forEach(badgeId => {
-        const metadata = badgeMetadata[badgeId] || { name: badgeId, image: '/badges/default.png' };
+        const metadata = badgeMetadata[badgeId] || { name: badgeId, image: '/images/badges/1st_pr_badge.png' };
 
         const badgeItem = document.createElement('div');
         badgeItem.className = 'badge-item';
-        badgeItem.innerHTML = `
-            <img src="${metadata.image}" alt="${metadata.name}" onerror="this.src='/badges/default.png'">
-            <div class="badge-name">${metadata.name}</div>
-        `;
 
+        const badgeImg = document.createElement('img');
+        badgeImg.src = metadata.image;
+        badgeImg.alt = metadata.name;
+        badgeImg.onerror = function() {
+            this.src = '/images/badges/default.png';
+        };
+
+        const badgeName = document.createElement('div');
+        badgeName.className = 'badge-name';
+        badgeName.textContent = metadata.name;
+
+        badgeItem.appendChild(badgeImg);
+        badgeItem.appendChild(badgeName);
         badgeShowcase.appendChild(badgeItem);
     });
 }
@@ -151,7 +171,47 @@ async function renderActivityChart() {
         const response = await fetch(`/api/analytics/contributor/${username}?days=30`);
         if (!response.ok) throw new Error('Failed to fetch activity data');
 
-        const data = await response.json();
+        const apiData = await response.json();
+
+        // API returns: { username, period, contributions: [], reviews: [], pointsHistory: [] }
+        // Create aggregated daily data
+        const dailyData = {};
+
+        // Aggregate contributions
+        if (apiData.contributions && Array.isArray(apiData.contributions)) {
+            apiData.contributions.forEach(c => {
+                const date = new Date(c.date).toDateString();
+                if (!dailyData[date]) dailyData[date] = { date, prCount: 0, reviewCount: 0, points: 0 };
+                dailyData[date].prCount += 1;
+            });
+        }
+
+        // Aggregate reviews
+        if (apiData.reviews && Array.isArray(apiData.reviews)) {
+            apiData.reviews.forEach(r => {
+                const date = new Date(r.date).toDateString();
+                if (!dailyData[date]) dailyData[date] = { date, prCount: 0, reviewCount: 0, points: 0 };
+                dailyData[date].reviewCount += 1;
+            });
+        }
+
+        // Aggregate points
+        if (apiData.pointsHistory && Array.isArray(apiData.pointsHistory)) {
+            apiData.pointsHistory.forEach(p => {
+                const date = new Date(p.timestamp).toDateString();
+                if (!dailyData[date]) dailyData[date] = { date, prCount: 0, reviewCount: 0, points: 0 };
+                dailyData[date].points += p.points || 0;
+            });
+        }
+
+        // Convert to sorted array
+        const data = Object.values(dailyData).sort((a, b) => new Date(a.date) - new Date(b.date));
+
+        // If no data, show empty chart
+        if (data.length === 0) {
+            ctx.parentElement.innerHTML = '<div class="empty-state">No activity data available for the last 30 days</div>';
+            return;
+        }
 
         // Prepare chart data
         const labels = data.map(d => {
