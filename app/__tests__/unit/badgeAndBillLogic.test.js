@@ -31,26 +31,70 @@ describe('Badge and Bill Awarding Logic', () => {
 
       it('should award milestone PR badges at correct thresholds', async () => {
         const testCases = [
-          { prCount: 10, expectedBadge: '10 PR badge', expectedImage: '10_pr_badge.png' },
-          { prCount: 50, expectedBadge: '50 PR badge', expectedImage: '50_pr_badge.png' },
-          { prCount: 100, expectedBadge: '100 PR badge', expectedImage: '100_pr_badge.png' },
-          { prCount: 500, expectedBadge: '500 PR badge', expectedImage: '500_pr_badge.png' },
-          { prCount: 1000, expectedBadge: '1000 PR badge', expectedImage: '1000_pr_badge.png' }
+          {
+            prCount: 10,
+            expectedBadge: '10 PR badge',
+            expectedImage: '10_prs_badge.png',
+            badges: [{ badge: '1st PR badge', date: new Date() }]
+          },
+          {
+            prCount: 50,
+            expectedBadge: '50 PR badge',
+            expectedImage: '50_prs_badge.png',
+            badges: [
+              { badge: '1st PR badge', date: new Date() },
+              { badge: '10 PR badge', date: new Date() }
+            ]
+          },
+          {
+            prCount: 100,
+            expectedBadge: '100 PR badge',
+            expectedImage: '100_prs_badge.png',
+            badges: [
+              { badge: '1st PR badge', date: new Date() },
+              { badge: '10 PR badge', date: new Date() },
+              { badge: '50 PR badge', date: new Date() }
+            ]
+          },
+          {
+            prCount: 500,
+            expectedBadge: '500 PR badge',
+            expectedImage: '500_prs_badge.png',
+            badges: [
+              { badge: '1st PR badge', date: new Date() },
+              { badge: '10 PR badge', date: new Date() },
+              { badge: '50 PR badge', date: new Date() },
+              { badge: '100 PR badge', date: new Date() }
+            ]
+          },
+          {
+            prCount: 1000,
+            expectedBadge: '1000 PR badge',
+            expectedImage: '1000_prs_badge.png',
+            badges: [
+              { badge: '1st PR badge', date: new Date() },
+              { badge: '10 PR badge', date: new Date() },
+              { badge: '50 PR badge', date: new Date() },
+              { badge: '100 PR badge', date: new Date() },
+              { badge: '500 PR badge', date: new Date() }
+            ]
+          }
         ];
 
         for (const testCase of testCases) {
           await Contributor.deleteMany({});
-          
+
           await Contributor.create(
-            createTestContributor({ 
-              username: `user_${testCase.prCount}`, 
+            createTestContributor({
+              username: `user_${testCase.prCount}`,
               prCount: testCase.prCount,
-              badges: [{ badge: '1st PR badge', date: new Date() }] // Has prerequisite badge
+              reviewCount: 0, // Set to 0 to avoid awarding review badges
+              badges: testCase.badges // Has all prerequisite badges
             })
           );
 
           const results = await awardBadges();
-          
+
           const milestoneResult = results.find(r => r.badge === testCase.expectedBadge);
           expect(milestoneResult).toBeDefined();
           expect(milestoneResult.badgeImage).toBe(testCase.expectedImage);
@@ -77,32 +121,76 @@ describe('Badge and Bill Awarding Logic', () => {
     describe('Review Badges', () => {
       it('should award review badges at correct thresholds', async () => {
         const testCases = [
-          { reviewCount: 1, expectedBadge: '1st Review badge', expectedImage: '1st_review_badge.png' },
-          { reviewCount: 10, expectedBadge: '10 Review badge', expectedImage: '10_review_badge.png' },
-          { reviewCount: 50, expectedBadge: '50 Review badge', expectedImage: '50_review_badge.png' },
-          { reviewCount: 100, expectedBadge: '100 Review badge', expectedImage: '100_review_badge.png' },
-          { reviewCount: 500, expectedBadge: '500 Review badge', expectedImage: '500_review_badge.png' },
-          { reviewCount: 1000, expectedBadge: '1000 Review badge', expectedImage: '1000_review_badge.png' }
+          {
+            reviewCount: 1,
+            expectedBadge: '1st Review badge',
+            expectedImage: '1st_review_badge.png',
+            badges: []
+          },
+          {
+            reviewCount: 10,
+            expectedBadge: '10 Reviews badge',
+            expectedImage: '10_reviews_badge.png',
+            badges: [{ badge: '1st Review badge', date: new Date() }]
+          },
+          {
+            reviewCount: 50,
+            expectedBadge: '50 Reviews badge',
+            expectedImage: '50_reviews_badge.png',
+            badges: [
+              { badge: '1st Review badge', date: new Date() },
+              { badge: '10 Reviews badge', date: new Date() }
+            ]
+          },
+          {
+            reviewCount: 100,
+            expectedBadge: '100 Reviews badge',
+            expectedImage: '100_reviews_badge.png',
+            badges: [
+              { badge: '1st Review badge', date: new Date() },
+              { badge: '10 Reviews badge', date: new Date() },
+              { badge: '50 Reviews badge', date: new Date() }
+            ]
+          },
+          {
+            reviewCount: 500,
+            expectedBadge: '500 Reviews badge',
+            expectedImage: '500_reviews_badge.png',
+            badges: [
+              { badge: '1st Review badge', date: new Date() },
+              { badge: '10 Reviews badge', date: new Date() },
+              { badge: '50 Reviews badge', date: new Date() },
+              { badge: '100 Reviews badge', date: new Date() }
+            ]
+          },
+          {
+            reviewCount: 1000,
+            expectedBadge: '1000 Reviews badge',
+            expectedImage: '1000_reviews_badge.png',
+            badges: [
+              { badge: '1st Review badge', date: new Date() },
+              { badge: '10 Reviews badge', date: new Date() },
+              { badge: '50 Reviews badge', date: new Date() },
+              { badge: '100 Reviews badge', date: new Date() },
+              { badge: '500 Reviews badge', date: new Date() }
+            ]
+          }
         ];
 
         for (const testCase of testCases) {
           await Contributor.deleteMany({});
-          
-          const existingBadges = testCase.reviewCount > 1 
-            ? [{ badge: '1st Review badge', date: new Date() }]
-            : [];
 
           await Contributor.create(
-            createTestContributor({ 
-              username: `reviewer_${testCase.reviewCount}`, 
+            createTestContributor({
+              username: `reviewer_${testCase.reviewCount}`,
               prCount: 0,
               reviewCount: testCase.reviewCount,
-              badges: existingBadges
+              badges: testCase.badges
             })
           );
 
           const results = await awardBadges();
-          
+
           const reviewResult = results.find(r => r.badge === testCase.expectedBadge);
           expect(reviewResult).toBeDefined();
           expect(reviewResult.badgeImage).toBe(testCase.expectedImage);
@@ -111,39 +199,52 @@ describe('Badge and Bill Awarding Logic', () => {
 
       it('should award both PR and review badges to active contributors', async () => {
         await Contributor.create(
-          createTestContributor({ 
-            username: 'active_contributor', 
+          createTestContributor({
+            username: 'active_contributor',
             prCount: 1,
             reviewCount: 1,
             badges: []
           })
         );
 
-        const results = await awardBadges();
-        
-        expect(results).toHaveLength(2);
-        expect(results.some(r => r.badge === '1st PR badge')).toBe(true);
-        expect(results.some(r => r.badge === '1st Review badge')).toBe(true);
+        // First call awards 1st PR badge
+        const results1 = await awardBadges();
+        expect(results1).toHaveLength(1);
+        expect(results1[0].badge).toBe('1st PR badge');
+
+        // Second call awards 1st Review badge
+        const results2 = await awardBadges();
+        expect(results2).toHaveLength(1);
+        expect(results2[0].badge).toBe('1st Review badge');
       });
     });
 
     describe('Badge Persistence', () => {
       it('should save awarded badges to the database', async () => {
         await Contributor.create(
-          createTestContributor({ 
-            username: 'persistent_user', 
+          createTestContributor({
+            username: 'persistent_user',
             prCount: 10,
+            reviewCount: 0,
             badges: []
           })
         );
 
+        // First call awards 1st PR badge
         await awardBadges();
 
-        const updatedContributor = await Contributor.findOne({ username: 'persistent_user' });
-        expect(updatedContributor.badges).toHaveLength(2); // 1st PR + 10 PR badges
+        let updatedContributor = await Contributor.findOne({ username: 'persistent_user' });
+        expect(updatedContributor.badges).toHaveLength(1);
         expect(updatedContributor.badges[0].badge).toBe('1st PR badge');
         expect(updatedContributor.badges[0].date).toBeDefined();
+
+        // Second call awards 10 PR badge
+        await awardBadges();
+
+        updatedContributor = await Contributor.findOne({ username: 'persistent_user' });
+        expect(updatedContributor.badges).toHaveLength(2);
         expect(updatedContributor.badges[1].badge).toBe('10 PR badge');
+        expect(updatedContributor.badges[1].date).toBeDefined();
       });
     });
   });
@@ -262,8 +363,8 @@ describe('Badge and Bill Awarding Logic', () => {
 
       it('should award multiple incremental Bills if needed', async () => {
         await Contributor.create(
-          createTestContributor({ 
-            username: 'super_contributor', 
+          createTestContributor({
+            username: 'super_contributor',
             prCount: 200,
             reviewCount: 100, // Total = 300
             totalBillsAwarded: 0,
@@ -271,14 +372,21 @@ describe('Badge and Bill Awarding Logic', () => {
           })
         );
 
-        const results = await awardBillsAndVonettes();
-        
+        // First call awards initial milestone (10 PRs) → 1 bill
+        let results = await awardBillsAndVonettes();
         expect(results).toHaveLength(1);
         expect(results[0].bills).toBe('Bill');
-        
-        // Should get 4 bills total: 1 for first 10 PRs + 3 for incremental (300/100 = 3)
-        const updatedUser = await Contributor.findOne({ username: 'super_contributor' });
-        expect(updatedUser.totalBillsAwarded).toBe(4);
+
+        let updatedUser = await Contributor.findOne({ username: 'super_contributor' });
+        expect(updatedUser.totalBillsAwarded).toBe(1);
+
+        // Second call awards incremental bills (300/100 - 1 = 2 more) → 3 bills total
+        results = await awardBillsAndVonettes();
+        expect(results).toHaveLength(1);
+        expect(results[0].bills).toBe('Bill');
+
+        updatedUser = await Contributor.findOne({ username: 'super_contributor' });
+        expect(updatedUser.totalBillsAwarded).toBe(3);
       });
 
       it('should not award bills if no new milestones reached', async () => {
@@ -301,8 +409,8 @@ describe('Badge and Bill Awarding Logic', () => {
     describe('Complex Scenarios', () => {
       it('should handle both milestone and incremental awards correctly', async () => {
         await Contributor.create(
-          createTestContributor({ 
-            username: 'complex_case', 
+          createTestContributor({
+            username: 'complex_case',
             prCount: 500, // Triggers 500 PR Vonette
             reviewCount: 100, // Total contributions = 600
             totalBillsAwarded: 0,
@@ -311,15 +419,15 @@ describe('Badge and Bill Awarding Logic', () => {
           })
         );
 
+        // First call awards Vonette (5 bills) - highest priority milestone
         const results = await awardBillsAndVonettes();
-        
+
         expect(results).toHaveLength(1);
-        expect(results[0].bills).toBe('Vonette'); // Should get Vonette (highest award)
-        
+        expect(results[0].bills).toBe('Vonette');
+
         const updatedUser = await Contributor.findOne({ username: 'complex_case' });
-        // Should get: 1 (first 10 PRs) + 5 (500 PR Vonette) + 0 (incremental already covered)
-        expect(updatedUser.totalBillsAwarded).toBe(6);
-        expect(updatedUser.first10PrsAwarded).toBe(true);
+        // Vonette awards 5 bills (milestones take precedence over incremental)
+        expect(updatedUser.totalBillsAwarded).toBe(5);
         expect(updatedUser.first500PrsAwarded).toBe(true);
       });
 

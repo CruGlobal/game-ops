@@ -16,7 +16,10 @@ beforeAll(async () => {
   const mongoUri = mongoServer.getUri();
   
   // Connect to the in-memory database
-  await mongoose.connect(mongoUri);
+  // Only connect if not already connected to avoid "multiple connections" error
+  if (mongoose.connection.readyState === 0) {
+    await mongoose.connect(mongoUri);
+  }
   
   // Set test environment variables
   process.env.NODE_ENV = 'test';
@@ -124,21 +127,50 @@ export const mockGitHubApi = {
 
 // Helper function to create test contributors
 export const createTestContributor = (overrides = {}) => {
-  return {
+  const baseContributor = {
     username: 'testuser',
     prCount: 5,
     reviewCount: 3,
     avatarUrl: 'https://github.com/testuser.png',
     badges: [],
     totalBillsAwarded: 0,
+    firstPrAwarded: false,
+    firstReviewAwarded: false,
     first10PrsAwarded: false,
     first10ReviewsAwarded: false,
+    first50PrsAwarded: false,
+    first50ReviewsAwarded: false,
+    first100PrsAwarded: false,
+    first100ReviewsAwarded: false,
     first500PrsAwarded: false,
     first500ReviewsAwarded: false,
+    first1000PrsAwarded: false,
+    first1000ReviewsAwarded: false,
     contributions: [],
     reviews: [],
     ...overrides
   };
+
+  // Auto-set boolean flags based on badges array
+  if (baseContributor.badges && baseContributor.badges.length > 0) {
+    baseContributor.badges.forEach(badgeObj => {
+      const badge = badgeObj.badge || badgeObj;
+      if (badge === '1st PR badge') baseContributor.firstPrAwarded = true;
+      if (badge === '1st Review badge') baseContributor.firstReviewAwarded = true;
+      if (badge === '10 PR badge') baseContributor.first10PrsAwarded = true;
+      if (badge === '10 Reviews badge') baseContributor.first10ReviewsAwarded = true;
+      if (badge === '50 PR badge') baseContributor.first50PrsAwarded = true;
+      if (badge === '50 Reviews badge') baseContributor.first50ReviewsAwarded = true;
+      if (badge === '100 PR badge') baseContributor.first100PrsAwarded = true;
+      if (badge === '100 Reviews badge') baseContributor.first100ReviewsAwarded = true;
+      if (badge === '500 PR badge') baseContributor.first500PrsAwarded = true;
+      if (badge === '500 Reviews badge') baseContributor.first500ReviewsAwarded = true;
+      if (badge === '1000 PR badge') baseContributor.first1000PrsAwarded = true;
+      if (badge === '1000 Reviews badge') baseContributor.first1000ReviewsAwarded = true;
+    });
+  }
+
+  return baseContributor;
 };
 
 // Helper function to create test PR data

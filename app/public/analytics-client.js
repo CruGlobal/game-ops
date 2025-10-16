@@ -44,6 +44,9 @@
     async function loadOverview() {
         try {
             const response = await fetch(`/api/analytics/overview?days=${currentDays}`);
+            if (!response.ok) {
+                throw new Error(`Failed to load overview (HTTP ${response.status})`);
+            }
             const data = await response.json();
 
             // Update stats
@@ -59,6 +62,7 @@
 
         } catch (error) {
             console.error('Error loading overview:', error);
+            showToast('Failed to load overview data. Please refresh the page.', 'error');
         }
     }
 
@@ -66,7 +70,17 @@
     async function loadTrends() {
         try {
             const response = await fetch(`/api/analytics/team?days=${currentDays}`);
+            if (!response.ok) {
+                throw new Error(`Failed to load trends (HTTP ${response.status})`);
+            }
             const data = await response.json();
+
+            // Check for empty data
+            if (!data.timeSeries || data.timeSeries.length === 0) {
+                const chartContainer = document.getElementById('trendsChart').parentElement;
+                chartContainer.innerHTML = '<p style="text-align: center; padding: 40px; color: var(--text-secondary);">No contribution data available for this period</p>';
+                return;
+            }
 
             const ctx = document.getElementById('trendsChart').getContext('2d');
 
@@ -174,6 +188,7 @@
 
         } catch (error) {
             console.error('Error loading trends:', error);
+            showToast('Failed to load contribution trends.', 'error');
         }
     }
 
@@ -181,6 +196,9 @@
     async function loadTopContributors() {
         try {
             const response = await fetch('/api/analytics/top-contributors?limit=10');
+            if (!response.ok) {
+                throw new Error(`Failed to load top contributors (HTTP ${response.status})`);
+            }
             const data = await response.json();
 
             const ctx = document.getElementById('topContributorsChart').getContext('2d');
@@ -263,6 +281,7 @@
 
         } catch (error) {
             console.error('Error loading top contributors:', error);
+            showToast('Failed to load top contributors data.', 'error');
         }
     }
 
@@ -270,6 +289,9 @@
     async function loadChallengeStats() {
         try {
             const response = await fetch('/api/analytics/challenges');
+            if (!response.ok) {
+                throw new Error(`Failed to load challenge stats (HTTP ${response.status})`);
+            }
             const data = await response.json();
 
             const container = document.getElementById('challengeStats');
@@ -302,6 +324,7 @@
 
         } catch (error) {
             console.error('Error loading challenge stats:', error);
+            showToast('Failed to load challenge statistics.', 'error');
         }
     }
 
@@ -309,6 +332,9 @@
     async function loadHeatmap() {
         try {
             const response = await fetch('/api/analytics/heatmap?days=90');
+            if (!response.ok) {
+                throw new Error(`Failed to load heatmap (HTTP ${response.status})`);
+            }
             const data = await response.json();
 
             const ctx = document.getElementById('heatmapChart').getContext('2d');
@@ -400,6 +426,7 @@
 
         } catch (error) {
             console.error('Error loading heatmap:', error);
+            showToast('Failed to load activity heatmap.', 'error');
         }
     }
 
@@ -407,6 +434,9 @@
     async function loadGrowth() {
         try {
             const response = await fetch('/api/analytics/growth');
+            if (!response.ok) {
+                throw new Error(`Failed to load growth trends (HTTP ${response.status})`);
+            }
             const data = await response.json();
 
             // Weekly growth
@@ -450,6 +480,7 @@
 
         } catch (error) {
             console.error('Error loading growth trends:', error);
+            showToast('Failed to load growth trends.', 'error');
         }
     }
 
@@ -476,7 +507,7 @@
             const response = await fetch(`/api/analytics/export?type=${type}&days=${currentDays}`);
 
             if (!response.ok) {
-                throw new Error('Export failed');
+                throw new Error(`Export failed (HTTP ${response.status})`);
             }
 
             const blob = await response.blob();
@@ -492,7 +523,7 @@
             showToast(`${type} data exported successfully`, 'success');
         } catch (error) {
             console.error('Error exporting data:', error);
-            showToast('Export failed', 'error');
+            showToast('Failed to export data. Please try again.', 'error');
         }
     };
 

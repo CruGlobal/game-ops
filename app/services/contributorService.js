@@ -92,8 +92,10 @@ export const initializeDatabase = async () => {
         }
 
         console.log('Database initialized successfully');
+        return 'Database initialized successfully.';
     } catch (err) {
         console.error('Error initializing database', err);
+        throw err;
     }
 };
 
@@ -300,15 +302,15 @@ export const awardBadges = async (pullRequestNumber = null) => {
                 badgeImage = '1st_review_badge.png';
                 contributor.firstReviewAwarded = true;
             } else if (contributor.prCount >= 10 && !contributor.first10PrsAwarded) {
-                badgeAwarded = '10 PRs badge';
-                badgeImage = '10_pr_badge.png';
+                badgeAwarded = '10 PR badge';
+                badgeImage = '10_prs_badge.png';
                 contributor.first10PrsAwarded = true;
             } else if (contributor.reviewCount >= 10 && !contributor.first10ReviewsAwarded) {
                 badgeAwarded = '10 Reviews badge';
-                badgeImage = '10_review_badge.png';
+                badgeImage = '10_reviews_badge.png';
                 contributor.first10ReviewsAwarded = true;
             } else if (contributor.prCount >= 50 && !contributor.first50PrsAwarded) {
-                badgeAwarded = '50 PRs badge';
+                badgeAwarded = '50 PR badge';
                 badgeImage = '50_prs_badge.png';
                 contributor.first50PrsAwarded = true;
             } else if (contributor.reviewCount >= 50 && !contributor.first50ReviewsAwarded) {
@@ -316,7 +318,7 @@ export const awardBadges = async (pullRequestNumber = null) => {
                 badgeImage = '50_reviews_badge.png';
                 contributor.first50ReviewsAwarded = true;
             } else if (contributor.prCount >= 100 && !contributor.first100PrsAwarded) {
-                badgeAwarded = '100 PRs badge';
+                badgeAwarded = '100 PR badge';
                 badgeImage = '100_prs_badge.png';
                 contributor.first100PrsAwarded = true;
             } else if (contributor.reviewCount >= 100 && !contributor.first100ReviewsAwarded) {
@@ -324,7 +326,7 @@ export const awardBadges = async (pullRequestNumber = null) => {
                 badgeImage = '100_reviews_badge.png';
                 contributor.first100ReviewsAwarded = true;
             } else if (contributor.prCount >= 500 && !contributor.first500PrsAwarded) {
-                badgeAwarded = '500 PRs badge';
+                badgeAwarded = '500 PR badge';
                 badgeImage = '500_prs_badge.png';
                 contributor.first500PrsAwarded = true;
             } else if (contributor.reviewCount >= 500 && !contributor.first500ReviewsAwarded) {
@@ -332,7 +334,7 @@ export const awardBadges = async (pullRequestNumber = null) => {
                 badgeImage = '500_reviews_badge.png';
                 contributor.first500ReviewsAwarded = true;
             } else if (contributor.prCount >= 1000 && !contributor.first1000PrsAwarded) {
-                badgeAwarded = '1000 PRs badge';
+                badgeAwarded = '1000 PR badge';
                 badgeImage = '1000_prs_badge.png';
                 contributor.first1000PrsAwarded = true;
             } else if (contributor.reviewCount >= 1000 && !contributor.first1000ReviewsAwarded) {
@@ -561,32 +563,41 @@ export const awardBillsAndVonettes = async (pullRequestNumber = null, test = fal
             let billsAwarded = null;
             let billsImage = null;
             let billsValue = 0;
+            let hasMilestone = false;
 
-            if (contributor.prCount >= 10 && !contributor.first10PrsAwarded) {
-                billsAwarded = 'Bill';
-                billsImage = '1_bill_57X27.png';
-                billsValue += 1;
-                contributor.first10PrsAwarded = true;
-            } else if (contributor.reviewCount >= 10 && !contributor.first10ReviewsAwarded) {
-                billsAwarded = 'Bill';
-                billsImage = '1_bill_57X27.png';
-                billsValue += 1;
-                contributor.first10ReviewsAwarded = true;
-           }  else if ((contributor.prCount >= 500 && !contributor.first500PrsAwarded) || (contributor.reviewCount >= 500 && !contributor.first500ReviewsAwarded)) {
+            // Check for Vonette first (highest priority)
+            if ((contributor.prCount >= 500 && !contributor.first500PrsAwarded) || (contributor.reviewCount >= 500 && !contributor.first500ReviewsAwarded)) {
                 billsAwarded = 'Vonette';
                 billsImage = '5_vonett_57_25.png';
-                billsValue += 5;
+                billsValue = 5;
+                hasMilestone = true;
                 if (contributor.prCount >= 500) contributor.first500PrsAwarded = true;
                 if (contributor.reviewCount >= 500) contributor.first500ReviewsAwarded = true;
-           }
+            }
+            // Check for initial Bill milestones (10 PRs or 10 reviews) - only award once
+            else if ((contributor.prCount >= 10 && !contributor.first10PrsAwarded) || (contributor.reviewCount >= 10 && !contributor.first10ReviewsAwarded)) {
+                // Only award if they haven't received ANY initial milestone bill yet
+                if ((contributor.totalBillsAwarded || 0) === 0) {
+                    billsAwarded = 'Bill';
+                    billsImage = '1_bill_57X27.png';
+                    billsValue = 1;
+                    hasMilestone = true;
+                    if (contributor.prCount >= 10) contributor.first10PrsAwarded = true;
+                    if (contributor.reviewCount >= 10) contributor.first10ReviewsAwarded = true;
+                }
+            }
 
-            const totalContributions = contributor.prCount + contributor.reviewCount;
-            const newBills = Math.floor(totalContributions / 100) - (contributor.totalBillsAwarded || 0);
+            // Check for incremental bills (every 100 total contributions)
+            // Only award incremental if NO milestone was awarded
+            if (!hasMilestone) {
+                const totalContributions = contributor.prCount + contributor.reviewCount;
+                const newBills = Math.floor(totalContributions / 100) - (contributor.totalBillsAwarded || 0);
 
-            if (newBills > 0) {
-                billsAwarded = 'Bill';
-                billsImage = '1_bill_57X27.png';
-                billsValue += newBills;
+                if (newBills > 0) {
+                    billsAwarded = 'Bill';
+                    billsImage = '1_bill_57X27.png';
+                    billsValue = newBills;
+                }
             }
 
             if (billsValue > 0) {

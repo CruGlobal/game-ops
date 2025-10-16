@@ -44,6 +44,9 @@ document.addEventListener('DOMContentLoaded', () => {
 async function loadActiveChallenges() {
     try {
         const response = await fetch('/api/challenges/active');
+        if (!response.ok) {
+            throw new Error(`Failed to load challenges (HTTP ${response.status})`);
+        }
         const data = await response.json();
 
         if (data.challenges && data.challenges.length > 0) {
@@ -56,6 +59,9 @@ async function loadActiveChallenges() {
         console.error('Error loading challenges:', error);
         document.getElementById('challenges-grid').innerHTML =
             '<p class="error-message">Error loading challenges. Please try again later.</p>';
+        if (typeof showToast === 'function') {
+            showToast('Failed to load challenges. Please refresh the page.', 'error');
+        }
     }
 }
 
@@ -187,7 +193,7 @@ async function joinChallenge(challengeId) {
     } catch (error) {
         console.error('Error joining challenge:', error);
         if (typeof showToast === 'function') {
-            showToast('Error joining challenge. Please try again.', 'error');
+            showToast(error.message || 'Failed to join challenge. Please try again.', 'error');
         } else {
             alert('Error joining challenge. Please try again.');
         }
@@ -201,6 +207,9 @@ async function joinChallenge(challengeId) {
 async function loadMyChallenges(username) {
     try {
         const response = await fetch(`/api/challenges/user/${username}`);
+        if (!response.ok) {
+            throw new Error(`Failed to load user challenges (HTTP ${response.status})`);
+        }
         const data = await response.json();
 
         if (data.activeChallenges && data.activeChallenges.length > 0) {
@@ -211,6 +220,9 @@ async function loadMyChallenges(username) {
         }
     } catch (error) {
         console.error('Error loading user challenges:', error);
+        if (typeof showToast === 'function') {
+            showToast('Failed to load your challenges.', 'error');
+        }
     }
 }
 
