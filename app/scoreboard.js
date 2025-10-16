@@ -43,9 +43,9 @@ app.use(helmet({
     contentSecurityPolicy: {
         directives: {
             defaultSrc: ["'self'"],
-            scriptSrc: ["'self'", "https://cdn.jsdelivr.net", "'nonce-lexicostatistics'"],
+            scriptSrc: ["'self'", "https://cdn.jsdelivr.net", "https://cdn.socket.io", "'nonce-lexicostatistics'"],
             imgSrc: ["'self'", "data:", "https://github.com", "https://avatars.githubusercontent.com"],
-            connectSrc: ["'self'", "ws://localhost:3000", "wss://localhost:3000"]
+            connectSrc: ["'self'", "https://cdn.jsdelivr.net", "ws://localhost:3000", "wss://localhost:3000"]
         }
     }
 }));
