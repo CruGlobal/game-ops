@@ -88,7 +88,7 @@ export const joinChallenge = async (username, challengeId) => {
         }
 
         if (!contributor) {
-            throw new Error('Contributor not found');
+            throw new Error('Contributor not found. Only users with at least one merged PR can join challenges. Please contribute to the repository first.');
         }
 
         // Check if already joined

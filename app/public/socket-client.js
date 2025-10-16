@@ -40,12 +40,6 @@
         refreshLeaderboard();
     });
 
-    // Leaderboard update event
-    socket.on('leaderboard-update', (data) => {
-        console.log('Leaderboard Update:', data);
-        updateLeaderboard(data.leaderboard);
-    });
-
     // Review update event
     socket.on('review-update', (data) => {
         console.log('Review Update:', data);
@@ -158,20 +152,59 @@
             document.body.appendChild(container);
         }
 
+        // Toast icons based on type
+        const icons = {
+            success: '✓',
+            error: '✕',
+            warning: '⚠',
+            info: 'ℹ',
+            achievement: '🏆'
+        };
+
+        // Create toast element
         const toast = document.createElement('div');
         toast.className = `toast toast-${type}`;
-        toast.textContent = message;
+
+        // Create toast content structure
+        toast.innerHTML = `
+            <div class="toast-icon">${icons[type] || icons.info}</div>
+            <div class="toast-message">${escapeHtml(message)}</div>
+            <button class="toast-close" aria-label="Close">×</button>
+            <div class="toast-progress"></div>
+        `;
+
+        // Add close button handler
+        const closeBtn = toast.querySelector('.toast-close');
+        closeBtn.addEventListener('click', () => {
+            toast.classList.remove('show');
+            setTimeout(() => toast.remove(), 300);
+        });
 
         container.appendChild(toast);
 
         // Trigger animation
         setTimeout(() => toast.classList.add('show'), 10);
 
+        // Start progress bar animation
+        const progressBar = toast.querySelector('.toast-progress');
+        progressBar.style.transition = `width ${duration}ms linear`;
+        setTimeout(() => progressBar.style.width = '0%', 50);
+
         // Remove after duration
-        setTimeout(() => {
+        const removeTimeout = setTimeout(() => {
             toast.classList.remove('show');
             setTimeout(() => toast.remove(), 300);
         }, duration);
+
+        // Clear timeout if manually closed
+        closeBtn.addEventListener('click', () => clearTimeout(removeTimeout), { once: true });
+    }
+
+    // Helper function to escape HTML in toast messages
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
     }
 
     // Gamification helper functions
@@ -194,28 +227,76 @@
     }
 
     function showAchievementModal(data) {
-        // Simple achievement notification modal
+        // Enhanced achievement notification modal with confetti and animations
         const modal = document.createElement('div');
         modal.className = 'achievement-modal';
+
+        // Determine badge icon based on achievement type
+        const badgeIcon = data.badgeIcon || '🏆';
+        const badgeColor = data.badgeColor || '#ffd93d';
+
         modal.innerHTML = `
+            <div class="achievement-modal-overlay"></div>
             <div class="achievement-modal-content">
-                <div class="achievement-icon">🏆</div>
-                <h2>Achievement Unlocked!</h2>
-                <h3>${data.achievementName}</h3>
-                <p>${data.description}</p>
-                <p class="achievement-points">+${data.points} points</p>
-                <button onclick="this.parentElement.parentElement.remove()">Awesome!</button>
+                <button class="achievement-close-btn" aria-label="Close">×</button>
+                <div class="achievement-confetti"></div>
+                <div class="achievement-badge">
+                    <div class="achievement-badge-ring"></div>
+                    <div class="achievement-badge-icon">${escapeHtml(badgeIcon)}</div>
+                </div>
+                <h2 class="achievement-title">Achievement Unlocked!</h2>
+                <h3 class="achievement-name">${escapeHtml(data.achievementName)}</h3>
+                <p class="achievement-description">${escapeHtml(data.description || '')}</p>
+                <div class="achievement-points">
+                    <span class="points-label">Reward</span>
+                    <span class="points-value">+${data.points} points</span>
+                </div>
+                <button class="achievement-action-btn">Awesome!</button>
             </div>
         `;
+
         document.body.appendChild(modal);
 
+        // Add confetti particles
+        const confettiContainer = modal.querySelector('.achievement-confetti');
+        createConfetti(confettiContainer);
+
+        // Event handlers
+        const closeBtn = modal.querySelector('.achievement-close-btn');
+        const actionBtn = modal.querySelector('.achievement-action-btn');
+
+        const closeModal = () => {
+            modal.classList.remove('show');
+            setTimeout(() => modal.remove(), 400);
+        };
+
+        closeBtn.addEventListener('click', closeModal);
+        actionBtn.addEventListener('click', closeModal);
+
+        // Click overlay to close
+        modal.querySelector('.achievement-modal-overlay').addEventListener('click', closeModal);
+
+        // Trigger animation
         setTimeout(() => modal.classList.add('show'), 10);
 
-        // Auto-remove after 10 seconds
-        setTimeout(() => {
-            modal.classList.remove('show');
-            setTimeout(() => modal.remove(), 300);
-        }, 10000);
+        // Auto-remove after 15 seconds
+        setTimeout(closeModal, 15000);
+    }
+
+    // Create confetti particles for celebration effect
+    function createConfetti(container) {
+        const colors = ['#ff6b6b', '#4ecdc4', '#45b7d1', '#ffd93d', '#6c5ce7', '#fd79a8'];
+        const particleCount = 50;
+
+        for (let i = 0; i < particleCount; i++) {
+            const particle = document.createElement('div');
+            particle.className = 'confetti-particle';
+            particle.style.left = `${Math.random() * 100}%`;
+            particle.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+            particle.style.animationDelay = `${Math.random() * 0.5}s`;
+            particle.style.animationDuration = `${2 + Math.random() * 2}s`;
+            container.appendChild(particle);
+        }
     }
 
     function updateChallengeProgressBar(data) {
@@ -227,7 +308,81 @@
         }
     }
 
-    // Expose socket for debugging
+    // Listen for leaderboard updates
+    socket.on('leaderboard-update', (data) => {
+        console.log('Leaderboard update received:', data);
+        updateLeaderboard(data);
+    });
+
+    /**
+     * Update leaderboard in real-time without page refresh
+     * @param {Object} data - Updated contributor data
+     */
+    function updateLeaderboard(data) {
+        const { username, pullRequestCount, reviewCount, totalPoints } = data;
+
+        // Find the list item for this contributor
+        const listItem = document.querySelector(`li[data-username="${username}"]`);
+
+        if (!listItem) {
+            // Contributor not in current view
+            console.log('Contributor not found in leaderboard:', username);
+            return;
+        }
+
+        // Update PR count
+        const prCell = listItem.querySelector('.pr-count');
+        if (prCell && prCell.textContent !== pullRequestCount.toString()) {
+            prCell.textContent = pullRequestCount;
+            animateChange(prCell);
+        }
+
+        // Update review count
+        const reviewCell = listItem.querySelector('.review-count');
+        if (reviewCell && reviewCell.textContent !== reviewCount.toString()) {
+            reviewCell.textContent = reviewCount;
+            animateChange(reviewCell);
+        }
+
+        // Update total points (if displayed)
+        const pointsCell = listItem.querySelector('.total-points');
+        if (pointsCell && totalPoints !== undefined) {
+            const oldPoints = parseInt(pointsCell.textContent.replace(/,/g, '')) || 0;
+            if (oldPoints !== totalPoints) {
+                pointsCell.textContent = totalPoints.toLocaleString();
+                animateChange(pointsCell);
+            }
+        }
+
+        // Highlight the entire list item
+        highlightRow(listItem);
+    }
+
+    /**
+     * Animate value change in a cell
+     * @param {HTMLElement} cell - The cell to animate
+     */
+    function animateChange(cell) {
+        cell.classList.add('value-changed');
+        setTimeout(() => {
+            cell.classList.remove('value-changed');
+        }, 1000);
+    }
+
+    /**
+     * Highlight a row temporarily
+     * @param {HTMLElement} row - The row to highlight
+     */
+    function highlightRow(row) {
+        row.classList.add('row-updated');
+        setTimeout(() => {
+            row.classList.remove('row-updated');
+        }, 2000);
+    }
+
+    // Expose functions globally for testing and external use
     window.realtimeSocket = socket;
+    window.showToast = showToast;
+    window.showAchievementModal = showAchievementModal;
 
 })();

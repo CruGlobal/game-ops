@@ -204,7 +204,19 @@ export const getStreakStats = async (username) => {
         const contributor = await Contributor.findOne({ username });
 
         if (!contributor) {
-            throw new Error('Contributor not found');
+            // Return default streak data for non-existent users
+            return {
+                username,
+                currentStreak: 0,
+                longestStreak: 0,
+                lastContributionDate: null,
+                streakBadges: {
+                    sevenDay: false,
+                    thirtyDay: false,
+                    ninetyDay: false,
+                    yearLong: false
+                }
+            };
         }
 
         return {

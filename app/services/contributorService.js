@@ -154,6 +154,15 @@ export const updateContributor = async (username, type, date, merged = false) =>
                 reviewCount: contributor.reviewCount
             });
         }
+
+        // Emit leaderboard update for live UI updates
+        emitLeaderboardUpdate({
+            username: contributor.username,
+            pullRequestCount: contributor.pullRequestCount || 0,
+            reviewCount: contributor.reviewCount || 0,
+            totalPoints: contributor.totalPoints || 0,
+            avatarUrl: contributor.avatarUrl
+        });
     }
 };
 

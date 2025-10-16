@@ -40,7 +40,12 @@ export const emitLeaderboardUpdate = (data) => {
     if (!ioInstance) return;
 
     ioInstance.to('scoreboard-updates').emit(SOCKET_EVENTS.LEADERBOARD_UPDATE, {
-        leaderboard: data.leaderboard,
+        username: data.username,
+        pullRequestCount: data.pullRequestCount,
+        reviewCount: data.reviewCount,
+        totalPoints: data.totalPoints || 0,
+        rank: data.rank,
+        avatarUrl: data.avatarUrl,
         timestamp: new Date()
     });
 };
