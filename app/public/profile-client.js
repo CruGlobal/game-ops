@@ -115,28 +115,34 @@ function populateBadgeShowcase() {
     }
 
     // Badge metadata mapping (images are in /images/badges/)
+    // Keys match actual badge names from database
     const badgeMetadata = {
-        'first-pr': { name: 'First PR', image: '/images/badges/1st_pr_badge.png' },
-        'first-review': { name: 'First Review', image: '/images/badges/1st_review_badge.png' },
-        '10-prs': { name: '10 PRs', image: '/images/badges/10_prs_badge.png' },
-        '10-reviews': { name: '10 Reviews', image: '/images/badges/10_reviews_badge.png' },
-        '50-prs': { name: '50 PRs', image: '/images/badges/50_prs_badge.png' },
-        '50-reviews': { name: '50 Reviews', image: '/images/badges/50_reviews_badge.png' },
-        '100-prs': { name: '100 PRs', image: '/images/badges/100_prs_badge.png' },
-        '100-reviews': { name: '100 Reviews', image: '/images/badges/100_reviews_badge.png' },
-        '500-prs': { name: '500 PRs', image: '/images/badges/500_prs_badge.png' },
-        '500-reviews': { name: '500 Reviews', image: '/images/badges/500_reviews_badge.png' },
-        '1000-prs': { name: '1000 PRs', image: '/images/badges/1000_prs_badge.png' },
-        '1000-reviews': { name: '1000 Reviews', image: '/images/badges/1000_reviews_badge.png' },
-        'week-warrior': { name: 'Week Warrior', image: '/images/badges/50_prs_badge.png' },
-        'monthly-master': { name: 'Monthly Master', image: '/images/badges/100_prs_badge.png' },
-        'quarter-champion': { name: 'Quarter Champion', image: '/images/badges/500_prs_badge.png' },
-        'year-hero': { name: 'Year-Long Hero', image: '/images/badges/1000_prs_badge.png' }
+        '1st PR badge': { name: '1st PR Badge', image: '/images/badges/1st_pr_badge.png' },
+        '1st Review badge': { name: '1st Review Badge', image: '/images/badges/1st_review_badge.png' },
+        '10 PR badge': { name: '10 PR Badge', image: '/images/badges/10_prs_badge.png' },
+        '10 Reviews badge': { name: '10 Reviews Badge', image: '/images/badges/10_reviews_badge.png' },
+        '50 PR badge': { name: '50 PR Badge', image: '/images/badges/50_prs_badge.png' },
+        '50 Reviews badge': { name: '50 Reviews Badge', image: '/images/badges/50_reviews_badge.png' },
+        '100 PR badge': { name: '100 PR Badge', image: '/images/badges/100_prs_badge.png' },
+        '100 Reviews badge': { name: '100 Reviews Badge', image: '/images/badges/100_reviews_badge.png' },
+        '500 PR badge': { name: '500 PR Badge', image: '/images/badges/500_prs_badge.png' },
+        '500 Reviews badge': { name: '500 Reviews Badge', image: '/images/badges/500_reviews_badge.png' },
+        '1000 PR badge': { name: '1000 PR Badge', image: '/images/badges/1000_prs_badge.png' },
+        '1000 Reviews badge': { name: '1000 Reviews Badge', image: '/images/badges/1000_reviews_badge.png' },
+        // Streak badges (may not be in database yet, using placeholder images)
+        'Week Warrior': { name: 'Week Warrior', image: '/images/badges/50_prs_badge.png' },
+        'Monthly Master': { name: 'Monthly Master', image: '/images/badges/100_prs_badge.png' },
+        'Quarter Champion': { name: 'Quarter Champion', image: '/images/badges/500_prs_badge.png' },
+        'Year-Long Hero': { name: 'Year-Long Hero', image: '/images/badges/1000_prs_badge.png' }
     };
 
     badgeShowcase.innerHTML = '';
 
-    contributorData.badges.forEach(badgeId => {
+    contributorData.badges.forEach(badgeData => {
+        // Handle both string format and object format { badge: 'name', date: 'ISO' }
+        const badgeId = typeof badgeData === 'string' ? badgeData : badgeData.badge;
+        const badgeDate = typeof badgeData === 'object' && badgeData.date ? new Date(badgeData.date) : null;
+
         const metadata = badgeMetadata[badgeId] || { name: badgeId, image: '/images/badges/1st_pr_badge.png' };
 
         const badgeItem = document.createElement('div');
@@ -146,7 +152,7 @@ function populateBadgeShowcase() {
         badgeImg.src = metadata.image;
         badgeImg.alt = metadata.name;
         badgeImg.onerror = function() {
-            this.src = '/images/badges/default.png';
+            this.src = '/images/badges/1st_pr_badge.png';
         };
 
         const badgeName = document.createElement('div');
@@ -155,6 +161,15 @@ function populateBadgeShowcase() {
 
         badgeItem.appendChild(badgeImg);
         badgeItem.appendChild(badgeName);
+
+        // Add date if available
+        if (badgeDate) {
+            const dateElement = document.createElement('div');
+            dateElement.className = 'badge-date';
+            dateElement.textContent = `Earned: ${badgeDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+            badgeItem.appendChild(dateElement);
+        }
+
         badgeShowcase.appendChild(badgeItem);
     });
 }
