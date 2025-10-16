@@ -12,6 +12,7 @@ import { Server } from 'socket.io';
 import contributorRoutes from './routes/contributorRoutes.js';
 import healthRoutes from './routes/healthRoutes.js';
 import challengeRoutes from './routes/challengeRoutes.js';
+import analyticsRoutes from './routes/analyticsRoutes.js';
 import { awardBillsAndVonettesController, fetchPRs, fetchPRsCron, awardContributorBadges, awardContributorBadgesCron } from './controllers/contributorController.js';
 import { generateWeeklyChallenges, checkExpiredChallenges } from './services/challengeService.js';
 import { errorHandler } from './middleware/errorHandler.js';
@@ -126,6 +127,16 @@ app.get('/top-cat', (req, res) => {
     res.render('top-cat');
 });
 
+// Route to render the challenges.ejs template
+app.get('/challenges', (req, res) => {
+    res.render('challenges');
+});
+
+// Route to render the analytics.ejs template
+app.get('/analytics', (req, res) => {
+    res.render('analytics');
+});
+
 // Routes for GitHub authentication
 app.get('/auth/github', passport.authenticate('github', { scope: ['user:email'] }));
 
@@ -150,6 +161,7 @@ app.use(express.static('public'));
 app.use('/api', contributorRoutes);
 app.use('/api', healthRoutes);
 app.use('/api/challenges', challengeRoutes);
+app.use('/api/analytics', analyticsRoutes);
 
 // Test routes (development only)
 if (process.env.NODE_ENV !== 'production') {
