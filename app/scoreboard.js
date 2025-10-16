@@ -108,24 +108,14 @@ io.on(SOCKET_EVENTS.CONNECTION, (socket) => {
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
-// Root route to render the index.ejs template
+// Root route - redirect to leaderboard
 app.get('/', (req, res) => {
-    res.render('index');
+    res.redirect('/leaderboard');
 });
 
-// Route to render the activity.ejs template
-app.get('/activity', (req, res) => {
-    res.render('activity');
-});
-
-// Route to render the charts.ejs template
-app.get('/charts', (req, res) => {
-    res.render('charts');
-});
-
-// Route to render the top-cat.ejs template
-app.get('/top-cat', (req, res) => {
-    res.render('top-cat');
+// Route to render the leaderboard.ejs template (new home page)
+app.get('/leaderboard', (req, res) => {
+    res.render('leaderboard');
 });
 
 // Route to render the challenges.ejs template
@@ -133,14 +123,17 @@ app.get('/challenges', (req, res) => {
     res.render('challenges');
 });
 
-// Route to render the analytics.ejs template
-app.get('/analytics', (req, res) => {
-    res.render('analytics');
+// Admin routes
+app.get('/activity', (req, res) => {
+    res.render('activity');
 });
 
-// Route to render the leaderboard.ejs template
-app.get('/leaderboard', (req, res) => {
-    res.render('leaderboard');
+app.get('/charts', (req, res) => {
+    res.render('charts');
+});
+
+app.get('/analytics', (req, res) => {
+    res.render('analytics');
 });
 
 // Routes for GitHub authentication
