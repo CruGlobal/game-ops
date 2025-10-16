@@ -22,7 +22,8 @@ import {
     getPointsHistoryController,
     getPointsSummaryController,
     getStreakLeaderboardController,
-    getStreakStatsController
+    getStreakStatsController,
+    getContributorController
 } from '../controllers/contributorController.js';
 import { getContributors, resetContributor, resetAllContributors } from '../controllers/adminController.js';
 import { authenticate } from '../middleware/authMiddleware.js';
@@ -110,5 +111,8 @@ router.get('/:username/points-summary', getPointsSummaryController);
 // Streak routes
 router.get('/leaderboard/streaks', getStreakLeaderboardController);
 router.get('/:username/streak', getStreakStatsController);
+
+// Get single contributor by username
+router.get('/contributors/:username', getContributorController);
 
 export default router;

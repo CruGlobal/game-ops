@@ -550,6 +550,20 @@ export const getTopReviewers = async () => {
     return reviewers;
 };
 
+// Get a single contributor by username
+export const getContributorByUsername = async (username) => {
+    if (process.env.NODE_ENV === 'production') {
+        const params = {
+            TableName: 'Contributors',
+            Key: { username }
+        };
+        const data = await dbClient.get(params).promise();
+        return data.Item || null;
+    } else {
+        return await Contributor.findOne({ username }).lean();
+    }
+};
+
 // Award bills and vonettes to contributors based on their contributions
 export const awardBillsAndVonettes = async (pullRequestNumber = null, test = false) => {
     const results = [];

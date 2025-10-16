@@ -1,4 +1,4 @@
-import { awardBillsAndVonettes, fetchActivityData, fetchPullRequests, awardBadges, getTopContributors, getTopReviewers, getTopContributorsDateRange, getTopReviewersDateRange, initializeDatabase } from '../services/contributorService.js';
+import { awardBillsAndVonettes, fetchActivityData, fetchPullRequests, awardBadges, getTopContributors, getTopReviewers, getTopContributorsDateRange, getTopReviewersDateRange, initializeDatabase, getContributorByUsername } from '../services/contributorService.js';
 import Contributor from '../models/contributor.js';
 import { getStreakStats, getStreakLeaderboard } from '../services/streakService.js';
 import { getPointsLeaderboard, getPointsHistory, getPointsSummary } from '../services/pointsService.js';
@@ -265,5 +265,21 @@ export const getStreakStatsController = async (req, res) => {
         res.json(stats);
     } catch (err) {
         res.status(404).json({ error: err.message });
+    }
+};
+
+// Get a single contributor by username
+export const getContributorController = async (req, res) => {
+    try {
+        const { username } = req.params;
+        const contributor = await getContributorByUsername(username);
+
+        if (!contributor) {
+            return res.status(404).json({ error: 'Contributor not found' });
+        }
+
+        res.json(contributor);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
     }
 };
