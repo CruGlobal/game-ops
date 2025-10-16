@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Leaderboard - GitHub PR Scoreboard</title>
+    <link rel="stylesheet" href="/modern-design-system.css">
+    <link rel="stylesheet" href="/styles.css">
+    <link rel="stylesheet" href="/leaderboard.css">
+</head>
+<body>
+<div class="container">
+    <div class="header-section">
+        <h1>🏆 Leaderboard</h1>
+        <div class="hamburger-menu">
+            <button class="hamburger-button">&#9776;</button>
+            <%- include('partials/nav') %>
+        </div>
+    </div>
+
+    <!-- Search and Filter Bar -->
+    <div class="controls-section">
+        <div class="search-bar">
+            <input type="text" id="search-input" placeholder="🔍 Search contributors..." />
+        </div>
+        <div class="filter-dropdown">
+            <label for="sort-select">Sort by:</label>
+            <select id="sort-select">
+                <option value="prCount">Pull Requests</option>
+                <option value="reviewCount">Reviews</option>
+                <option value="totalPoints">Total Points</option>
+                <option value="currentStreak">Current Streak</option>
+                <option value="longestStreak">Longest Streak</option>
+            </select>
+        </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+        <button class="tab-button active" data-tab="all">🌟 All Leaders</button>
+        <button class="tab-button" data-tab="contributors">👨‍💻 Top Contributors</button>
+        <button class="tab-button" data-tab="reviewers">👀 Top Reviewers</button>
+        <button class="tab-button" data-tab="points">⭐ Top Points</button>
+        <button class="tab-button" data-tab="streaks">🔥 Top Streaks</button>
+    </div>
+
+    <!-- All Leaders Tab -->
+    <div class="tab-content active" id="all">
+        <div class="leaderboard-grid" id="all-leaders-grid"></div>
+    </div>
+
+    <!-- Top Contributors Tab -->
+    <div class="tab-content" id="contributors">
+        <div class="leaderboard-grid" id="contributors-grid"></div>
+    </div>
+
+    <!-- Top Reviewers Tab -->
+    <div class="tab-content" id="reviewers">
+        <div class="leaderboard-grid" id="reviewers-grid"></div>
+    </div>
+
+    <!-- Top Points Tab -->
+    <div class="tab-content" id="points">
+        <div class="leaderboard-grid" id="points-grid"></div>
+    </div>
+
+    <!-- Top Streaks Tab -->
+    <div class="tab-content" id="streaks">
+        <div class="leaderboard-grid" id="streaks-grid"></div>
+    </div>
+</div>
+
+<!-- Socket.IO Client Library -->
+<script src="/socket.io/socket.io.js"></script>
+<!-- Custom Scripts -->
+<script nonce="lexicostatistics" src="/socket-client.js"></script>
+<script nonce="lexicostatistics" src="/leaderboard-client.js"></script>
+<script nonce="lexicostatistics" src="/theme-toggle.js"></script>
+</body>
+</html>

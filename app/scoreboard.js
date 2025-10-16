@@ -138,6 +138,11 @@ app.get('/analytics', (req, res) => {
     res.render('analytics');
 });
 
+// Route to render the leaderboard.ejs template
+app.get('/leaderboard', (req, res) => {
+    res.render('leaderboard');
+});
+
 // Routes for GitHub authentication
 app.get('/auth/github', passport.authenticate('github', { scope: ['user:email'] }));
 

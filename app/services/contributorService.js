@@ -504,7 +504,7 @@ export const getTopReviewersDateRange = async (startDate, endDate, page, limit) 
     return { reviewers, totalReviews };
 };
 
-// Get the top contributors based on PR count
+// Get the top contributors based on PR count with gamification data
 export const getTopContributors = async () => {
     let contributors;
     if (process.env.NODE_ENV === 'production') {
@@ -512,18 +512,22 @@ export const getTopContributors = async () => {
             TableName: 'Contributors',
             FilterExpression: 'NOT contains(username, :bot)',
             ExpressionAttributeValues: { ':bot': '[bot]' },
-            ProjectionExpression: 'username, prCount, avatarUrl, badges, totalBillsAwarded',
+            ProjectionExpression: 'username, prCount, reviewCount, avatarUrl, badges, totalBillsAwarded, totalPoints, currentStreak, longestStreak, streakBadges',
             Limit: 50,
         };
         const data = await dbClient.scan(params).promise();
         contributors = data.Items.sort((a, b) => b.prCount - a.prCount); // Sort contributors by PR count
     } else {
-        contributors = await Contributor.find({ username: { $not: /\[bot\]$/ } }).sort({ prCount: -1 }).limit(50).select('username prCount avatarUrl badges totalBillsAwarded');
+        contributors = await Contributor.find({ username: { $not: /\[bot\]$/ } })
+            .sort({ prCount: -1 })
+            .limit(50)
+            .select('username prCount reviewCount avatarUrl badges totalBillsAwarded totalPoints currentStreak longestStreak streakBadges')
+            .lean();
     }
     return contributors;
 };
 
-// Get the top reviewers based on review count
+// Get the top reviewers based on review count with gamification data
 export const getTopReviewers = async () => {
     let reviewers;
     if (process.env.NODE_ENV === 'production') {
@@ -531,13 +535,17 @@ export const getTopReviewers = async () => {
             TableName: 'Contributors',
             FilterExpression: 'NOT contains(username, :bot)',
             ExpressionAttributeValues: { ':bot': '[bot]' },
-            ProjectionExpression: 'username, reviewCount, avatarUrl, badges,totalBillsAwarded',
+            ProjectionExpression: 'username, prCount, reviewCount, avatarUrl, badges, totalBillsAwarded, totalPoints, currentStreak, longestStreak, streakBadges',
             Limit: 50,
         };
         const data = await dbClient.scan(params).promise();
         reviewers = data.Items.sort((a, b) => b.reviewCount - a.reviewCount); // Sort reviewers by review count
     } else {
-        reviewers = await Contributor.find({ username: { $not: /\[bot\]$/ } }).sort({ reviewCount: -1 }).limit(50).select('username reviewCount avatarUrl badges totalBillsAwarded');
+        reviewers = await Contributor.find({ username: { $not: /\[bot\]$/ } })
+            .sort({ reviewCount: -1 })
+            .limit(50)
+            .select('username prCount reviewCount avatarUrl badges totalBillsAwarded totalPoints currentStreak longestStreak streakBadges')
+            .lean();
     }
     return reviewers;
 };
