@@ -123,6 +123,34 @@ app.get('/challenges', (req, res) => {
     res.render('challenges');
 });
 
+// Route to render individual profile pages
+app.get('/profile/:username', async (req, res) => {
+    try {
+        const { username } = req.params;
+
+        // Import contributorService
+        const { getContributorByUsername } = await import('./services/contributorService.js');
+        const contributor = await getContributorByUsername(username);
+
+        if (!contributor) {
+            return res.status(404).render('error', {
+                errorCode: 404,
+                errorMessage: 'Contributor Not Found',
+                errorDescription: `The contributor "${username}" could not be found in our database.`
+            });
+        }
+
+        res.render('profile', { contributor });
+    } catch (error) {
+        logger.error('Error loading profile page', { error: error.message, username: req.params.username });
+        res.status(500).render('error', {
+            errorCode: 500,
+            errorMessage: 'Server Error',
+            errorDescription: 'An error occurred while loading the profile page. Please try again later.'
+        });
+    }
+});
+
 // Admin routes
 app.get('/activity', (req, res) => {
     res.render('activity');

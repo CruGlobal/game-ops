@@ -7,25 +7,32 @@
     <link rel="stylesheet" href="/modern-design-system.css">
     <link rel="stylesheet" href="/styles.css">
     <link rel="stylesheet" href="/leaderboard.css">
+    <link rel="stylesheet" href="/animations.css">
 </head>
 <body>
+<a href="#main-content" class="skip-link">Skip to main content</a>
 <div class="container">
     <div class="header-section">
         <h1>🏆 Leaderboard</h1>
         <div class="hamburger-menu">
-            <button class="hamburger-button">&#9776;</button>
+            <button class="hamburger-button" aria-label="Toggle navigation menu" aria-expanded="false">&#9776;</button>
             <%- include('partials/nav') %>
         </div>
     </div>
 
     <!-- Search and Filter Bar -->
-    <div class="controls-section">
+    <div class="controls-section" role="search" aria-label="Leaderboard controls">
         <div class="search-bar">
-            <input type="text" id="search-input" placeholder="🔍 Search contributors..." />
+            <input
+                type="text"
+                id="search-input"
+                placeholder="🔍 Search contributors..."
+                aria-label="Search contributors by username"
+            />
         </div>
         <div class="filter-dropdown">
             <label for="sort-select">Sort by:</label>
-            <select id="sort-select">
+            <select id="sort-select" aria-label="Sort leaderboard by criteria">
                 <option value="prCount">Pull Requests</option>
                 <option value="reviewCount">Reviews</option>
                 <option value="totalPoints">Total Points</option>
@@ -36,43 +43,46 @@
     </div>
 
     <!-- Tabs -->
-    <div class="tabs">
-        <button class="tab-button active" data-tab="all">🌟 All Leaders</button>
-        <button class="tab-button" data-tab="contributors">👨‍💻 Top Contributors</button>
-        <button class="tab-button" data-tab="reviewers">👀 Top Reviewers</button>
-        <button class="tab-button" data-tab="points">⭐ Top Points</button>
-        <button class="tab-button" data-tab="streaks">🔥 Top Streaks</button>
+    <div class="tabs" role="tablist" aria-label="Leaderboard categories">
+        <button class="tab-button active" data-tab="all" role="tab" aria-selected="true" aria-controls="all" id="tab-all">🌟 All Leaders</button>
+        <button class="tab-button" data-tab="contributors" role="tab" aria-selected="false" aria-controls="contributors" id="tab-contributors">👨‍💻 Top Contributors</button>
+        <button class="tab-button" data-tab="reviewers" role="tab" aria-selected="false" aria-controls="reviewers" id="tab-reviewers">👀 Top Reviewers</button>
+        <button class="tab-button" data-tab="points" role="tab" aria-selected="false" aria-controls="points" id="tab-points">⭐ Top Points</button>
+        <button class="tab-button" data-tab="streaks" role="tab" aria-selected="false" aria-controls="streaks" id="tab-streaks">🔥 Top Streaks</button>
     </div>
 
     <!-- All Leaders Tab -->
-    <div class="tab-content active" id="all">
-        <div class="leaderboard-grid" id="all-leaders-grid"></div>
-    </div>
+    <main id="main-content">
+        <div class="tab-content active" id="all" role="tabpanel" aria-labelledby="tab-all">
+            <div class="leaderboard-grid" id="all-leaders-grid" aria-live="polite" aria-atomic="false"></div>
+        </div>
 
-    <!-- Top Contributors Tab -->
-    <div class="tab-content" id="contributors">
-        <div class="leaderboard-grid" id="contributors-grid"></div>
-    </div>
+        <!-- Top Contributors Tab -->
+        <div class="tab-content" id="contributors" role="tabpanel" aria-labelledby="tab-contributors" hidden>
+            <div class="leaderboard-grid" id="contributors-grid" aria-live="polite" aria-atomic="false"></div>
+        </div>
 
-    <!-- Top Reviewers Tab -->
-    <div class="tab-content" id="reviewers">
-        <div class="leaderboard-grid" id="reviewers-grid"></div>
-    </div>
+        <!-- Top Reviewers Tab -->
+        <div class="tab-content" id="reviewers" role="tabpanel" aria-labelledby="tab-reviewers" hidden>
+            <div class="leaderboard-grid" id="reviewers-grid" aria-live="polite" aria-atomic="false"></div>
+        </div>
 
-    <!-- Top Points Tab -->
-    <div class="tab-content" id="points">
-        <div class="leaderboard-grid" id="points-grid"></div>
-    </div>
+        <!-- Top Points Tab -->
+        <div class="tab-content" id="points" role="tabpanel" aria-labelledby="tab-points" hidden>
+            <div class="leaderboard-grid" id="points-grid" aria-live="polite" aria-atomic="false"></div>
+        </div>
 
-    <!-- Top Streaks Tab -->
-    <div class="tab-content" id="streaks">
-        <div class="leaderboard-grid" id="streaks-grid"></div>
-    </div>
+        <!-- Top Streaks Tab -->
+        <div class="tab-content" id="streaks" role="tabpanel" aria-labelledby="tab-streaks" hidden>
+            <div class="leaderboard-grid" id="streaks-grid" aria-live="polite" aria-atomic="false"></div>
+        </div>
+    </main>
 </div>
 
 <!-- Socket.IO Client Library -->
 <script src="/socket.io/socket.io.js"></script>
 <!-- Custom Scripts -->
+<script src="/confetti.js"></script>
 <script nonce="lexicostatistics" src="/socket-client.js"></script>
 <script nonce="lexicostatistics" src="/leaderboard-client.js"></script>
 <script nonce="lexicostatistics" src="/theme-toggle.js"></script>

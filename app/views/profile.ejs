@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Profile - GitHub PR Scoreboard</title>
+    <link rel="stylesheet" href="/modern-design-system.css">
+    <link rel="stylesheet" href="/styles.css">
+    <link rel="stylesheet" href="/profile.css">
+    <link rel="stylesheet" href="/animations.css">
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+    <%- include('partials/nav') %>
+
+    <div class="container">
+        <!-- Profile Header -->
+        <div class="profile-header">
+            <button class="back-button" onclick="window.location.href='/leaderboard'">
+                ← Back to Leaderboard
+            </button>
+            <div class="profile-hero">
+                <img id="profileAvatar" src="" alt="Profile Avatar" class="profile-avatar">
+                <div class="profile-title">
+                    <h1 id="profileUsername" class="profile-name">Loading...</h1>
+                    <div id="profileRank" class="profile-rank"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Stats Grid -->
+        <div class="stats-grid">
+            <div class="stat-card stat-card-prs">
+                <div class="stat-icon">📝</div>
+                <div class="stat-content">
+                    <div class="stat-label">Pull Requests</div>
+                    <div id="statPRs" class="stat-value">0</div>
+                </div>
+            </div>
+
+            <div class="stat-card stat-card-reviews">
+                <div class="stat-icon">👀</div>
+                <div class="stat-content">
+                    <div class="stat-label">Reviews</div>
+                    <div id="statReviews" class="stat-value">0</div>
+                </div>
+            </div>
+
+            <div class="stat-card stat-card-points">
+                <div class="stat-icon">⭐</div>
+                <div class="stat-content">
+                    <div class="stat-label">Total Points</div>
+                    <div id="statPoints" class="stat-value">0</div>
+                </div>
+            </div>
+
+            <div class="stat-card stat-card-streak">
+                <div class="stat-icon">🔥</div>
+                <div class="stat-content">
+                    <div class="stat-label">Current Streak</div>
+                    <div id="statStreak" class="stat-value">0 days</div>
+                    <div id="statLongestStreak" class="stat-sublabel">Longest: 0 days</div>
+                </div>
+            </div>
+
+            <div class="stat-card stat-card-bills">
+                <div class="stat-icon">💵</div>
+                <div class="stat-content">
+                    <div class="stat-label">Bills Awarded</div>
+                    <div id="statBills" class="stat-value">0</div>
+                </div>
+            </div>
+
+            <div class="stat-card stat-card-badges">
+                <div class="stat-icon">🏅</div>
+                <div class="stat-content">
+                    <div class="stat-label">Badges Earned</div>
+                    <div id="statBadges" class="stat-value">0</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Badge Showcase -->
+        <div class="section">
+            <h2 class="section-title">🏆 Badge Collection</h2>
+            <div id="badgeShowcase" class="badge-showcase">
+                <div class="empty-state">No badges earned yet</div>
+            </div>
+        </div>
+
+        <!-- Activity Chart -->
+        <div class="section">
+            <h2 class="section-title">📊 Activity Timeline (Last 30 Days)</h2>
+            <div class="chart-container">
+                <canvas id="activityChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Active Challenges -->
+        <div id="activeChallengesSection" class="section" style="display: none;">
+            <h2 class="section-title">🎯 Active Challenges</h2>
+            <div id="activeChallengesContainer" class="challenges-container">
+            </div>
+        </div>
+
+        <!-- Completed Challenges -->
+        <div id="completedChallengesSection" class="section" style="display: none;">
+            <h2 class="section-title">✅ Completed Challenges</h2>
+            <div id="completedChallengesContainer" class="challenges-container">
+            </div>
+        </div>
+    </div>
+
+    <script src="/confetti.js"></script>
+    <script src="/theme-toggle.js"></script>
+    <script src="/socket-client.js"></script>
+    <script src="/profile-client.js"></script>
+</body>
+</html>

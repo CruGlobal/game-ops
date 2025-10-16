@@ -38,6 +38,11 @@
         console.log('Badge Awarded:', data);
         showBadgeNotification(data);
         refreshLeaderboard();
+
+        // Trigger confetti celebration
+        if (window.confetti) {
+            window.confetti.burst({ count: 60 });
+        }
     });
 
     // Review update event
@@ -63,6 +68,11 @@
         console.log('Achievement Unlocked:', data);
         showToast(`🏆 ${data.username} unlocked: ${data.achievementName}!`, 'success', 5000);
         showAchievementModal(data);
+
+        // Full celebration with confetti
+        if (window.confetti) {
+            window.confetti.celebrate();
+        }
     });
 
     socket.on('points-awarded', (data) => {
@@ -78,6 +88,14 @@
     socket.on('challenge-completed', (data) => {
         console.log('Challenge Completed:', data);
         showToast(`🎉 ${data.username} completed: ${data.challengeName}! (+${data.reward} points)`, 'success', 5000);
+
+        // Confetti cannon celebration
+        if (window.confetti) {
+            window.confetti.cannon({ side: 'left', count: 40 });
+            setTimeout(() => {
+                window.confetti.cannon({ side: 'right', count: 40 });
+            }, 200);
+        }
     });
 
     // Helper functions

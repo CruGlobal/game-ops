@@ -5,6 +5,79 @@ body {
     transition: background-color var(--transition-base, 200ms ease), color var(--transition-base, 200ms ease);
 }
 
+/* Skip Link - Accessibility */
+.skip-link {
+    position: absolute;
+    top: -40px;
+    left: 0;
+    background: var(--primary-color, #3b82f6);
+    color: white;
+    padding: 0.5rem 1rem;
+    text-decoration: none;
+    z-index: 100;
+    border-radius: 0 0 4px 0;
+}
+
+.skip-link:focus {
+    top: 0;
+}
+
+/* Screen Reader Only - Hide visually but available to screen readers */
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+}
+
+/* Focus Indicators - Keyboard Navigation */
+*:focus {
+    outline: 2px solid var(--primary-color, #3b82f6);
+    outline-offset: 2px;
+}
+
+/* Only show focus outline for keyboard navigation (not mouse clicks) */
+*:focus:not(:focus-visible) {
+    outline: none;
+}
+
+*:focus-visible {
+    outline: 3px solid var(--primary-color, #3b82f6);
+    outline-offset: 3px;
+    border-radius: 4px;
+}
+
+/* Focus styles for buttons */
+button:focus-visible,
+.tab-button:focus-visible {
+    outline: 3px solid var(--primary-color, #3b82f6);
+    outline-offset: 2px;
+    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.2);
+}
+
+/* Focus styles for links */
+a:focus-visible {
+    outline: 3px solid var(--primary-color, #3b82f6);
+    outline-offset: 2px;
+    text-decoration: underline;
+    text-decoration-thickness: 2px;
+}
+
+/* Focus styles for inputs */
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+    outline: 3px solid var(--primary-color, #3b82f6);
+    outline-offset: 0;
+    border-color: var(--primary-color, #3b82f6);
+    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.2);
+}
+
 /* Container for the main content, centered with a width of 80% of the viewport */
 .container {
     width: 80%;

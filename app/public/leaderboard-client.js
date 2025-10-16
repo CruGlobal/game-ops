@@ -18,8 +18,9 @@ function initializeEventListeners() {
 
     if (hamburgerButton && hamburgerContent) {
         hamburgerButton.addEventListener('click', () => {
-            hamburgerContent.classList.toggle('active');
-            hamburgerContent.style.display = hamburgerContent.classList.contains('active') ? 'block' : 'none';
+            const isActive = hamburgerContent.classList.toggle('active');
+            hamburgerContent.style.display = isActive ? 'block' : 'none';
+            hamburgerButton.setAttribute('aria-expanded', isActive);
         });
     }
 
@@ -28,6 +29,11 @@ function initializeEventListeners() {
     tabButtons.forEach(button => {
         button.addEventListener('click', () => {
             switchTab(button.dataset.tab);
+        });
+
+        // Keyboard navigation for tabs
+        button.addEventListener('keydown', (e) => {
+            handleTabKeyNavigation(e, button);
         });
     });
 
@@ -50,20 +56,90 @@ function initializeEventListeners() {
     }
 }
 
+/**
+ * Handle keyboard navigation for tabs (Arrow keys)
+ */
+function handleTabKeyNavigation(e, currentButton) {
+    const tabButtons = Array.from(document.querySelectorAll('.tab-button'));
+    const currentIndex = tabButtons.indexOf(currentButton);
+    let newIndex = currentIndex;
+
+    switch (e.key) {
+        case 'ArrowLeft':
+            e.preventDefault();
+            newIndex = currentIndex > 0 ? currentIndex - 1 : tabButtons.length - 1;
+            break;
+        case 'ArrowRight':
+            e.preventDefault();
+            newIndex = currentIndex < tabButtons.length - 1 ? currentIndex + 1 : 0;
+            break;
+        case 'Home':
+            e.preventDefault();
+            newIndex = 0;
+            break;
+        case 'End':
+            e.preventDefault();
+            newIndex = tabButtons.length - 1;
+            break;
+        default:
+            return;
+    }
+
+    tabButtons[newIndex].focus();
+    switchTab(tabButtons[newIndex].dataset.tab);
+}
+
 function switchTab(tabName) {
     currentTab = tabName;
 
-    // Update tab buttons
+    // Update tab buttons and ARIA attributes
     document.querySelectorAll('.tab-button').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.tab === tabName);
+        const isActive = btn.dataset.tab === tabName;
+        btn.classList.toggle('active', isActive);
+        btn.setAttribute('aria-selected', isActive);
     });
 
-    // Update tab content
+    // Update tab content and hidden attributes
     document.querySelectorAll('.tab-content').forEach(content => {
-        content.classList.toggle('active', content.id === tabName);
+        const isActive = content.id === tabName;
+        content.classList.toggle('active', isActive);
+        if (isActive) {
+            content.removeAttribute('hidden');
+        } else {
+            content.setAttribute('hidden', '');
+        }
     });
 
     renderCurrentTab();
+
+    // Announce tab change to screen readers
+    announceToScreenReader(`Switched to ${tabName} tab`);
+}
+
+/**
+ * Announce message to screen readers using ARIA live region
+ */
+function announceToScreenReader(message) {
+    const liveRegion = document.getElementById('sr-live-region') || createLiveRegion();
+    liveRegion.textContent = message;
+
+    // Clear after announcement
+    setTimeout(() => {
+        liveRegion.textContent = '';
+    }, 1000);
+}
+
+/**
+ * Create a screen reader live region if it doesn't exist
+ */
+function createLiveRegion() {
+    const liveRegion = document.createElement('div');
+    liveRegion.id = 'sr-live-region';
+    liveRegion.className = 'sr-only';
+    liveRegion.setAttribute('aria-live', 'polite');
+    liveRegion.setAttribute('aria-atomic', 'true');
+    document.body.appendChild(liveRegion);
+    return liveRegion;
 }
 
 async function loadLeaderboardData() {
@@ -214,6 +290,12 @@ function createLeaderboardCard(user, rank, type) {
     const card = document.createElement('div');
     card.className = 'leaderboard-card';
     card.setAttribute('data-username', user.username);
+    card.style.cursor = 'pointer';
+
+    // Make card clickable to navigate to profile
+    card.addEventListener('click', () => {
+        window.location.href = `/profile/${user.username}`;
+    });
 
     // Rank badge
     const rankBadgeClass = rank <= 3 ? `rank-badge rank-${rank}` : 'rank-badge';

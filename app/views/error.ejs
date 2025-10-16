@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= errorCode %> - GitHub PR Scoreboard</title>
+    <link rel="stylesheet" href="/modern-design-system.css">
+    <link rel="stylesheet" href="/styles.css">
+    <style>
+        .error-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 2rem;
+            text-align: center;
+        }
+
+        .error-code {
+            font-size: 6rem;
+            font-weight: 900;
+            color: var(--primary-color);
+            margin: 0;
+            line-height: 1;
+        }
+
+        .error-message {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--text-color);
+            margin: 1rem 0;
+        }
+
+        .error-description {
+            font-size: 1.125rem;
+            color: var(--text-secondary);
+            margin-bottom: 2rem;
+            max-width: 600px;
+        }
+
+        .error-icon {
+            font-size: 8rem;
+            margin-bottom: 1rem;
+            animation: float 3s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0%, 100% {
+                transform: translateY(0);
+            }
+            50% {
+                transform: translateY(-20px);
+            }
+        }
+
+        .error-actions {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .error-button {
+            padding: 0.875rem 2rem;
+            border-radius: var(--radius-md);
+            font-size: 1rem;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all var(--transition-normal);
+            cursor: pointer;
+            border: none;
+        }
+
+        .error-button-primary {
+            background: var(--primary-color);
+            color: white;
+        }
+
+        .error-button-primary:hover {
+            background: var(--primary-hover);
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .error-button-secondary {
+            background: var(--surface-color);
+            color: var(--text-color);
+            border: 1px solid var(--border-color);
+        }
+
+        .error-button-secondary:hover {
+            background: var(--surface-hover);
+            border-color: var(--primary-color);
+            transform: translateY(-2px);
+        }
+
+        @media (max-width: 768px) {
+            .error-code {
+                font-size: 4rem;
+            }
+
+            .error-message {
+                font-size: 1.5rem;
+            }
+
+            .error-description {
+                font-size: 1rem;
+            }
+
+            .error-icon {
+                font-size: 5rem;
+            }
+
+            .error-actions {
+                flex-direction: column;
+                width: 100%;
+                max-width: 300px;
+            }
+
+            .error-button {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <%- include('partials/nav') %>
+
+    <div class="error-container">
+        <div class="error-icon">
+            <% if (errorCode == 404) { %>
+                🔍
+            <% } else if (errorCode == 500) { %>
+                ⚠️
+            <% } else if (errorCode == 403) { %>
+                🔒
+            <% } else { %>
+                ❌
+            <% } %>
+        </div>
+
+        <h1 class="error-code"><%= errorCode %></h1>
+        <h2 class="error-message"><%= errorMessage || 'An Error Occurred' %></h2>
+        <p class="error-description">
+            <%= errorDescription || 'Something went wrong. Please try again later.' %>
+        </p>
+
+        <div class="error-actions">
+            <a href="/leaderboard" class="error-button error-button-primary">
+                🏠 Go Home
+            </a>
+            <button onclick="window.history.back()" class="error-button error-button-secondary">
+                ← Go Back
+            </button>
+        </div>
+    </div>
+
+    <script src="/theme-toggle.js"></script>
+</body>
+</html>
