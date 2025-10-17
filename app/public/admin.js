@@ -4,6 +4,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     const contributorsList = document.getElementById('contributors-list');
     const resetAllButton = document.getElementById('reset-all');
 
+    // Notification settings controls
+    const toastToggle = document.getElementById('toast-toggle');
+    const achievementToggle = document.getElementById('achievement-toggle');
+    const resetNotificationsButton = document.getElementById('reset-notifications');
+
     // Function to set the token in localStorage
     const setToken = (token) => {
         try {
@@ -64,6 +69,75 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     };
 
+    // Initialize notification settings
+    const initializeNotificationSettings = () => {
+        if (!window.notificationSettings) {
+            console.error('Notification settings module not loaded');
+            return;
+        }
+
+        // Load current settings
+        const settings = window.notificationSettings.getSettings();
+        toastToggle.checked = settings.toastsEnabled;
+        achievementToggle.checked = settings.achievementsEnabled;
+
+        // Toast toggle event
+        toastToggle.addEventListener('change', (e) => {
+            window.notificationSettings.toggleToasts(e.target.checked);
+            showAdminFeedback(
+                e.target.checked ? 'Toast notifications enabled' : 'Toast notifications disabled',
+                'info'
+            );
+        });
+
+        // Achievement toggle event
+        achievementToggle.addEventListener('change', (e) => {
+            window.notificationSettings.toggleAchievements(e.target.checked);
+            showAdminFeedback(
+                e.target.checked ? 'Achievement popups enabled' : 'Achievement popups disabled',
+                'info'
+            );
+        });
+
+        // Reset button event
+        resetNotificationsButton.addEventListener('click', () => {
+            const defaults = window.notificationSettings.resetToDefaults();
+            toastToggle.checked = defaults.toastsEnabled;
+            achievementToggle.checked = defaults.achievementsEnabled;
+            showAdminFeedback('Notification settings reset to defaults', 'success');
+        });
+
+        // Listen for external changes
+        window.addEventListener('notification-settings-changed', (e) => {
+            toastToggle.checked = e.detail.toastsEnabled;
+            achievementToggle.checked = e.detail.achievementsEnabled;
+        });
+    };
+
+    // Admin feedback toast (always shows, not affected by settings)
+    const showAdminFeedback = (message, type = 'info') => {
+        const toast = document.createElement('div');
+        toast.className = `toast toast-${type} show`;
+        toast.innerHTML = `
+            <div class="toast-icon">${type === 'success' ? '✓' : 'ℹ'}</div>
+            <div class="toast-message">${message}</div>
+        `;
+
+        let container = document.getElementById('toast-container');
+        if (!container) {
+            container = document.createElement('div');
+            container.id = 'toast-container';
+            document.body.appendChild(container);
+        }
+
+        container.appendChild(toast);
+
+        setTimeout(() => {
+            toast.classList.remove('show');
+            setTimeout(() => toast.remove(), 300);
+        }, 2000);
+    };
+
     try {
         const response = await fetch('/api/auth/status');
         if (response.ok) {
@@ -72,6 +146,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 authStatus.textContent = `Welcome, ${data.username}`;
                 adminContent.style.display = 'block';
                 loadContributors();
+                initializeNotificationSettings();
             } else {
                 adminContent.style.display = 'none';
             }

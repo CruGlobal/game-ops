@@ -15,11 +15,45 @@
     </div>
     <div id="auth-status"></div>
     <div id="admin-content" style="display:none;">
-        <h2>Contributors</h2>
-        <button id="reset-all">Reset All</button>
-        <ul id="contributors-list"></ul>
+        <!-- Notification Settings Section -->
+        <section class="notification-settings-section">
+            <h2>⚙️ Notification Settings</h2>
+            <p class="settings-description">Control when toast notifications and achievement popups appear. Disable these to reduce notification floods from batch updates.</p>
+
+            <div class="settings-controls">
+                <div class="setting-item">
+                    <label class="toggle-label">
+                        <input type="checkbox" id="toast-toggle" class="toggle-checkbox" checked>
+                        <span class="toggle-slider"></span>
+                        <span class="toggle-text">Toast Notifications</span>
+                    </label>
+                    <p class="setting-hint">Show toast messages for PRs, reviews, and updates</p>
+                </div>
+
+                <div class="setting-item">
+                    <label class="toggle-label">
+                        <input type="checkbox" id="achievement-toggle" class="toggle-checkbox" checked>
+                        <span class="toggle-slider"></span>
+                        <span class="toggle-text">Achievement Popups & Confetti</span>
+                    </label>
+                    <p class="setting-hint">Show celebration popups and confetti animations for achievements</p>
+                </div>
+            </div>
+
+            <button id="reset-notifications" class="secondary-button">Reset to Defaults</button>
+        </section>
+
+        <hr class="section-divider">
+
+        <!-- Contributors Management Section -->
+        <section class="contributors-section">
+            <h2>Contributors</h2>
+            <button id="reset-all">Reset All</button>
+            <ul id="contributors-list"></ul>
+        </section>
     </div>
 </div>
+<script src="/notification-settings.js"></script>
 <script src="/admin.js"></script>
 <script src="/init.js"></script>
 </body>

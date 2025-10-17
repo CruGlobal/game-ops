@@ -39,9 +39,14 @@
         showBadgeNotification(data);
         refreshLeaderboard();
 
-        // Trigger confetti celebration
-        if (window.confetti) {
-            window.confetti.burst({ count: 60 });
+        // Check if achievements/confetti are enabled
+        if (window.notificationSettings && window.notificationSettings.areAchievementsEnabled()) {
+            // Trigger confetti celebration
+            if (window.confetti) {
+                window.confetti.burst({ count: 60 });
+            }
+        } else {
+            console.log('Badge confetti suppressed (disabled)');
         }
     });
 
@@ -67,11 +72,17 @@
     socket.on('achievement-unlocked', (data) => {
         console.log('Achievement Unlocked:', data);
         showToast(`🏆 ${data.username} unlocked: ${data.achievementName}!`, 'success', 5000);
-        showAchievementModal(data);
 
-        // Full celebration with confetti
-        if (window.confetti) {
-            window.confetti.celebrate();
+        // Check if achievements are enabled
+        if (window.notificationSettings && window.notificationSettings.areAchievementsEnabled()) {
+            showAchievementModal(data);
+
+            // Full celebration with confetti
+            if (window.confetti) {
+                window.confetti.celebrate();
+            }
+        } else {
+            console.log('Achievement popup suppressed (disabled):', data.achievementName);
         }
     });
 
@@ -89,12 +100,17 @@
         console.log('Challenge Completed:', data);
         showToast(`🎉 ${data.username} completed: ${data.challengeName}! (+${data.reward} points)`, 'success', 5000);
 
-        // Confetti cannon celebration
-        if (window.confetti) {
-            window.confetti.cannon({ side: 'left', count: 40 });
-            setTimeout(() => {
-                window.confetti.cannon({ side: 'right', count: 40 });
-            }, 200);
+        // Check if achievements/confetti are enabled
+        if (window.notificationSettings && window.notificationSettings.areAchievementsEnabled()) {
+            // Confetti cannon celebration
+            if (window.confetti) {
+                window.confetti.cannon({ side: 'left', count: 40 });
+                setTimeout(() => {
+                    window.confetti.cannon({ side: 'right', count: 40 });
+                }, 200);
+            }
+        } else {
+            console.log('Challenge confetti suppressed (disabled)');
         }
     });
 
@@ -162,6 +178,12 @@
 
     // Toast notification system (basic implementation)
     function showToast(message, type = 'info', duration = 3000) {
+        // Check if toasts are enabled
+        if (window.notificationSettings && !window.notificationSettings.areToastsEnabled()) {
+            console.log('Toast suppressed (disabled):', message);
+            return;
+        }
+
         // Check if toast container exists
         let container = document.getElementById('toast-container');
         if (!container) {

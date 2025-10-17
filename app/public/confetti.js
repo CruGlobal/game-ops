@@ -136,6 +136,12 @@ class Confetti {
      * Launch confetti burst
      */
     burst(options = {}) {
+        // Check if achievements/confetti are enabled
+        if (window.notificationSettings && !window.notificationSettings.areAchievementsEnabled()) {
+            console.log('Confetti burst suppressed (disabled)');
+            return;
+        }
+
         const {
             x = this.canvas ? this.canvas.width / 2 : window.innerWidth / 2,
             y = this.canvas ? this.canvas.height / 2 : window.innerHeight / 2,
@@ -169,6 +175,12 @@ class Confetti {
      * Launch confetti from top
      */
     rain(options = {}) {
+        // Check if achievements/confetti are enabled
+        if (window.notificationSettings && !window.notificationSettings.areAchievementsEnabled()) {
+            console.log('Confetti rain suppressed (disabled)');
+            return;
+        }
+
         const {
             duration = 3000,
             particlesPerSecond = 20
@@ -210,6 +222,12 @@ class Confetti {
      * Launch confetti from sides
      */
     cannon(options = {}) {
+        // Check if achievements/confetti are enabled
+        if (window.notificationSettings && !window.notificationSettings.areAchievementsEnabled()) {
+            console.log('Confetti cannon suppressed (disabled)');
+            return;
+        }
+
         const {
             side = 'left', // 'left' or 'right'
             count = 30
@@ -245,6 +263,12 @@ class Confetti {
      * Launch full screen celebration
      */
     celebrate() {
+        // Check if achievements/confetti are enabled
+        if (window.notificationSettings && !window.notificationSettings.areAchievementsEnabled()) {
+            console.log('Confetti celebration suppressed (disabled)');
+            return;
+        }
+
         // Burst from center
         this.burst({ count: 100 });
 

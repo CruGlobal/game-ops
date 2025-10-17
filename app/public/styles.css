@@ -1496,3 +1496,191 @@ h1 {
 .page-header-with-nav .hamburger-menu {
     position: static;
 }
+
+/* ========================================
+   NOTIFICATION SETTINGS - Admin Toggle Controls
+   ======================================== */
+
+.notification-settings-section {
+    background: var(--bg-secondary, #f9fafb);
+    border: 1px solid var(--border-color, #e5e7eb);
+    border-radius: var(--radius-lg, 12px);
+    padding: var(--spacing-6, 1.5rem);
+    margin-bottom: var(--spacing-8, 2rem);
+}
+
+.notification-settings-section h2 {
+    margin-top: 0;
+    margin-bottom: var(--spacing-2, 0.5rem);
+    color: var(--text-primary, #111827);
+    font-size: var(--font-size-2xl, 1.5rem);
+}
+
+.settings-description {
+    color: var(--text-secondary, #6b7280);
+    margin-bottom: var(--spacing-6, 1.5rem);
+    font-size: var(--font-size-sm, 0.875rem);
+}
+
+.settings-controls {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-6, 1.5rem);
+    margin-bottom: var(--spacing-6, 1.5rem);
+}
+
+.setting-item {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-2, 0.5rem);
+}
+
+/* Toggle Switch Styles */
+.toggle-label {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-3, 0.75rem);
+    cursor: pointer;
+    user-select: none;
+    position: relative;
+}
+
+.toggle-checkbox {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.toggle-slider {
+    position: relative;
+    display: inline-block;
+    width: 52px;
+    height: 28px;
+    background-color: var(--gray-300, #d1d5db);
+    border-radius: 28px;
+    transition: background-color var(--transition-base, 200ms ease);
+}
+
+.toggle-slider::before {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 24px;
+    height: 24px;
+    background-color: white;
+    border-radius: 50%;
+    transition: transform var(--transition-base, 200ms ease);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.toggle-checkbox:checked + .toggle-slider {
+    background-color: var(--success-color, #10b981);
+}
+
+.toggle-checkbox:checked + .toggle-slider::before {
+    transform: translateX(24px);
+}
+
+.toggle-checkbox:focus + .toggle-slider {
+    outline: 2px solid var(--primary-color, #3b82f6);
+    outline-offset: 2px;
+}
+
+.toggle-checkbox:disabled + .toggle-slider {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.toggle-text {
+    font-weight: 500;
+    color: var(--text-primary, #111827);
+    font-size: var(--font-size-base, 1rem);
+}
+
+.setting-hint {
+    color: var(--text-tertiary, #9ca3af);
+    font-size: var(--font-size-sm, 0.875rem);
+    margin: 0;
+    margin-left: 64px; /* Align with toggle text */
+}
+
+/* Secondary Button for Reset */
+.secondary-button {
+    background: var(--bg-primary, #ffffff);
+    color: var(--text-secondary, #6b7280);
+    border: 1px solid var(--border-color, #e5e7eb);
+    padding: var(--spacing-2, 0.5rem) var(--spacing-4, 1rem);
+    border-radius: var(--radius-md, 8px);
+    font-size: var(--font-size-sm, 0.875rem);
+    font-weight: 500;
+    cursor: pointer;
+    transition: all var(--transition-base, 200ms ease);
+    align-self: flex-start;
+}
+
+.secondary-button:hover {
+    background: var(--bg-secondary, #f9fafb);
+    border-color: var(--gray-400, #9ca3af);
+    color: var(--text-primary, #111827);
+}
+
+.secondary-button:active {
+    transform: scale(0.98);
+}
+
+/* Section Divider */
+.section-divider {
+    border: none;
+    border-top: 1px solid var(--border-color, #e5e7eb);
+    margin: var(--spacing-8, 2rem) 0;
+}
+
+/* Contributors Section */
+.contributors-section {
+    margin-top: var(--spacing-6, 1.5rem);
+}
+
+.contributors-section h2 {
+    margin-bottom: var(--spacing-4, 1rem);
+}
+
+/* Dark Mode Support */
+@media (prefers-color-scheme: dark) {
+    .notification-settings-section {
+        background: var(--bg-secondary, #1f2937);
+        border-color: var(--border-color, #374151);
+    }
+
+    .toggle-slider {
+        background-color: var(--gray-600, #4b5563);
+    }
+
+    .secondary-button {
+        background: var(--bg-secondary, #1f2937);
+        border-color: var(--border-color, #374151);
+        color: var(--text-secondary, #9ca3af);
+    }
+
+    .secondary-button:hover {
+        background: var(--bg-tertiary, #374151);
+        border-color: var(--gray-500, #6b7280);
+    }
+
+    .section-divider {
+        border-color: var(--border-color, #374151);
+    }
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .setting-hint {
+        margin-left: 0;
+        margin-top: var(--spacing-1, 0.25rem);
+    }
+
+    .notification-settings-section {
+        padding: var(--spacing-4, 1rem);
+    }
+}
