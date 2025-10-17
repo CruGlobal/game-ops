@@ -125,8 +125,41 @@ const ContributorSchema = new mongoose.Schema({
             type: Boolean,
             default: false
         }
-    }
+    },
+
+    // Track processed PRs to prevent duplicates
+    processedPRs: [{
+        prNumber: {
+            type: Number,
+            required: true
+        },
+        prTitle: String,
+        processedDate: {
+            type: Date,
+            default: Date.now
+        },
+        action: {
+            type: String,
+            enum: ['authored', 'reviewed'],
+            required: true
+        }
+    }],
+    processedReviews: [{
+        prNumber: {
+            type: Number,
+            required: true
+        },
+        reviewId: Number,  // GitHub review ID
+        processedDate: {
+            type: Date,
+            default: Date.now
+        }
+    }]
 });
+
+// Index for quick duplicate lookup
+ContributorSchema.index({ 'processedPRs.prNumber': 1 });
+ContributorSchema.index({ 'processedReviews.prNumber': 1 });
 
 // Create a model for the Contributor schema
 const Contributor = mongoose.model('Contributor', ContributorSchema);

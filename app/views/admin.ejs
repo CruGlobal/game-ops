@@ -72,11 +72,254 @@
                     </ul>
                 </div>
             </div>
+
+            <!-- Data Overview Section -->
+            <div class="card">
+                <h2>📊 Data Overview</h2>
+                <p class="card-description">View PR fetch statistics and check data integrity</p>
+
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <span class="stat-label">PR Range Fetched</span>
+                        <span class="stat-value" id="pr-range">
+                            <span class="loading-spinner">Loading...</span>
+                        </span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Total PRs in Database</span>
+                        <span class="stat-value" id="total-prs">
+                            <span class="loading-spinner">Loading...</span>
+                        </span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Total Reviews in Database</span>
+                        <span class="stat-value" id="total-reviews">
+                            <span class="loading-spinner">Loading...</span>
+                        </span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Date Range</span>
+                        <span class="stat-value" id="date-range">
+                            <span class="loading-spinner">Loading...</span>
+                        </span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Last Fetch</span>
+                        <span class="stat-value" id="last-fetch">
+                            <span class="loading-spinner">Loading...</span>
+                        </span>
+                    </div>
+                </div>
+
+                <div class="button-group">
+                    <button id="check-duplicates" class="btn btn-secondary">
+                        <span>🔍 Check for Duplicates</span>
+                    </button>
+                    <button id="refresh-stats" class="btn btn-secondary">
+                        <span>🔄 Refresh Stats</span>
+                    </button>
+                </div>
+
+                <!-- Duplicate Results Display -->
+                <div id="duplicate-results" class="alert" style="display: none;">
+                    <div id="duplicate-content"></div>
+                </div>
+
+                <!-- Fetch History -->
+                <div id="fetch-history" style="display: none; margin-top: 1.5rem;">
+                    <h3>Recent Fetch History</h3>
+                    <div id="fetch-history-list" class="fetch-history-list"></div>
+                </div>
+            </div>
         </div>
     </main>
 </div>
 <script src="/notification-settings.js"></script>
 <script src="/admin.js"></script>
 <script src="/init.js"></script>
+
+<script>
+// Data Overview Functionality
+(async function initDataOverview() {
+    // Load PR range info on page load
+    await loadPRRangeInfo();
+
+    // Refresh button
+    document.getElementById('refresh-stats')?.addEventListener('click', async () => {
+        await loadPRRangeInfo();
+        if (typeof showToast === 'function') {
+            showToast('Stats refreshed successfully', 'success');
+        }
+    });
+
+    // Duplicate check button
+    document.getElementById('check-duplicates')?.addEventListener('click', async () => {
+        await checkForDuplicates();
+    });
+})();
+
+async function loadPRRangeInfo() {
+    try {
+        const response = await fetch('/api/admin/pr-range-info');
+        const result = await response.json();
+
+        if (result.success) {
+            const data = result.data;
+
+            // Update PR range
+            const prRange = data.firstPR && data.latestPR
+                ? `#${data.firstPR.toLocaleString()} - #${data.latestPR.toLocaleString()}`
+                : 'No data';
+            document.getElementById('pr-range').textContent = prRange;
+
+            // Update total PRs
+            document.getElementById('total-prs').textContent = data.totalPRs
+                ? data.totalPRs.toLocaleString()
+                : '0';
+
+            // Update total reviews
+            document.getElementById('total-reviews').textContent = data.totalReviews
+                ? data.totalReviews.toLocaleString()
+                : '0';
+
+            // Update date range
+            if (data.dateRange.start && data.dateRange.end) {
+                const startDate = new Date(data.dateRange.start).toLocaleDateString();
+                const endDate = new Date(data.dateRange.end).toLocaleDateString();
+                document.getElementById('date-range').textContent = `${startDate} to ${endDate}`;
+            } else {
+                document.getElementById('date-range').textContent = 'No data';
+            }
+
+            // Update last fetch
+            if (data.lastFetch) {
+                const lastFetch = new Date(data.lastFetch).toLocaleString();
+                document.getElementById('last-fetch').textContent = lastFetch;
+            } else {
+                document.getElementById('last-fetch').textContent = 'Never';
+            }
+
+            // Show fetch history if available
+            if (data.fetchHistory && data.fetchHistory.length > 0) {
+                displayFetchHistory(data.fetchHistory);
+            }
+        } else {
+            console.error('Failed to load PR range info:', result.message);
+            if (typeof showToast === 'function') {
+                showToast('Failed to load data statistics', 'error');
+            }
+        }
+    } catch (error) {
+        console.error('Error loading PR range info:', error);
+        document.querySelectorAll('.stat-value .loading-spinner').forEach(el => {
+            el.parentElement.textContent = 'Error loading';
+        });
+    }
+}
+
+async function checkForDuplicates() {
+    const button = document.getElementById('check-duplicates');
+    const resultsDiv = document.getElementById('duplicate-results');
+    const contentDiv = document.getElementById('duplicate-content');
+
+    // Show loading state
+    button.disabled = true;
+    button.innerHTML = '<span>⏳ Checking...</span>';
+
+    try {
+        const response = await fetch('/api/admin/duplicate-check');
+        const result = await response.json();
+
+        if (result.success) {
+            const data = result.data;
+
+            // Display results
+            resultsDiv.style.display = 'block';
+
+            if (!data.hasDuplicates) {
+                resultsDiv.className = 'alert alert-success';
+                contentDiv.innerHTML = `
+                    <h3>✅ No Duplicates Found</h3>
+                    <p>Your database is clean! All PRs and reviews are unique.</p>
+                `;
+            } else {
+                resultsDiv.className = 'alert alert-warning';
+
+                let html = `
+                    <h3>⚠️ Duplicates Detected</h3>
+                    <div class="duplicate-summary">
+                        <p><strong>Summary:</strong></p>
+                        <ul>
+                            <li>Duplicate PRs: ${data.summary.duplicatePRs}</li>
+                            <li>Duplicate Reviews: ${data.summary.duplicateReviews}</li>
+                            <li>Count Mismatches: ${data.summary.mismatches || 0}</li>
+                            <li>Affected Contributors: ${data.summary.affectedContributors}</li>
+                            <li>Total Issues: ${data.duplicateCount}</li>
+                        </ul>
+                    </div>
+                `;
+
+                if (data.details.length > 0) {
+                    html += '<div class="duplicate-details"><h4>Details:</h4><ul>';
+                    data.details.slice(0, 10).forEach(detail => {
+                        html += `<li><strong>${detail.type}:</strong> ${detail.issue}</li>`;
+                    });
+                    if (data.details.length > 10) {
+                        html += `<li><em>... and ${data.details.length - 10} more issues</em></li>`;
+                    }
+                    html += '</ul></div>';
+                }
+
+                contentDiv.innerHTML = html;
+            }
+        } else {
+            resultsDiv.style.display = 'block';
+            resultsDiv.className = 'alert alert-error';
+            contentDiv.innerHTML = `
+                <h3>❌ Error</h3>
+                <p>${result.message}</p>
+            `;
+        }
+    } catch (error) {
+        console.error('Error checking duplicates:', error);
+        resultsDiv.style.display = 'block';
+        resultsDiv.className = 'alert alert-error';
+        contentDiv.innerHTML = `
+            <h3>❌ Error</h3>
+            <p>Failed to check for duplicates. Please try again.</p>
+        `;
+    } finally {
+        button.disabled = false;
+        button.innerHTML = '<span>🔍 Check for Duplicates</span>';
+    }
+}
+
+function displayFetchHistory(history) {
+    const container = document.getElementById('fetch-history');
+    const list = document.getElementById('fetch-history-list');
+
+    if (history.length === 0) {
+        container.style.display = 'none';
+        return;
+    }
+
+    container.style.display = 'block';
+
+    let html = '<ul>';
+    history.forEach(fetch => {
+        const date = new Date(fetch.fetchDate).toLocaleString();
+        html += `
+            <li>
+                <strong>${date}</strong>:
+                ${fetch.prRangeFetched}
+                (${fetch.prsAdded} PRs, ${fetch.reviewsAdded} reviews added)
+            </li>
+        `;
+    });
+    html += '</ul>';
+
+    list.innerHTML = html;
+}
+</script>
 </body>
 </html>

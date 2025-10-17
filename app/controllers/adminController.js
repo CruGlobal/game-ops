@@ -1,6 +1,7 @@
 // adminController.js
 import Contributor from '../models/contributor.js';
 import { body, validationResult } from 'express-validator';
+import { getPRRangeInfo, checkForDuplicates } from '../services/contributorService.js';
 
 // Function to get all contributors
 export const getContributors = async (req, res) => {
@@ -71,3 +72,45 @@ export const resetAllContributors = async (req, res) => {
         res.status(500).send('Error resetting all contributors');
     }
 };
+
+/**
+ * Get PR fetch range and database statistics
+ * GET /api/admin/pr-range-info
+ */
+export async function getPRRangeInfoController(req, res) {
+    try {
+        const info = await getPRRangeInfo();
+        res.json({
+            success: true,
+            data: info
+        });
+    } catch (error) {
+        console.error('Error in getPRRangeInfoController:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to retrieve PR range information',
+            error: error.message
+        });
+    }
+}
+
+/**
+ * Check for duplicate PRs in database
+ * GET /api/admin/duplicate-check
+ */
+export async function checkDuplicatesController(req, res) {
+    try {
+        const results = await checkForDuplicates();
+        res.json({
+            success: true,
+            data: results
+        });
+    } catch (error) {
+        console.error('Error in checkDuplicatesController:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to check for duplicates',
+            error: error.message
+        });
+    }
+}

@@ -25,7 +25,7 @@ import {
     getStreakStatsController,
     getContributorController
 } from '../controllers/contributorController.js';
-import { getContributors, resetContributor, resetAllContributors } from '../controllers/adminController.js';
+import { getContributors, resetContributor, resetAllContributors, getPRRangeInfoController, checkDuplicatesController } from '../controllers/adminController.js';
 import { authenticate } from '../middleware/authMiddleware.js';
 import { login } from '../controllers/authController.js';
 import { ensureAuthenticated } from '../middleware/ensureAuthenticated.js';
@@ -63,6 +63,12 @@ router.post('/admin/reset-contributor', authenticate, resetContributor);
 
 // Route to reset all contributors
 router.post('/admin/reset-all', authenticate, resetAllContributors);
+
+// PR Range Info and Data Statistics
+router.get('/admin/pr-range-info', ensureAuthenticated, getPRRangeInfoController);
+
+// Duplicate Detection
+router.get('/admin/duplicate-check', ensureAuthenticated, checkDuplicatesController);
 
 // Route to get the list of badge images
 router.get('/badges', (req, res) => {

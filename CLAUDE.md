@@ -70,6 +70,7 @@ The application uses a dual database approach:
 - **NEW: Points system** (totalPoints, pointsHistory with timestamps)
 - **NEW: Challenge participation** (activeChallenges, completedChallenges)
 - **NEW: Streak badges** (sevenDay, thirtyDay, ninetyDay, yearLong)
+- **PHASE 1: Duplicate prevention** (processedPRs, processedReviews arrays with PR numbers and dates)
 
 **Challenge Schema** (`app/models/challenge.js`):
 - Challenge metadata (title, description, type, target, reward)
@@ -77,6 +78,14 @@ The application uses a dual database approach:
 - Date ranges (startDate, endDate)
 - Participant tracking with progress
 - Difficulty levels and categories
+
+**PRMetadata Schema** (`app/models/prMetadata.js`) - **PHASE 1**:
+- Repository identification (repoOwner, repoName)
+- PR range tracking (firstPRFetched, latestPRFetched, totalPRsInDB)
+- Date range tracking (dateRangeStart, dateRangeEnd)
+- Last fetch timestamp (lastFetchDate)
+- Fetch history array with timestamps, PR counts, and review counts
+- Singleton pattern - one record per repository
 
 ### Key Components
 
@@ -219,6 +228,31 @@ app/
   - Reward system with point bonuses
   - Challenge completion achievements
 
+#### **PHASE 1: Data Visibility & Integrity**
+- **PR Fetch Range Tracking:**
+  - View PR number range fetched (e.g., #1 - #5678)
+  - Total PRs and reviews in database
+  - Date range of PRs (oldest to newest)
+  - Last fetch timestamp
+  - Fetch history (last 5-20 fetches with details)
+  - Admin dashboard card with real-time stats
+
+- **Duplicate Detection:**
+  - Check for duplicate PRs within contributors
+  - Check for duplicate reviews
+  - Detect count mismatches (totalPRs vs processedPRs)
+  - Detailed duplicate report with affected contributors
+  - Admin dashboard UI for one-click duplicate checks
+  - Summary statistics (duplicate count, affected users)
+
+- **Data Integrity:**
+  - Track processed PRs per contributor (prevent double-counting)
+  - Track processed reviews with GitHub review IDs
+  - Automatic duplicate prevention during PR fetching
+  - Metadata tracking for audit trail
+  - processedPRs and processedReviews arrays in Contributor schema
+  - Indexed fields for performance (O(1) duplicate lookups)
+
 #### **NEW: Modern UI/UX**
 - CSS design system with custom properties (60+ design tokens)
 - Dark mode with theme persistence
@@ -315,6 +349,10 @@ npm run test:coverage   # Run tests with coverage report
 ### Streak Endpoints
 - **GET /api/streaks/leaderboard** - Get streak leaderboard
 - **GET /api/streaks/:username** - Get user's streak stats
+
+### Admin - Data Overview (Phase 1)
+- **GET /api/admin/pr-range-info** - Get PR fetch range and database statistics (returns firstPR, latestPR, totalPRs, totalReviews, dateRange, lastFetch, fetchHistory)
+- **GET /api/admin/duplicate-check** - Check for duplicate PRs/reviews in database (returns hasDuplicates, duplicateCount, details[], summary{})
 
 ### Analytics Endpoints
 - **GET /api/analytics/overview** - Combined analytics dashboard data (team, top contributors, challenges, growth)
