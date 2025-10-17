@@ -15,6 +15,100 @@
     </div>
     <div id="auth-status"></div>
     <div id="admin-content" style="display:none;">
+        <h2>Create OKR Challenge</h2>
+        <div class="okr-challenge-form">
+            <form id="okr-challenge-form">
+                <div class="form-group">
+                    <label for="challenge-title">Challenge Title *</label>
+                    <input type="text" id="challenge-title" name="title" required
+                           placeholder="e.g., Siebel SSO Proxy Testing">
+                </div>
+
+                <div class="form-group">
+                    <label for="challenge-description">Description *</label>
+                    <textarea id="challenge-description" name="description" required rows="3"
+                              placeholder="Complete PRs related to Siebel SSO Proxy Testing"></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label for="label-filters">PR Labels (one per line) *</label>
+                    <textarea id="label-filters" name="labelFilters" required rows="4"
+                              placeholder="UST - Siebel - L# 46&#10;siebel*&#10;sso-proxy"></textarea>
+                    <small>Use * for wildcards. Example: "siebel*" matches "siebel-bug", "siebel-feature"</small>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="challenge-target">Target PRs *</label>
+                        <input type="number" id="challenge-target" name="target" required min="1" value="5">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="challenge-reward">Reward Points</label>
+                        <input type="number" id="challenge-reward" name="reward" min="0" value="300">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="challenge-difficulty">Difficulty</label>
+                        <select id="challenge-difficulty" name="difficulty">
+                            <option value="easy">Easy</option>
+                            <option value="medium">Medium</option>
+                            <option value="hard" selected>Hard</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="start-date">Start Date</label>
+                        <input type="date" id="start-date" name="startDate">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="end-date">End Date *</label>
+                        <input type="date" id="end-date" name="endDate" required>
+                    </div>
+                </div>
+
+                <div class="okr-metadata">
+                    <h3>OKR Metadata (Optional)</h3>
+                    <div class="form-group">
+                        <label for="okr-objective">Objective</label>
+                        <input type="text" id="okr-objective" name="objective"
+                               placeholder="e.g., Improve authentication systems">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="okr-key-result">Key Result</label>
+                        <input type="text" id="okr-key-result" name="keyResult"
+                               placeholder="e.g., Complete SSO integration testing">
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="okr-department">Department/Team</label>
+                            <input type="text" id="okr-department" name="department"
+                                   placeholder="e.g., UST, Engineering">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="okr-quarter">Quarter</label>
+                            <input type="text" id="okr-quarter" name="quarter"
+                                   placeholder="e.g., Q4 2025">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-actions">
+                    <button type="submit" class="btn-primary">Create Challenge</button>
+                    <button type="reset" class="btn-secondary">Clear Form</button>
+                </div>
+            </form>
+            <div id="challenge-create-status"></div>
+        </div>
+
+        <hr style="margin: 2rem 0;">
+
         <h2>Contributors</h2>
         <button id="reset-all">Reset All</button>
         <ul id="contributors-list"></ul>

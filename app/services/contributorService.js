@@ -214,9 +214,25 @@ export const fetchPullRequests = async () => {
 
                     // Update challenge progress
                     if (contributor.activeChallenges && contributor.activeChallenges.length > 0) {
+                        const { checkLabelMatch } = await import('./challengeService.js');
+
                         for (const activeChallenge of contributor.activeChallenges) {
                             const challenge = await import('../models/challenge.js').then(m => m.default.findById(activeChallenge.challengeId));
-                            if (challenge && challenge.type === 'pr-merge') {
+
+                            if (!challenge) continue;
+
+                            let shouldIncrement = false;
+
+                            // Check challenge type
+                            if (challenge.type === 'pr-merge') {
+                                shouldIncrement = true;
+                            } else if (challenge.type === 'okr-label') {
+                                // Check if PR labels match challenge filters
+                                const prLabels = pr.labels || [];
+                                shouldIncrement = checkLabelMatch(prLabels, challenge.labelFilters);
+                            }
+
+                            if (shouldIncrement) {
                                 await updateChallengeProgress(username, challenge._id.toString(), 1);
                             }
                         }

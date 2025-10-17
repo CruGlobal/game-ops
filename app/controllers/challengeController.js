@@ -3,7 +3,8 @@ import {
     getChallengeById,
     joinChallenge,
     getUserChallenges,
-    getChallengeLeaderboard
+    getChallengeLeaderboard,
+    createOKRChallenge
 } from '../services/challengeService.js';
 
 // Get all active challenges
@@ -70,5 +71,60 @@ export const getUserChallengesController = async (req, res) => {
         res.json(challenges);
     } catch (err) {
         res.status(404).json({ error: err.message });
+    }
+};
+
+// Create OKR challenge (admin only)
+export const createOKRChallengeController = async (req, res) => {
+    try {
+        const {
+            title,
+            description,
+            labelFilters,
+            target,
+            reward,
+            startDate,
+            endDate,
+            difficulty,
+            okrMetadata
+        } = req.body;
+
+        // Validate required fields
+        if (!title || !description || !labelFilters || !Array.isArray(labelFilters) || labelFilters.length === 0) {
+            return res.status(400).json({
+                error: 'Title, description, and at least one label filter are required'
+            });
+        }
+
+        if (!target || target < 1) {
+            return res.status(400).json({
+                error: 'Target must be at least 1'
+            });
+        }
+
+        if (!endDate) {
+            return res.status(400).json({
+                error: 'End date is required'
+            });
+        }
+
+        const challenge = await createOKRChallenge({
+            title,
+            description,
+            labelFilters,
+            target,
+            reward,
+            startDate,
+            endDate,
+            difficulty,
+            okrMetadata
+        });
+
+        res.status(201).json({
+            message: 'OKR challenge created successfully',
+            challenge
+        });
+    } catch (err) {
+        res.status(400).json({ error: err.message });
     }
 };

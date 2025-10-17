@@ -11,7 +11,7 @@ const challengeSchema = new mongoose.Schema({
     },
     type: {
         type: String,
-        enum: ['pr-merge', 'review', 'streak', 'points', 'team'],
+        enum: ['pr-merge', 'review', 'streak', 'points', 'team', 'okr-label'],
         required: true
     },
     target: {
@@ -59,6 +59,16 @@ const challengeSchema = new mongoose.Schema({
         type: String,
         enum: ['individual', 'community'],
         default: 'individual'
+    },
+    // OKR-specific fields
+    labelFilters: [{
+        type: String  // PR labels to match (exact or pattern)
+    }],
+    okrMetadata: {
+        objective: String,      // OKR objective name
+        keyResult: String,      // Specific key result
+        department: String,     // Team/department name
+        quarter: String         // e.g., "Q1 2025"
     }
 }, {
     timestamps: true

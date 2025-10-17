@@ -454,3 +454,101 @@ export const getChallengeLeaderboard = async (challengeId) => {
         throw error;
     }
 };
+
+/**
+ * Check if PR labels match challenge label filters
+ * @param {Array} prLabels - PR labels from GitHub
+ * @param {Array} labelFilters - Challenge label filters
+ * @returns {Boolean} True if labels match
+ */
+export const checkLabelMatch = (prLabels, labelFilters) => {
+    if (!labelFilters || labelFilters.length === 0) {
+        return true; // No filters means all PRs count
+    }
+
+    if (!prLabels || prLabels.length === 0) {
+        return false; // No labels on PR, can't match
+    }
+
+    // Normalize PR labels to strings
+    const normalizedPRLabels = prLabels.map(l =>
+        (typeof l === 'string' ? l : l.name).toLowerCase().trim()
+    );
+
+    // Check if any filter matches any PR label
+    return labelFilters.some(filter => {
+        const normalizedFilter = filter.toLowerCase().trim();
+
+        // Support wildcard matching with *
+        if (normalizedFilter.includes('*')) {
+            const regex = new RegExp('^' + normalizedFilter.replace(/\*/g, '.*') + '$');
+            return normalizedPRLabels.some(label => regex.test(label));
+        }
+
+        // Exact match or substring match
+        return normalizedPRLabels.some(label =>
+            label === normalizedFilter || label.includes(normalizedFilter)
+        );
+    });
+};
+
+/**
+ * Create an OKR-based challenge
+ * @param {Object} okrData - OKR challenge data
+ * @returns {Object} Created challenge
+ */
+export const createOKRChallenge = async (okrData) => {
+    try {
+        const {
+            title,
+            description,
+            labelFilters,
+            target,
+            reward,
+            startDate,
+            endDate,
+            difficulty,
+            okrMetadata
+        } = okrData;
+
+        // Validate required fields
+        if (!title || !description || !labelFilters || labelFilters.length === 0) {
+            throw new Error('Title, description, and at least one label filter are required');
+        }
+
+        if (!target || target < 1) {
+            throw new Error('Target must be at least 1');
+        }
+
+        const challenge = new Challenge({
+            title,
+            description,
+            type: 'okr-label',
+            labelFilters,
+            target,
+            reward: reward || 300, // Default OKR reward
+            startDate: startDate || new Date(),
+            endDate,
+            difficulty: difficulty || 'hard',
+            category: 'community', // OKR challenges are typically team-based
+            status: 'active',
+            okrMetadata: okrMetadata || {}
+        });
+
+        await challenge.save();
+
+        logger.info('OKR challenge created', {
+            challengeId: challenge._id,
+            title: challenge.title,
+            labelFilters: challenge.labelFilters,
+            department: okrMetadata?.department
+        });
+
+        return challenge;
+    } catch (error) {
+        logger.error('Error creating OKR challenge', {
+            error: error.message
+        });
+        throw error;
+    }
+};
