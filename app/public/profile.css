@@ -27,9 +27,9 @@
 }
 
 .back-button:hover {
-    background: var(--primary-color);
-    color: white;
-    border-color: var(--primary-color);
+    background: var(--primary-color, #3b82f6);
+    color: #ffffff !important;  /* Force white text on hover */
+    border-color: var(--primary-color, #3b82f6);
     transform: translateX(-2px);
 }
 

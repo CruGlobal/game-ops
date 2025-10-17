@@ -1443,3 +1443,56 @@ h1 {
     font-style: italic;
     padding: 2rem;
 }
+
+/* Page Header with Navigation Layout */
+.page-header-with-nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.page-header-with-nav .back-button {
+    background: var(--bg-secondary, #f3f4f6);
+    border: 1px solid var(--border-color, #d1d5db);
+    color: var(--text-primary, #111827);
+    padding: 0.75rem 1.5rem;
+    border-radius: 6px;
+    font-size: 0.95rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.page-header-with-nav .back-button:hover {
+    background: var(--primary-color, #3b82f6);
+    color: #ffffff !important;  /* Force white text on hover in all modes */
+    border-color: var(--primary-color, #3b82f6);
+    transform: translateX(-2px);
+}
+
+.page-header-with-nav .hamburger-menu {
+    margin-left: auto;
+}
+
+/* Ensure consistent hamburger menu positioning */
+.header-section {
+    position: relative;
+    margin-bottom: 2rem;
+}
+
+.header-section .hamburger-menu {
+    position: absolute;
+    top: 0;
+    right: 0;
+}
+
+/* For pages with back button + hamburger menu */
+.page-header-with-nav .hamburger-menu {
+    position: static;
+}

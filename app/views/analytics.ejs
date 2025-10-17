@@ -5,13 +5,21 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Analytics Dashboard - GitHub PR Scoreboard</title>
     <link rel="stylesheet" href="/modern-design-system.css">
+    <link rel="stylesheet" href="/styles.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body>
-    <%- include('partials/nav') %>
-
-    <div class="container">
+<a href="#main-content" class="skip-link">Skip to main content</a>
+<div class="container">
+    <div class="header-section">
         <h1>📊 Analytics Dashboard</h1>
+        <div class="hamburger-menu">
+            <button class="hamburger-button" aria-label="Toggle navigation menu" aria-expanded="false">&#9776;</button>
+            <%- include('partials/nav') %>
+        </div>
+    </div>
+
+    <main id="main-content">
 
         <!-- Time Period Selector -->
         <div class="card" style="margin-bottom: 24px;">
@@ -116,9 +124,13 @@
     <script src="/socket-client.js"></script>
     <script src="/scripts.js"></script>
     <!-- Theme Toggle -->
-    <script nonce="lexicostatistics" src="/theme-toggle.js"></script>
-    <!-- Analytics Client -->
-    <script nonce="lexicostatistics" src="/analytics-client.js"></script>
+    </main>
+</div>
+
+<script nonce="lexicostatistics" src="/theme-toggle.js"></script>
+<!-- Analytics Client -->
+<script nonce="lexicostatistics" src="/analytics-client.js"></script>
+<script src="/init.js"></script>
 </body>
 </html>
 

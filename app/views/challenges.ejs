@@ -8,14 +8,23 @@
     <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
-    <%- include('partials/nav') %>
-
-    <div class="container">
-        <div class="page-header">
-            <h1>🏆 Weekly Challenges</h1>
-            <p class="page-description">Compete in weekly challenges to earn extra points and exclusive rewards!</p>
+<a href="#main-content" class="skip-link">Skip to main content</a>
+<div class="container">
+    <div class="header-section">
+        <div class="page-header-with-nav">
+            <button class="back-button" onclick="window.location.href='/leaderboard'">
+                ← Back to Leaderboard
+            </button>
+            <div class="hamburger-menu">
+                <button class="hamburger-button" aria-label="Toggle navigation menu" aria-expanded="false">&#9776;</button>
+                <%- include('partials/nav') %>
+            </div>
         </div>
+        <h1>🎯 Weekly Challenges</h1>
+        <p class="page-description">Compete in weekly challenges to earn extra points and exclusive rewards!</p>
+    </div>
 
+    <main id="main-content">
         <!-- Active Challenges Section -->
         <section id="active-challenges" class="challenges-section">
             <h2>Active Challenges</h2>
@@ -40,12 +49,14 @@
                 <p class="empty-message">No completed challenges yet. Check back after challenges end!</p>
             </div>
         </section>
-    </div>
+    </main>
+</div>
 
-    <script src="/socket.io/socket.io.js"></script>
-    <script nonce="lexicostatistics" src="/socket-client.js"></script>
-    <script nonce="lexicostatistics" src="/challenges-client.js"></script>
-    <!-- Theme Toggle -->
-    <script nonce="lexicostatistics" src="/theme-toggle.js"></script>
+<script src="/socket.io/socket.io.js"></script>
+<script nonce="lexicostatistics" src="/socket-client.js"></script>
+<script nonce="lexicostatistics" src="/challenges-client.js"></script>
+<!-- Theme Toggle -->
+<script nonce="lexicostatistics" src="/theme-toggle.js"></script>
+<script src="/init.js"></script>
 </body>
 </html>

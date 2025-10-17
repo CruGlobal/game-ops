@@ -11,14 +11,23 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body>
-    <%- include('partials/nav') %>
-
-    <div class="container">
-        <!-- Profile Header -->
-        <div class="profile-header">
+<a href="#main-content" class="skip-link">Skip to main content</a>
+<div class="container">
+    <div class="header-section">
+        <div class="page-header-with-nav">
             <button class="back-button" id="backButton">
                 ← Back to Leaderboard
             </button>
+            <div class="hamburger-menu">
+                <button class="hamburger-button" aria-label="Toggle navigation menu" aria-expanded="false">&#9776;</button>
+                <%- include('partials/nav') %>
+            </div>
+        </div>
+    </div>
+
+    <main id="main-content">
+        <!-- Profile Header -->
+        <div class="profile-header">
             <div class="profile-hero">
                 <img id="profileAvatar" src="" alt="Profile Avatar" class="profile-avatar">
                 <div class="profile-title">
@@ -113,10 +122,14 @@
 
     <!-- Socket.IO Client Library -->
     <script src="/socket.io/socket.io.js"></script>
-    <!-- Custom Scripts -->
-    <script src="/confetti.js"></script>
-    <script src="/theme-toggle.js"></script>
-    <script src="/socket-client.js"></script>
-    <script src="/profile-client.js"></script>
+    </main>
+</div>
+
+<!-- Custom Scripts -->
+<script src="/confetti.js"></script>
+<script src="/theme-toggle.js"></script>
+<script src="/socket-client.js"></script>
+<script src="/profile-client.js"></script>
+<script src="/init.js"></script>
 </body>
 </html>
