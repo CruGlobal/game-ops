@@ -8,6 +8,14 @@ let currentUsername = null;
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', () => {
+    // Handle back button
+    const backButton = document.getElementById('backButton');
+    if (backButton) {
+        backButton.addEventListener('click', () => {
+            window.location.href = '/leaderboard';
+        });
+    }
+
     // Get username from localStorage or prompt
     currentUsername = localStorage.getItem('github_username');
 
