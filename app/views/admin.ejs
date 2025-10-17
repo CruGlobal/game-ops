@@ -54,25 +54,6 @@
                 <button id="reset-notifications" class="secondary-button">Reset to Defaults</button>
             </div>
 
-            <!-- Contributors Management Section -->
-            <div class="card">
-                <h2>👥 Contributor Management</h2>
-                <p class="settings-description">Reset contributor data and statistics. Use with caution - this action cannot be undone.</p>
-
-                <div class="action-buttons">
-                    <button id="reset-all" class="btn btn-danger">
-                        <span>🔄 Reset All Contributors</span>
-                    </button>
-                </div>
-
-                <div class="contributors-list-container">
-                    <h3>Contributors</h3>
-                    <ul id="contributors-list" class="contributors-list">
-                        <!-- Contributors will be loaded here -->
-                    </ul>
-                </div>
-            </div>
-
             <!-- Data Overview Section -->
             <div class="card">
                 <h2>📊 Data Overview</h2>
@@ -131,6 +112,25 @@
                     <div id="fetch-history-list" class="fetch-history-list"></div>
                 </div>
             </div>
+
+            <!-- Contributors Management Section -->
+            <div class="card">
+                <h2>👥 Contributor Management</h2>
+                <p class="settings-description">Reset contributor data and statistics. Use with caution - this action cannot be undone.</p>
+
+                <div class="action-buttons">
+                    <button id="reset-all" class="btn btn-danger">
+                        <span>🔄 Reset All Contributors</span>
+                    </button>
+                </div>
+
+                <div class="contributors-list-container">
+                    <h3>Contributors</h3>
+                    <ul id="contributors-list" class="contributors-list">
+                        <!-- Contributors will be loaded here -->
+                    </ul>
+                </div>
+            </div>
         </div>
     </main>
 </div>
@@ -138,7 +138,7 @@
 <script src="/admin.js"></script>
 <script src="/init.js"></script>
 
-<script>
+<script nonce="lexicostatistics">
 // Data Overview Functionality
 (async function initDataOverview() {
     // Load PR range info on page load
