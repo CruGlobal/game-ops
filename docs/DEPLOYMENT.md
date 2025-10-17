@@ -64,15 +64,15 @@ Edit `.env` with your configuration:
 
 ```env
 # Required Variables
-GITHUB_TOKEN=ghp_your_github_personal_access_token_here
+GITHUB_TOKEN=<your-github-token>
 MONGO_URI=mongodb://localhost:27017/scoreboard
-SESSION_SECRET=generate_a_random_secret_here
+SESSION_SECRET=<generate-random-secret>
 NODE_ENV=development
 
 # Optional Variables
 PORT=3000
-GITHUB_CLIENT_ID=your_oauth_app_client_id
-GITHUB_CLIENT_SECRET=your_oauth_app_client_secret
+GITHUB_CLIENT_ID=<your-oauth-client-id>
+GITHUB_CLIENT_SECRET=<your-oauth-client-secret>
 GITHUB_CALLBACK_URL=http://localhost:3000/auth/github/callback
 
 # Organization/Repository Settings
@@ -154,9 +154,9 @@ docker build -t github-pr-scoreboard:latest .
 docker run -d \
   --name pr-scoreboard \
   -p 3000:3000 \
-  -e GITHUB_TOKEN=your_token \
+  -e GITHUB_TOKEN=<your-token> \
   -e MONGO_URI=mongodb://host.docker.internal:27017/scoreboard \
-  -e SESSION_SECRET=your_secret \
+  -e SESSION_SECRET=<your-secret> \
   -e NODE_ENV=production \
   github-pr-scoreboard:latest
 ```
@@ -559,13 +559,13 @@ sudo certbot --nginx -d your-domain.com
 **2. Get Connection String**
 
 ```
-mongodb+srv://username:password@cluster.mongodb.net/scoreboard?retryWrites=true&w=majority
+mongodb+srv://<your-username>:<your-password>@cluster.mongodb.net/scoreboard?retryWrites=true&w=majority
 ```
 
 **3. Update Environment Variable**
 
 ```env
-MONGO_URI=mongodb+srv://username:password@cluster.mongodb.net/scoreboard?retryWrites=true&w=majority
+MONGO_URI=mongodb+srv://<your-username>:<your-password>@cluster.mongodb.net/scoreboard?retryWrites=true&w=majority
 ```
 
 ### Local MongoDB
