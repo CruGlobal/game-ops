@@ -63,9 +63,13 @@ app.use((req, res, next) => {
     next();
 });
 
+// Rate limiting - environment-aware configuration
 const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000,
-    max: 500,
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: process.env.NODE_ENV === 'production' ? 500 : 10000, // 10k for dev, 500 for prod
+    message: 'Too many requests from this IP, please try again later.',
+    standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+    legacyHeaders: false, // Disable the `X-RateLimit-*` headers
 });
 app.use(limiter);
 
