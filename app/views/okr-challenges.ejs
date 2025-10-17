@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OKR Challenges - Admin</title>
+    <link rel="stylesheet" href="/modern-design-system.css">
+    <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<a href="#main-content" class="skip-link">Skip to main content</a>
+<div class="container">
+    <div class="header-section">
+        <h1>🎯 Create OKR Challenge</h1>
+        <div class="hamburger-menu">
+            <button class="hamburger-button" aria-label="Toggle navigation menu" aria-expanded="false">&#9776;</button>
+            <%- include('partials/nav') %>
+        </div>
+    </div>
+
+    <div id="auth-status" class="auth-status"></div>
+
+    <main id="main-content">
+        <div id="admin-content" style="display:none;">
+            <div class="page-description">
+                <p>Create custom challenges that track Pull Requests based on GitHub labels.
+                   Align team contributions with Objectives and Key Results (OKRs).</p>
+            </div>
+
+            <div class="okr-challenge-form">
+                <form id="okr-challenge-form">
+                    <h2>Challenge Details</h2>
+
+                    <div class="form-group">
+                        <label for="challenge-title">Challenge Title *</label>
+                        <input type="text" id="challenge-title" name="title" required
+                               placeholder="e.g., Siebel SSO Proxy Testing">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="challenge-description">Description *</label>
+                        <textarea id="challenge-description" name="description" required rows="3"
+                                  placeholder="Complete PRs related to Siebel SSO Proxy Testing"></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="label-filters">PR Labels (one per line) *</label>
+                        <textarea id="label-filters" name="labelFilters" required rows="4"
+                                  placeholder="UST - Siebel - L# 46&#10;siebel*&#10;sso-proxy"></textarea>
+                        <small>Use * for wildcards. Example: "siebel*" matches "siebel-bug", "siebel-feature"</small>
+                    </div>
+
+                    <h3>Challenge Settings</h3>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="challenge-target">Target PRs *</label>
+                            <input type="number" id="challenge-target" name="target" required min="1" value="5">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="challenge-reward">Reward Points</label>
+                            <input type="number" id="challenge-reward" name="reward" min="0" value="300">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="challenge-difficulty">Difficulty</label>
+                            <select id="challenge-difficulty" name="difficulty">
+                                <option value="easy">Easy</option>
+                                <option value="medium">Medium</option>
+                                <option value="hard" selected>Hard</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="start-date">Start Date</label>
+                            <input type="date" id="start-date" name="startDate">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="end-date">End Date *</label>
+                            <input type="date" id="end-date" name="endDate" required>
+                        </div>
+                    </div>
+
+                    <div class="okr-metadata">
+                        <h3>OKR Metadata (Optional)</h3>
+                        <p class="form-help-text">Link this challenge to your team's Objectives and Key Results</p>
+
+                        <div class="form-group">
+                            <label for="okr-objective">Objective</label>
+                            <input type="text" id="okr-objective" name="objective"
+                                   placeholder="e.g., Improve authentication systems">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="okr-key-result">Key Result</label>
+                            <input type="text" id="okr-key-result" name="keyResult"
+                                   placeholder="e.g., Complete SSO integration testing">
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="okr-department">Department/Team</label>
+                                <input type="text" id="okr-department" name="department"
+                                       placeholder="e.g., UST, Engineering">
+                            </div>
+
+                            <div class="form-group">
+                                <label for="okr-quarter">Quarter</label>
+                                <input type="text" id="okr-quarter" name="quarter"
+                                       placeholder="e.g., Q4 2025">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="submit" class="btn-primary">Create Challenge</button>
+                        <button type="reset" class="btn-secondary">Clear Form</button>
+                    </div>
+                </form>
+                <div id="challenge-create-status"></div>
+            </div>
+
+            <div class="existing-challenges-section">
+                <h2>Existing OKR Challenges</h2>
+                <div id="okr-challenges-list">
+                    <p class="loading">Loading challenges...</p>
+                </div>
+            </div>
+        </div>
+
+        <div id="unauthorized-content" style="display:none;">
+            <div class="alert alert-warning">
+                <h2>⚠️ Authentication Required</h2>
+                <p>You must be logged in as an administrator to create OKR challenges.</p>
+                <a href="/auth/github" class="btn-primary">Log in with GitHub</a>
+            </div>
+        </div>
+    </main>
+</div>
+
+<script src="/okr-challenges.js"></script>
+<script src="/init.js"></script>
+</body>
+</html>

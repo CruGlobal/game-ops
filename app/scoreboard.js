@@ -179,7 +179,11 @@ app.get('/auth/github/callback',
     }
 );
 
-// Protect the admin route
+// Protect admin routes - more specific routes first
+app.get('/admin/okr-challenges', ensureAuthenticated, (req, res) => {
+    res.render('okr-challenges', { user: req.user });
+});
+
 app.get('/admin', ensureAuthenticated, (req, res) => {
     res.render('admin', { user: req.user });
 });
