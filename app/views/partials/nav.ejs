@@ -1,20 +1,55 @@
 <link rel="stylesheet" href="/styles.css">
-<div class="hamburger-content">
+<nav class="hamburger-content" role="navigation" aria-label="Main navigation">
     <ul class="nav-list">
-        <li><a href="/">🏆 Leaderboard</a></li>
-        <li><a href="/challenges">🎯 Challenges</a></li>
+        <li><a href="/" class="nav-link">
+            <span class="nav-icon">🏆</span>
+            <span class="nav-text">Leaderboard</span>
+        </a></li>
+        <li><a href="/challenges" class="nav-link">
+            <span class="nav-icon">🎯</span>
+            <span class="nav-text">Challenges</span>
+        </a></li>
         <li class="admin-menu">
-          <span>⚙️ Admin</span>
-          <ul class="admin-submenu">
-              <li><a href="/activity">Activity</a></li>
-              <li><a href="/charts">Charts</a></li>
-              <li><a href="/analytics">Analytics</a></li>
-              <li><a href="/admin/okr-challenges">OKR Challenges</a></li>
-              <li><a href="/admin">Reset</a></li>
-              <li class="submenu-divider">—————————</li>
-              <li><a href="/toast-test.html">🍞 Toast Tests</a></li>
-              <li><a href="/badges.html">🏅 Badge Gallery</a></li>
+          <button class="admin-menu-toggle" aria-expanded="false" aria-controls="admin-submenu">
+              <span class="nav-icon">⚙️</span>
+              <span class="nav-text">Admin</span>
+              <span class="submenu-arrow">▼</span>
+          </button>
+          <ul class="admin-submenu" id="admin-submenu">
+              <li class="submenu-section-title">Reports & Analytics</li>
+              <li><a href="/activity" class="submenu-link">
+                  <span class="submenu-icon">📈</span>
+                  <span>Activity</span>
+              </a></li>
+              <li><a href="/charts" class="submenu-link">
+                  <span class="submenu-icon">📊</span>
+                  <span>Charts</span>
+              </a></li>
+              <li><a href="/analytics" class="submenu-link">
+                  <span class="submenu-icon">📉</span>
+                  <span>Analytics</span>
+              </a></li>
+              <li class="submenu-divider"></li>
+              <li class="submenu-section-title">Management</li>
+              <li><a href="/admin/okr-challenges" class="submenu-link">
+                  <span class="submenu-icon">🎯</span>
+                  <span>OKR Challenges</span>
+              </a></li>
+              <li><a href="/admin" class="submenu-link">
+                  <span class="submenu-icon">⚙️</span>
+                  <span>Settings</span>
+              </a></li>
+              <li class="submenu-divider"></li>
+              <li class="submenu-section-title">Development</li>
+              <li><a href="/toast-test.html" class="submenu-link">
+                  <span class="submenu-icon">🍞</span>
+                  <span>Toast Tests</span>
+              </a></li>
+              <li><a href="/badges.html" class="submenu-link">
+                  <span class="submenu-icon">🏅</span>
+                  <span>Badge Gallery</span>
+              </a></li>
           </ul>
         </li>
     </ul>
-</div>
+</nav>
