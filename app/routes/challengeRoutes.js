@@ -7,7 +7,7 @@ import {
     getUserChallengesController,
     createOKRChallengeController
 } from '../controllers/challengeController.js';
-import { ensureAuthenticated, ensureAdmin } from '../middleware/auth.js';
+import { authenticate } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
@@ -27,6 +27,6 @@ router.get('/:id/leaderboard', getChallengeLeaderboardController);
 router.get('/user/:username', getUserChallengesController);
 
 // Create OKR challenge (admin only)
-router.post('/okr/create', ensureAuthenticated, ensureAdmin, createOKRChallengeController);
+router.post('/okr/create', authenticate, createOKRChallengeController);
 
 export default router;
