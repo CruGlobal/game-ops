@@ -15,7 +15,9 @@ A gamified GitHub Pull Request tracking and leaderboard system with real-time up
 - **🏅 Progressive Badge System** - Awards at 1, 10, 50, 100, 500, 1000 milestones
 - **💵 Bill/Vonette Awards** - Custom reward system for top contributors
 - **📈 Historical Data** - Time-series contribution and review tracking
-- **👥 Leaderboards** - Multiple views: PRs, reviews, points, streaks
+- **👥 Multi-Timeframe Leaderboards** - All-Time, Quarterly, and 4 category views (PRs, reviews, points, streaks)
+- **🏆 Quarterly Competition** - Fresh quarterly leaderboards with automatic reset and winner archiving
+- **📜 Hall of Fame** - Historical archive of past quarterly champions and top 3 contributors
 
 ### ⚡ Real-time Features (Socket.IO)
 - **Live Updates** - Leaderboard updates without page refresh
@@ -209,6 +211,18 @@ app/
 - Participants: username, progress, completion status
 - Rewards: point values based on difficulty
 
+**QuarterSettings:**
+- System type: calendar, fiscal, academic, custom
+- Configuration: Q1 start month (1-12)
+- Helper methods: quarter calculation utilities
+- Singleton pattern for single configuration
+
+**QuarterlyWinner:**
+- Quarter identification: "YYYY-QX" format
+- Winner details: username, avatar, quarterly stats
+- Top 3 contributors: rank, username, stats
+- Metadata: total participants, archived date
+
 ---
 
 ## 🔧 Configuration
@@ -265,6 +279,21 @@ export const POINTS = {
 - `GET /api/streaks/leaderboard` - Get streak rankings
 - `GET /api/streaks/:username` - Get user's streak stats
 
+### Quarterly Leaderboard Endpoints
+- `GET /api/leaderboard/all-time` - Get all-time rankings by total points
+- `GET /api/leaderboard/quarterly` - Get current quarter rankings
+- `GET /api/leaderboard/quarterly/:quarter` - Get specific quarter rankings
+- `GET /api/leaderboard/hall-of-fame` - Get past quarterly winners
+
+### Admin - Quarter Configuration
+- `GET /api/admin/quarter-config` - Get quarter configuration
+- `POST /api/admin/quarter-config` - Update quarter system (requires auth)
+
+### Admin - Data Integrity (Phase 1)
+- `GET /api/admin/pr-range-info` - Get PR fetch range and database statistics
+- `GET /api/admin/duplicate-check` - Check for duplicate PRs/reviews
+- `POST /api/admin/fix-duplicates` - Repair duplicate data (requires auth)
+
 ### WebSocket Events
 
 **Server → Client:**
@@ -287,6 +316,10 @@ For detailed API documentation, see [docs/API.md](docs/API.md) (coming soon).
 2. Award milestone badges
 3. Verify and update contributor streaks
 4. Award streak badges
+5. Check for new quarter and reset if needed
+   - Archive top 3 contributors to Hall of Fame
+   - Reset all quarterly stats to 0
+   - Broadcast quarter change notifications
 
 ### Weekly (Monday 00:00 UTC)
 1. Generate 3 new weekly challenges
@@ -340,11 +373,23 @@ it('should award streak badge', async () => {
 - [x] Weekly challenges
 - [x] Modern UI with dark mode
 - [x] Comprehensive testing
+- [x] PR range visibility and duplicate detection
+- [x] Data integrity validation and repair tools
 
-### Phase 2: Advanced Features (Planned)
+### Phase 2: Quarterly Leaderboard System ✅ (Complete)
+- [x] Multi-timeframe leaderboards (All-Time, Quarterly, Hall of Fame)
+- [x] Configurable quarter calculation (Calendar, Fiscal, Academic, Custom)
+- [x] Automatic quarter boundary detection and reset
+- [x] Winner archiving to Hall of Fame
+- [x] Historical data backfill (27 quarters archived from 2019-2025)
+- [x] Modern Hall of Fame UI with compact cards
+- [x] Quarterly stats tracking per contributor
+- [x] Admin quarter configuration panel
+
+### Phase 3: Analytics & Advanced Features (Planned)
 - [ ] Team challenges
 - [ ] Custom achievement creation
-- [ ] Analytics dashboard
+- [ ] Analytics dashboard with time-series visualizations
 - [ ] Mobile app (React Native)
 - [ ] Integration with Slack/Discord
 
