@@ -2,7 +2,11 @@
 
 let allContributors = [];
 let allReviewers = [];
-let currentTab = 'all';
+let allTimeLeaderboard = [];
+let quarterlyLeaderboard = [];
+let hallOfFame = [];
+let currentQuarterInfo = null;
+let currentTab = 'all-time';
 let currentSort = 'prCount';
 let searchTerm = '';
 
@@ -146,18 +150,48 @@ async function loadLeaderboardData() {
     try {
         showLoading();
 
-        const [contributorsData, reviewersData] = await Promise.all([
+        const [contributorsData, reviewersData, allTimeData, quarterlyData, hallOfFameData, quarterInfoData] = await Promise.all([
             fetchData('/api/top-contributors'),
-            fetchData('/api/top-reviewers')
+            fetchData('/api/top-reviewers'),
+            fetchData('/api/leaderboard/all-time'),
+            fetchData('/api/leaderboard/quarterly'),
+            fetchData('/api/leaderboard/hall-of-fame'),
+            fetchData('/api/quarter-info')
         ]);
 
         allContributors = contributorsData;
         allReviewers = reviewersData;
+        allTimeLeaderboard = allTimeData.data || [];
+        quarterlyLeaderboard = quarterlyData.data?.leaderboard || [];
+        hallOfFame = hallOfFameData.data || [];
+
+        // Update quarter info display
+        if (quarterInfoData && quarterInfoData.success) {
+            currentQuarterInfo = quarterInfoData.data;
+            updateQuarterInfoDisplay();
+        }
 
         renderCurrentTab();
     } catch (error) {
         console.error('Error loading leaderboard data:', error);
         showError('Failed to load leaderboard data');
+    }
+}
+
+function updateQuarterInfoDisplay() {
+    if (!currentQuarterInfo) return;
+
+    const titleEl = document.getElementById('current-quarter-title');
+    const datesEl = document.getElementById('current-quarter-dates');
+
+    if (titleEl) {
+        titleEl.textContent = `Current Quarter: ${currentQuarterInfo.currentQuarter}`;
+    }
+
+    if (datesEl) {
+        const startDate = new Date(currentQuarterInfo.quarterDates.start).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+        const endDate = new Date(currentQuarterInfo.quarterDates.end).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+        datesEl.textContent = `${startDate} - ${endDate}`;
     }
 }
 
@@ -171,8 +205,14 @@ async function fetchData(url) {
 
 function renderCurrentTab() {
     switch (currentTab) {
-        case 'all':
-            renderAllLeaders();
+        case 'all-time':
+            renderAllTimeLeaderboard();
+            break;
+        case 'quarterly':
+            renderQuarterlyLeaderboard();
+            break;
+        case 'hall-of-fame':
+            renderHallOfFame();
             break;
         case 'contributors':
             renderTopContributors();
@@ -246,6 +286,194 @@ function renderTopStreaks() {
     const sortedUsers = sortUsers(filteredUsers, 'currentStreak');
 
     renderLeaderboard('streaks-grid', sortedUsers, 'streaks');
+}
+
+function renderAllTimeLeaderboard() {
+    const filteredUsers = filterUsers(allTimeLeaderboard);
+    const sortedUsers = sortUsers(filteredUsers, currentSort);
+
+    renderLeaderboard('all-time-grid', sortedUsers, 'all-time');
+}
+
+function renderQuarterlyLeaderboard() {
+    const filteredUsers = filterUsers(quarterlyLeaderboard);
+    const sortedUsers = sortUsers(filteredUsers, 'quarterlyStats.pointsThisQuarter');
+
+    renderQuarterlyGrid('quarterly-grid', sortedUsers);
+}
+
+function renderQuarterlyGrid(gridId, users) {
+    const grid = document.getElementById(gridId);
+    if (!grid) return;
+
+    grid.innerHTML = '';
+
+    if (users.length === 0) {
+        grid.innerHTML = `
+            <div class="empty-state">
+                <div class="empty-state-icon">📅</div>
+                <div class="empty-state-text">No contributors this quarter yet</div>
+            </div>
+        `;
+        return;
+    }
+
+    users.forEach((user, index) => {
+        const card = createQuarterlyCard(user, index + 1);
+        grid.appendChild(card);
+    });
+}
+
+function createQuarterlyCard(user, rank) {
+    const card = document.createElement('div');
+    card.className = 'leaderboard-card';
+    card.setAttribute('data-username', user.username);
+    card.style.cursor = 'pointer';
+
+    // Make card clickable to navigate to profile
+    card.addEventListener('click', () => {
+        window.location.href = `/profile/${user.username}`;
+    });
+
+    // Rank badge
+    const rankBadgeClass = rank <= 3 ? `rank-badge rank-${rank}` : 'rank-badge';
+    const rankEmoji = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : rank;
+
+    const quarterStats = user.quarterlyStats || {};
+    const prsThisQuarter = quarterStats.prsThisQuarter || 0;
+    const reviewsThisQuarter = quarterStats.reviewsThisQuarter || 0;
+    const pointsThisQuarter = quarterStats.pointsThisQuarter || 0;
+
+    card.innerHTML = `
+        <div class="${rankBadgeClass}">${rankEmoji}</div>
+
+        <div class="contributor-info">
+            <div class="contributor-header">
+                <img src="${user.avatarUrl}" alt="${user.username}" class="contributor-avatar">
+                <div class="contributor-name">${user.username}</div>
+            </div>
+            <div class="stats-row">
+                <div class="stat-item">
+                    <span class="stat-icon">📝</span>
+                    <div>
+                        <div class="stat-label">PRs</div>
+                        <div class="stat-value">${prsThisQuarter}</div>
+                    </div>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-icon">👀</span>
+                    <div>
+                        <div class="stat-label">Reviews</div>
+                        <div class="stat-value">${reviewsThisQuarter}</div>
+                    </div>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-icon">⭐</span>
+                    <div>
+                        <div class="stat-label">Points</div>
+                        <div class="stat-value">${pointsThisQuarter}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="badges-section">
+            <div class="quarter-badge">📅 This Quarter</div>
+        </div>
+    `;
+
+    return card;
+}
+
+function renderHallOfFame() {
+    const container = document.getElementById('hall-of-fame-container');
+    if (!container) return;
+
+    container.innerHTML = '';
+
+    if (hallOfFame.length === 0) {
+        container.innerHTML = `
+            <div class="empty-state">
+                <div class="empty-state-icon">🏆</div>
+                <div class="empty-state-text">No quarterly winners yet</div>
+            </div>
+        `;
+        return;
+    }
+
+    hallOfFame.forEach((winner, index) => {
+        const winnerCard = createHallOfFameCard(winner, index + 1);
+        container.appendChild(winnerCard);
+    });
+}
+
+function createHallOfFameCard(winner, index) {
+    const card = document.createElement('div');
+    card.className = 'hall-of-fame-card';
+
+    const winnerData = winner.winner || {};
+    const top3 = winner.top3 || [];
+
+    // Get rank emojis for top 3
+    const getRankDisplay = (rank) => {
+        if (rank === 1) return '<span class="rank-badge rank-1">🥇</span>';
+        if (rank === 2) return '<span class="rank-badge rank-2">🥈</span>';
+        if (rank === 3) return '<span class="rank-badge rank-3">🥉</span>';
+        return `<span class="rank-badge">${rank}</span>`;
+    };
+
+    card.innerHTML = `
+        <div class="hall-card-header">
+            <div class="quarter-badge">${winner.quarter}</div>
+            <div class="quarter-date">${new Date(winner.quarterStart).toLocaleDateString()} - ${new Date(winner.quarterEnd).toLocaleDateString()}</div>
+        </div>
+
+        <div class="hall-champion">
+            <div class="champion-crown">👑</div>
+            <img src="${winnerData.avatarUrl || '/images/default-avatar.png'}"
+                 alt="${winnerData.username}'s avatar"
+                 class="champion-avatar">
+            <div class="champion-name">${winnerData.username}</div>
+            <div class="champion-stats">
+                <div class="stat-pill">
+                    <span class="stat-icon">⭐</span>
+                    <span class="stat-value">${winnerData.pointsThisQuarter || 0}</span>
+                </div>
+                <div class="stat-pill">
+                    <span class="stat-icon">📝</span>
+                    <span class="stat-value">${winnerData.prsThisQuarter || 0}</span>
+                </div>
+                <div class="stat-pill">
+                    <span class="stat-icon">👀</span>
+                    <span class="stat-value">${winnerData.reviewsThisQuarter || 0}</span>
+                </div>
+            </div>
+        </div>
+
+        ${top3.length > 1 ? `
+            <div class="hall-podium">
+                <div class="podium-title">Top 3</div>
+                ${top3.slice(0, 3).map(contributor => `
+                    <div class="podium-item">
+                        ${getRankDisplay(contributor.rank || 0)}
+                        <img src="${contributor.avatarUrl || '/images/default-avatar.png'}"
+                             alt="${contributor.username || 'Unknown'}"
+                             class="podium-avatar">
+                        <div class="podium-info">
+                            <div class="podium-name">${contributor.username || 'Unknown'}</div>
+                            <div class="podium-points">${contributor.pointsThisQuarter || 0} pts</div>
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+        ` : ''}
+
+        <div class="hall-footer">
+            <span class="participants-count">👥 ${winner.totalParticipants || 0} contributors</span>
+        </div>
+    `;
+
+    return card;
 }
 
 function filterUsers(users) {
@@ -331,8 +559,8 @@ function createLeaderboardCard(user, rank, type) {
 function generateStatsHTML(user, type) {
     const stats = [];
 
-    // Always show PRs and Reviews for 'all' tab
-    if (type === 'all' || type === 'contributors') {
+    // Always show PRs and Reviews for 'all-time' tab
+    if (type === 'all-time' || type === 'contributors') {
         stats.push(`
             <div class="stat-item">
                 <span class="stat-icon">📝</span>
@@ -344,7 +572,7 @@ function generateStatsHTML(user, type) {
         `);
     }
 
-    if (type === 'all' || type === 'reviewers') {
+    if (type === 'all-time' || type === 'reviewers') {
         stats.push(`
             <div class="stat-item">
                 <span class="stat-icon">👀</span>
@@ -356,7 +584,7 @@ function generateStatsHTML(user, type) {
         `);
     }
 
-    if (type === 'all' || type === 'points') {
+    if (type === 'all-time' || type === 'points') {
         stats.push(`
             <div class="stat-item">
                 <span class="stat-icon">⭐</span>
@@ -368,7 +596,7 @@ function generateStatsHTML(user, type) {
         `);
     }
 
-    if (type === 'all' || type === 'streaks') {
+    if (type === 'all-time' || type === 'streaks') {
         stats.push(`
             <div class="stat-item">
                 <span class="stat-icon">🔥</span>

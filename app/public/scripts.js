@@ -76,22 +76,28 @@ document.addEventListener('DOMContentLoaded', async () => {
         return listItem;
     };
 
-    try {
-        const [topContributors, topReviewers] = await Promise.all([
-            fetchData('/api/top-contributors'),
-            fetchData('/api/top-reviewers')
-        ]);
+    // Only fetch and populate if the elements exist on this page
+    if (topContributorsList && topReviewersList) {
+        try {
+            const [topContributors, topReviewers] = await Promise.all([
+                fetchData('/api/top-contributors'),
+                fetchData('/api/top-reviewers')
+            ]);
 
-        topContributors.forEach(contributor => {
-            topContributorsList.appendChild(createContributorListItem(contributor));
-        });
+            topContributors.forEach(contributor => {
+                topContributorsList.appendChild(createContributorListItem(contributor));
+            });
 
-        topReviewers.forEach(reviewer => {
-            topReviewersList.appendChild(createReviewerListItem(reviewer));
-        });
-        // Explicitly set the 'active' class on the contributors tab content
-        contributorsTabContent.classList.add('active');
-    } catch (error) {
-        console.error('Error fetching contributors or reviewers:', error);
+            topReviewers.forEach(reviewer => {
+                topReviewersList.appendChild(createReviewerListItem(reviewer));
+            });
+
+            // Explicitly set the 'active' class on the contributors tab content
+            if (contributorsTabContent) {
+                contributorsTabContent.classList.add('active');
+            }
+        } catch (error) {
+            console.error('Error fetching contributors or reviewers:', error);
+        }
     }
 });

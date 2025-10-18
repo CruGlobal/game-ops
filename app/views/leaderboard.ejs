@@ -44,17 +44,39 @@
 
     <!-- Tabs -->
     <div class="tabs" role="tablist" aria-label="Leaderboard categories">
-        <button class="tab-button active" data-tab="all" role="tab" aria-selected="true" aria-controls="all" id="tab-all">🌟 All Leaders</button>
+        <button class="tab-button active" data-tab="all-time" role="tab" aria-selected="true" aria-controls="all-time" id="tab-all-time">🌟 All-Time</button>
+        <button class="tab-button" data-tab="quarterly" role="tab" aria-selected="false" aria-controls="quarterly" id="tab-quarterly">📅 This Quarter</button>
+        <button class="tab-button" data-tab="hall-of-fame" role="tab" aria-selected="false" aria-controls="hall-of-fame" id="tab-hall-of-fame">🏆 Hall of Fame</button>
         <button class="tab-button" data-tab="contributors" role="tab" aria-selected="false" aria-controls="contributors" id="tab-contributors">👨‍💻 Top Contributors</button>
         <button class="tab-button" data-tab="reviewers" role="tab" aria-selected="false" aria-controls="reviewers" id="tab-reviewers">👀 Top Reviewers</button>
         <button class="tab-button" data-tab="points" role="tab" aria-selected="false" aria-controls="points" id="tab-points">⭐ Top Points</button>
         <button class="tab-button" data-tab="streaks" role="tab" aria-selected="false" aria-controls="streaks" id="tab-streaks">🔥 Top Streaks</button>
     </div>
 
-    <!-- All Leaders Tab -->
+    <!-- All-Time Leaderboard Tab -->
     <main id="main-content">
-        <div class="tab-content active" id="all" role="tabpanel" aria-labelledby="tab-all">
-            <div class="leaderboard-grid" id="all-leaders-grid" aria-live="polite" aria-atomic="false"></div>
+        <div class="tab-content active" id="all-time" role="tabpanel" aria-labelledby="tab-all-time">
+            <div class="quarter-info" id="all-time-info">
+                <p class="quarter-description">All-time top contributors based on total points earned</p>
+            </div>
+            <div class="leaderboard-grid" id="all-time-grid" aria-live="polite" aria-atomic="false"></div>
+        </div>
+
+        <!-- Quarterly Leaderboard Tab -->
+        <div class="tab-content" id="quarterly" role="tabpanel" aria-labelledby="tab-quarterly" hidden>
+            <div class="quarter-info" id="quarterly-info">
+                <h3 id="current-quarter-title">Loading...</h3>
+                <p id="current-quarter-dates" class="quarter-description">Loading quarter information...</p>
+            </div>
+            <div class="leaderboard-grid" id="quarterly-grid" aria-live="polite" aria-atomic="false"></div>
+        </div>
+
+        <!-- Hall of Fame Tab -->
+        <div class="tab-content" id="hall-of-fame" role="tabpanel" aria-labelledby="tab-hall-of-fame" hidden>
+            <div class="quarter-info">
+                <p class="quarter-description">Past quarterly champions and top performers</p>
+            </div>
+            <div class="hall-of-fame-container" id="hall-of-fame-container" aria-live="polite" aria-atomic="false"></div>
         </div>
 
         <!-- Top Contributors Tab -->

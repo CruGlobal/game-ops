@@ -154,12 +154,47 @@ const ContributorSchema = new mongoose.Schema({
             type: Date,
             default: Date.now
         }
-    }]
+    }],
+
+    // Quarterly stats (Phase 2: Multi-timeframe leaderboards)
+    quarterlyStats: {
+        currentQuarter: {
+            type: String,
+            default: null  // e.g., "2025-Q1"
+        },
+        quarterStartDate: {
+            type: Date,
+            default: null
+        },
+        quarterEndDate: {
+            type: Date,
+            default: null
+        },
+        prsThisQuarter: {
+            type: Number,
+            default: 0
+        },
+        reviewsThisQuarter: {
+            type: Number,
+            default: 0
+        },
+        pointsThisQuarter: {
+            type: Number,
+            default: 0
+        },
+        lastUpdated: {
+            type: Date,
+            default: Date.now
+        }
+    }
 });
 
 // Index for quick duplicate lookup
 ContributorSchema.index({ 'processedPRs.prNumber': 1 });
 ContributorSchema.index({ 'processedReviews.prNumber': 1 });
+
+// Index for quarterly leaderboard queries
+ContributorSchema.index({ 'quarterlyStats.currentQuarter': 1, 'quarterlyStats.pointsThisQuarter': -1 });
 
 // Create a model for the Contributor schema
 const Contributor = mongoose.model('Contributor', ContributorSchema);

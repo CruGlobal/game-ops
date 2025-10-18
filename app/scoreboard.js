@@ -16,6 +16,7 @@ import analyticsRoutes from './routes/analyticsRoutes.js';
 import { fetchPRsCron, awardContributorBadgesCron } from './controllers/contributorController.js';
 import { awardBillsAndVonettes } from './services/contributorService.js';
 import { generateWeeklyChallenges, checkExpiredChallenges } from './services/challengeService.js';
+import { checkAndResetIfNewQuarter } from './services/quarterlyService.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import logger from './utils/logger.js';
 import session from 'express-session';
@@ -256,6 +257,25 @@ cron.schedule('0 0 * * *', async () => {
         logger.info('Expired challenges checked', { updatedCount: count });
     } catch (error) {
         logger.error('Error checking expired challenges', { error: error.message });
+    }
+});
+
+// Check and reset quarterly stats daily at midnight
+cron.schedule('0 0 * * *', async () => {
+    logger.info('Running daily task to check quarterly reset');
+    try {
+        const result = await checkAndResetIfNewQuarter();
+        if (result.quarterChanged) {
+            logger.info('Quarterly stats reset completed', {
+                oldQuarter: result.oldQuarter,
+                newQuarter: result.newQuarter,
+                winnersArchived: result.winnersArchived
+            });
+        } else {
+            logger.info('No quarterly reset needed');
+        }
+    } catch (error) {
+        logger.error('Error checking quarterly reset', { error: error.message });
     }
 });
 

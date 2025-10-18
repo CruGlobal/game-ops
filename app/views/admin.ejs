@@ -54,6 +54,66 @@
                 <button id="reset-notifications" class="secondary-button">Reset to Defaults</button>
             </div>
 
+            <!-- Quarter Configuration Section -->
+            <div class="card">
+                <h2>📅 Quarter Configuration</h2>
+                <p class="settings-description">Define how quarters are calculated for the leaderboard reset system.</p>
+
+                <div class="quarter-config">
+                    <div class="form-group">
+                        <label for="quarter-system">Quarter System</label>
+                        <select id="quarter-system" class="form-control">
+                            <option value="calendar" selected>Calendar Quarters (Jan, Apr, Jul, Oct)</option>
+                            <option value="fiscal-us">US Fiscal Year (Oct, Jan, Apr, Jul)</option>
+                            <option value="academic">Academic Year (Sep, Dec, Mar, Jun)</option>
+                            <option value="custom">Custom Configuration</option>
+                        </select>
+                    </div>
+
+                    <!-- Custom Configuration (hidden by default) -->
+                    <div id="custom-quarter-config" style="display: none; margin-top: 1rem;">
+                        <div class="form-group">
+                            <label for="q1-start-month">Q1 Start Month</label>
+                            <select id="q1-start-month" class="form-control">
+                                <option value="1">January</option>
+                                <option value="2">February</option>
+                                <option value="3">March</option>
+                                <option value="4">April</option>
+                                <option value="5">May</option>
+                                <option value="6">June</option>
+                                <option value="7">July</option>
+                                <option value="8">August</option>
+                                <option value="9">September</option>
+                                <option value="10">October</option>
+                                <option value="11">November</option>
+                                <option value="12">December</option>
+                            </select>
+                            <p class="setting-hint">Other quarters will be calculated automatically (3-month periods)</p>
+                        </div>
+                    </div>
+
+                    <!-- Current Quarter Display -->
+                    <div class="quarter-preview" style="margin-top: 1.5rem;">
+                        <h3 style="margin-bottom: 0.5rem;">Current Quarter</h3>
+                        <div class="preview-box" style="padding: 1rem; background: var(--bg-secondary, #f8f9fa); border-radius: 8px; border: 1px solid var(--border-color, #dee2e6);">
+                            <span class="quarter-badge" id="current-quarter-badge" style="font-size: 1.5rem; font-weight: 700; color: var(--primary-color, #0d6efd);">Loading...</span>
+                            <p id="current-quarter-dates" style="margin: 0.5rem 0 0 0; color: var(--text-muted, #6c757d);">Loading...</p>
+                        </div>
+                    </div>
+
+                    <!-- Save Button -->
+                    <button id="save-quarter-config" class="btn btn-primary" style="margin-top: 1rem;">
+                        <span>💾 Save Quarter Configuration</span>
+                    </button>
+
+                    <!-- Warning about resets -->
+                    <div class="alert alert-warning" style="margin-top: 1rem; display: none;" id="quarter-change-warning">
+                        <strong>⚠️ Note:</strong> Changing quarter configuration will recalculate the current quarter.
+                        If the new quarter differs from the old one, quarterly stats will be reset and winners archived.
+                    </div>
+                </div>
+            </div>
+
             <!-- Data Overview Section -->
             <div class="card">
                 <h2>📊 Data Overview</h2>
@@ -79,7 +139,7 @@
                         </span>
                     </div>
                     <div class="stat-item">
-                        <span class="stat-label">Date Range</span>
+                        <span class="stat-label">Data Span <span style="font-size: 0.8em; color: var(--text-secondary);">(may have gaps)</span></span>
                         <span class="stat-value" id="date-range">
                             <span class="loading-spinner">Loading...</span>
                         </span>
@@ -96,6 +156,9 @@
                     <button id="check-duplicates" class="btn btn-secondary">
                         <span>🔍 Check for Duplicates</span>
                     </button>
+                    <button id="fix-duplicates" class="btn btn-warning" style="display:none;">
+                        <span>🔧 Fix Duplicates</span>
+                    </button>
                     <button id="refresh-stats" class="btn btn-secondary">
                         <span>🔄 Refresh Stats</span>
                     </button>
@@ -110,6 +173,76 @@
                 <div id="fetch-history" style="display: none; margin-top: 1.5rem;">
                     <h3>Recent Fetch History</h3>
                     <div id="fetch-history-list" class="fetch-history-list"></div>
+                </div>
+            </div>
+
+            <!-- Historical Data Backfill Section -->
+            <div class="card">
+                <h2>📦 Historical Data Backfill</h2>
+                <p class="settings-description">Fetch historical PR and review data from GitHub to populate the database. This is useful when first deploying to production or filling data gaps.</p>
+
+                <div class="backfill-config">
+                    <div class="form-group">
+                        <label for="backfill-start-date">Start Date</label>
+                        <input type="date" id="backfill-start-date" class="form-control" />
+                        <small class="form-hint">Fetch PRs merged on or after this date</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="backfill-end-date">End Date</label>
+                        <input type="date" id="backfill-end-date" class="form-control" />
+                        <small class="form-hint">Fetch PRs merged on or before this date (default: today)</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="backfill-check-rate-limit" checked />
+                            Respect GitHub Rate Limits (recommended)
+                        </label>
+                        <small class="form-hint">Automatically pause when approaching rate limits</small>
+                    </div>
+
+                    <div class="button-group">
+                        <button id="start-backfill" class="btn btn-primary">
+                            <span>▶️ Start Backfill</span>
+                        </button>
+                        <button id="stop-backfill" class="btn btn-danger" style="display: none;">
+                            <span>⏸️ Stop Backfill</span>
+                        </button>
+                    </div>
+
+                    <!-- Progress Display -->
+                    <div id="backfill-progress" style="display: none; margin-top: 1.5rem;">
+                        <h3>Backfill Progress</h3>
+                        <div class="progress-container">
+                            <div class="progress-bar">
+                                <div id="backfill-progress-bar" class="progress-fill" style="width: 0%;"></div>
+                            </div>
+                            <div class="progress-stats" style="margin-top: 0.5rem; font-size: 0.9em;">
+                                <div>Status: <span id="backfill-status">Initializing...</span></div>
+                                <div>PRs Processed: <span id="backfill-prs-count">0</span></div>
+                                <div>Reviews Processed: <span id="backfill-reviews-count">0</span></div>
+                                <div>API Calls Remaining: <span id="backfill-rate-limit">5000</span></div>
+                                <div>Estimated Time Remaining: <span id="backfill-eta">Calculating...</span></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Results Display -->
+                    <div id="backfill-results" class="alert" style="display: none; margin-top: 1rem;">
+                        <div id="backfill-results-content"></div>
+                    </div>
+                </div>
+
+                <div class="alert alert-info" style="margin-top: 1rem;">
+                    <strong>ℹ️ Important:</strong>
+                    <ul style="margin: 0.5rem 0 0 1.5rem;">
+                        <li>Backfill can take several hours for large date ranges</li>
+                        <li>GitHub API has a rate limit of 5,000 requests/hour</li>
+                        <li>The process will automatically pause if rate limits are low</li>
+                        <li>You can safely close this page - backfill runs on the server</li>
+                        <li>Duplicate detection is automatic - safe to re-run</li>
+                    </ul>
                 </div>
             </div>
 
@@ -139,6 +272,32 @@
 <script src="/init.js"></script>
 
 <script nonce="lexicostatistics">
+// Simple toast notification function for admin page
+function showToast(message, type = 'info') {
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    toast.textContent = message;
+    toast.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        padding: 12px 20px;
+        background: ${type === 'success' ? '#10b981' : type === 'error' ? '#ef4444' : '#3b82f6'};
+        color: white;
+        border-radius: 8px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        z-index: 10000;
+        animation: slideInRight 0.3s ease-out;
+    `;
+    document.body.appendChild(toast);
+    setTimeout(() => {
+        toast.style.animation = 'slideOutRight 0.3s ease-out';
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
+}
+</script>
+
+<script nonce="lexicostatistics">
 // Data Overview Functionality
 (async function initDataOverview() {
     // Load PR range info on page load
@@ -155,6 +314,11 @@
     // Duplicate check button
     document.getElementById('check-duplicates')?.addEventListener('click', async () => {
         await checkForDuplicates();
+    });
+
+    // Fix duplicates button
+    document.getElementById('fix-duplicates')?.addEventListener('click', async () => {
+        await fixDuplicates();
     });
 })();
 
@@ -219,6 +383,7 @@ async function loadPRRangeInfo() {
 
 async function checkForDuplicates() {
     const button = document.getElementById('check-duplicates');
+    const fixButton = document.getElementById('fix-duplicates');
     const resultsDiv = document.getElementById('duplicate-results');
     const contentDiv = document.getElementById('duplicate-content');
 
@@ -242,6 +407,7 @@ async function checkForDuplicates() {
                     <h3>✅ No Duplicates Found</h3>
                     <p>Your database is clean! All PRs and reviews are unique.</p>
                 `;
+                fixButton.style.display = 'none'; // Hide fix button
             } else {
                 resultsDiv.className = 'alert alert-warning';
 
@@ -271,6 +437,7 @@ async function checkForDuplicates() {
                 }
 
                 contentDiv.innerHTML = html;
+                fixButton.style.display = 'inline-block'; // Show fix button
             }
         } else {
             resultsDiv.style.display = 'block';
@@ -279,6 +446,7 @@ async function checkForDuplicates() {
                 <h3>❌ Error</h3>
                 <p>${result.message}</p>
             `;
+            fixButton.style.display = 'none';
         }
     } catch (error) {
         console.error('Error checking duplicates:', error);
@@ -288,9 +456,78 @@ async function checkForDuplicates() {
             <h3>❌ Error</h3>
             <p>Failed to check for duplicates. Please try again.</p>
         `;
+        fixButton.style.display = 'none';
     } finally {
         button.disabled = false;
         button.innerHTML = '<span>🔍 Check for Duplicates</span>';
+    }
+}
+
+async function fixDuplicates() {
+    const button = document.getElementById('fix-duplicates');
+    const resultsDiv = document.getElementById('duplicate-results');
+    const contentDiv = document.getElementById('duplicate-content');
+
+    // Confirmation
+    if (!confirm('⚠️ This will modify the database to fix duplicate entries and count mismatches.\n\nAre you sure you want to continue?')) {
+        return;
+    }
+
+    // Show loading state
+    button.disabled = true;
+    button.innerHTML = '<span>⏳ Fixing...</span>';
+
+    try {
+        const response = await fetch('/api/admin/fix-duplicates', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        const result = await response.json();
+
+        if (result.success) {
+            const data = result.data;
+
+            resultsDiv.className = 'alert alert-success';
+            contentDiv.innerHTML = `
+                <h3>✅ Duplicates Fixed Successfully!</h3>
+                <div class="duplicate-summary">
+                    <p><strong>Results:</strong></p>
+                    <ul>
+                        <li>Contributors Fixed: ${data.contributorsFixed}</li>
+                        <li>PR Count Adjustments: ${data.prCountAdjustments}</li>
+                        <li>Review Count Adjustments: ${data.reviewCountAdjustments}</li>
+                        <li>Duplicate PRs Removed: ${data.duplicatePRsRemoved}</li>
+                        <li>Duplicate Reviews Removed: ${data.duplicateReviewsRemoved}</li>
+                    </ul>
+                </div>
+                <p><strong>⚠️ Important:</strong> You must restart Docker for the cron fix to take effect:</p>
+                <pre style="background: #f5f5f5; padding: 10px; border-radius: 4px;">docker-compose restart app</pre>
+            `;
+            button.style.display = 'none'; // Hide fix button after success
+
+            // Auto-refresh stats after 2 seconds
+            setTimeout(() => {
+                loadPRRangeInfo();
+            }, 2000);
+        } else {
+            resultsDiv.className = 'alert alert-error';
+            contentDiv.innerHTML = `
+                <h3>❌ Error</h3>
+                <p>${result.message}</p>
+            `;
+        }
+    } catch (error) {
+        console.error('Error fixing duplicates:', error);
+        resultsDiv.className = 'alert alert-error';
+        contentDiv.innerHTML = `
+            <h3>❌ Error</h3>
+            <p>Failed to fix duplicates. Please try again.</p>
+        `;
+    } finally {
+        button.disabled = false;
+        button.innerHTML = '<span>🔧 Fix Duplicates</span>';
     }
 }
 
@@ -319,6 +556,269 @@ function displayFetchHistory(history) {
     html += '</ul>';
 
     list.innerHTML = html;
+}
+
+// Quarter Configuration Functionality
+(async function initQuarterConfig() {
+    // Load current config
+    await loadQuarterConfig();
+
+    // Handle system type change
+    document.getElementById('quarter-system')?.addEventListener('change', (e) => {
+        const customConfig = document.getElementById('custom-quarter-config');
+        const warning = document.getElementById('quarter-change-warning');
+        if (e.target.value === 'custom') {
+            customConfig.style.display = 'block';
+        } else {
+            customConfig.style.display = 'none';
+        }
+        warning.style.display = 'block';
+    });
+
+    // Handle Q1 start month change
+    document.getElementById('q1-start-month')?.addEventListener('change', () => {
+        document.getElementById('quarter-change-warning').style.display = 'block';
+    });
+
+    // Handle save
+    document.getElementById('save-quarter-config')?.addEventListener('click', async () => {
+        await saveQuarterConfig();
+    });
+})();
+
+async function loadQuarterConfig() {
+    try {
+        const response = await fetch('/api/admin/quarter-config');
+        const result = await response.json();
+
+        if (result.success) {
+            const { config, currentQuarter, quarterDates } = result.data;
+
+            // Set dropdown values
+            document.getElementById('quarter-system').value = config.systemType;
+            document.getElementById('q1-start-month').value = config.q1StartMonth;
+
+            // Show custom config if needed
+            if (config.systemType === 'custom') {
+                document.getElementById('custom-quarter-config').style.display = 'block';
+            }
+
+            // Update preview
+            document.getElementById('current-quarter-badge').textContent = currentQuarter;
+            const startDate = new Date(quarterDates.start).toLocaleDateString();
+            const endDate = new Date(quarterDates.end).toLocaleDateString();
+            document.getElementById('current-quarter-dates').textContent =
+                `${startDate} - ${endDate}`;
+        }
+    } catch (error) {
+        console.error('Error loading quarter config:', error);
+        document.getElementById('current-quarter-badge').textContent = 'Error';
+        document.getElementById('current-quarter-dates').textContent = 'Failed to load';
+    }
+}
+
+async function saveQuarterConfig() {
+    const button = document.getElementById('save-quarter-config');
+    const systemType = document.getElementById('quarter-system').value;
+    const q1StartMonth = parseInt(document.getElementById('q1-start-month').value);
+
+    button.disabled = true;
+    button.innerHTML = '<span>⏳ Saving...</span>';
+
+    try {
+        const response = await fetch('/api/admin/quarter-config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ systemType, q1StartMonth })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            if (typeof showToast === 'function') {
+                let message = 'Quarter configuration saved successfully';
+                if (result.data.quarterChanged) {
+                    message += `. Quarter changed to ${result.data.newQuarter}`;
+                }
+                showToast(message, 'success');
+            }
+            await loadQuarterConfig(); // Reload to show updated quarter
+            document.getElementById('quarter-change-warning').style.display = 'none';
+        } else {
+            throw new Error(result.message);
+        }
+    } catch (error) {
+        console.error('Error saving quarter config:', error);
+        if (typeof showToast === 'function') {
+            showToast('Failed to save configuration', 'error');
+        }
+    } finally {
+        button.disabled = false;
+        button.innerHTML = '<span>💾 Save Quarter Configuration</span>';
+    }
+}
+
+// ===== Historical Data Backfill Functions =====
+
+// Set default end date to today
+document.getElementById('backfill-end-date').valueAsDate = new Date();
+
+// Start backfill
+document.getElementById('start-backfill')?.addEventListener('click', async () => {
+    const startDate = document.getElementById('backfill-start-date').value;
+    const endDate = document.getElementById('backfill-end-date').value;
+    const checkRateLimits = document.getElementById('backfill-check-rate-limit').checked;
+
+    if (!startDate || !endDate) {
+        showToast('Please select both start and end dates', 'error');
+        return;
+    }
+
+    if (new Date(startDate) > new Date(endDate)) {
+        showToast('Start date must be before end date', 'error');
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/admin/backfill/start', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ startDate, endDate, checkRateLimits })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            showToast('Backfill started successfully', 'success');
+            document.getElementById('start-backfill').style.display = 'none';
+            document.getElementById('stop-backfill').style.display = 'inline-block';
+            document.getElementById('backfill-progress').style.display = 'block';
+        } else {
+            showToast(result.message || 'Failed to start backfill', 'error');
+        }
+    } catch (error) {
+        console.error('Error starting backfill:', error);
+        showToast('Failed to start backfill', 'error');
+    }
+});
+
+// Stop backfill
+document.getElementById('stop-backfill')?.addEventListener('click', async () => {
+    try {
+        const response = await fetch('/api/admin/backfill/stop', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            showToast('Backfill stop requested', 'info');
+        } else {
+            showToast(result.message || 'Failed to stop backfill', 'error');
+        }
+    } catch (error) {
+        console.error('Error stopping backfill:', error);
+        showToast('Failed to stop backfill', 'error');
+    }
+});
+
+// Listen for backfill progress updates via WebSocket
+if (typeof socket !== 'undefined') {
+    socket.on('backfill-progress', (progress) => {
+        // Update progress bar
+        const progressBar = document.getElementById('backfill-progress-bar');
+        if (progressBar) {
+            progressBar.style.width = `${progress.percentage || 0}%`;
+        }
+
+        // Update stats
+        document.getElementById('backfill-status').textContent = progress.status || 'Running';
+        document.getElementById('backfill-prs-count').textContent = (progress.processedPRs || 0).toLocaleString();
+        document.getElementById('backfill-reviews-count').textContent = (progress.processedReviews || 0).toLocaleString();
+        document.getElementById('backfill-rate-limit').textContent = (progress.rateLimit || 0).toLocaleString();
+        document.getElementById('backfill-eta').textContent = progress.eta || 'Calculating...';
+
+        // If completed or stopped, update UI
+        if (progress.status === 'Completed' || progress.status === 'Stopped' || progress.status === 'Error') {
+            document.getElementById('start-backfill').style.display = 'inline-block';
+            document.getElementById('stop-backfill').style.display = 'none';
+
+            // Show results
+            const resultsDiv = document.getElementById('backfill-results');
+            const resultsContent = document.getElementById('backfill-results-content');
+
+            if (progress.status === 'Completed') {
+                resultsDiv.className = 'alert alert-success';
+                resultsContent.innerHTML = `
+                    <strong>✅ Backfill Completed!</strong><br>
+                    Processed ${progress.processedPRs || 0} PRs and ${progress.processedReviews || 0} reviews.
+                `;
+            } else if (progress.status === 'Stopped') {
+                resultsDiv.className = 'alert alert-warning';
+                resultsContent.innerHTML = `
+                    <strong>⏸️ Backfill Stopped</strong><br>
+                    Processed ${progress.processedPRs || 0} PRs and ${progress.processedReviews || 0} reviews before stopping.
+                `;
+            } else if (progress.status === 'Error') {
+                resultsDiv.className = 'alert alert-danger';
+                resultsContent.innerHTML = `
+                    <strong>❌ Backfill Error</strong><br>
+                    ${progress.error || 'An unknown error occurred'}
+                `;
+            }
+
+            resultsDiv.style.display = 'block';
+
+            // Refresh stats after backfill completes
+            setTimeout(() => {
+                loadPRRangeInfo();
+            }, 1000);
+        }
+    });
+
+    // Check backfill status on page load
+    (async () => {
+        try {
+            const response = await fetch('/api/admin/backfill/status');
+            const result = await response.json();
+
+            if (result.success && result.data.isRunning) {
+                console.log('Backfill is running, showing progress UI');
+                document.getElementById('start-backfill').style.display = 'none';
+                document.getElementById('stop-backfill').style.display = 'inline-block';
+                document.getElementById('backfill-progress').style.display = 'block';
+
+                // Update with current progress
+                const progress = result.data.progress;
+                if (progress) {
+                    const progressBar = document.getElementById('backfill-progress-bar');
+                    if (progressBar && progress.totalPRs > 0) {
+                        const percentage = Math.floor((progress.processedPRs / progress.totalPRs) * 100);
+                        progressBar.style.width = `${percentage}%`;
+                    }
+
+                    document.getElementById('backfill-status').textContent = progress.status || 'Running';
+                    document.getElementById('backfill-prs-count').textContent = (progress.processedPRs || 0).toLocaleString();
+                    document.getElementById('backfill-reviews-count').textContent = (progress.processedReviews || 0).toLocaleString();
+                    document.getElementById('backfill-rate-limit').textContent = (progress.rateLimit || 0).toLocaleString();
+                    document.getElementById('backfill-eta').textContent = progress.eta || 'Calculating...';
+
+                    console.log('Updated progress:', {
+                        processed: progress.processedPRs,
+                        total: progress.totalPRs,
+                        percentage,
+                        reviews: progress.processedReviews,
+                        status: progress.status
+                    });
+                }
+            } else {
+                console.log('No backfill currently running');
+            }
+        } catch (error) {
+            console.error('Error checking backfill status:', error);
+        }
+    })();
 }
 </script>
 </body>

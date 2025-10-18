@@ -10,6 +10,7 @@ import { updateStreak, checkStreakBadges } from './streakService.js';
 import { calculatePoints, awardPoints, awardReviewPoints } from './pointsService.js';
 import { checkAndAwardAchievements } from './achievementService.js';
 import { updateChallengeProgress } from './challengeService.js';
+import { checkAndResetIfNewQuarter, updateQuarterlyStats } from './quarterlyService.js';
 
 // Initialize Octokit with GitHub token and custom fetch
 const octokit = new Octokit({
@@ -183,6 +184,9 @@ const updateLastFetchDate = async (date) => {
 // Fetch pull requests and update contributors' PR counts
 export const fetchPullRequests = async () => {
     try {
+        // Check if we've entered a new quarter and reset if needed
+        await checkAndResetIfNewQuarter();
+
         let prsAdded = 0;
         let reviewsAdded = 0;
         const processStartTime = Date.now();
@@ -203,18 +207,30 @@ export const fetchPullRequests = async () => {
             const username = pr.user.login;
             const date = new Date(pr.updated_at);
             const merged = !!pr.merged_at; // Check if the PR is merged
-            await updateContributor(username, 'prCount', date, merged); // Pass the date to updateContributor
 
             // Gamification: Update streak, award points, check achievements
             try {
-                const contributor = await Contributor.findOne({ username });
-                if (contributor && merged) {
-                    // Track processed PR to prevent duplicates
-                    const alreadyProcessed = contributor.processedPRs?.some(
+                let contributor = await Contributor.findOne({ username });
+
+                // For merged PRs only
+                if (merged) {
+                    // ✅ FIX: Check for duplicates BEFORE updating (if contributor exists)
+                    const alreadyProcessed = contributor?.processedPRs?.some(
                         p => p.prNumber === pr.number && p.action === 'authored'
                     );
 
-                    if (!alreadyProcessed) {
+                    if (alreadyProcessed) {
+                        // Skip this PR - already processed
+                        continue;
+                    }
+
+                    // Not a duplicate - safe to process
+                    await updateContributor(username, 'prCount', date, merged);
+
+                    // Re-fetch contributor (updateContributor may have created it)
+                    contributor = await Contributor.findOne({ username });
+
+                    if (contributor) {
                         // Add to processedPRs array
                         if (!contributor.processedPRs) {
                             contributor.processedPRs = [];
@@ -226,7 +242,6 @@ export const fetchPullRequests = async () => {
                             processedDate: new Date()
                         });
                         prsAdded++;
-                    }
 
                     // Update streak
                     await updateStreak(contributor, pr.merged_at);
@@ -235,6 +250,12 @@ export const fetchPullRequests = async () => {
                     // Award points based on PR labels
                     const pointsData = calculatePoints(pr, contributor);
                     await awardPoints(contributor, pointsData.points, 'PR Merged', pr.number);
+
+                    // Update quarterly stats
+                    await updateQuarterlyStats(username, {
+                        prs: 1,
+                        points: pointsData.points
+                    });
 
                     // Update challenge progress
                     if (contributor.activeChallenges && contributor.activeChallenges.length > 0) {
@@ -265,9 +286,10 @@ export const fetchPullRequests = async () => {
                     // Check and award achievements
                     await checkAndAwardAchievements(contributor);
 
-                    // Save contributor with updated processedPRs
-                    await contributor.save();
-                }
+                        // Save contributor with updated processedPRs
+                        await contributor.save();
+                    }  // End if (contributor)
+                }  // End if (merged)
             } catch (gamificationError) {
                 console.error('Gamification error for PR:', pr.number, gamificationError);
                 // Don't fail the whole process if gamification fails
@@ -308,6 +330,15 @@ export const fetchPullRequests = async () => {
                         }
 
                         await awardReviewPoints(reviewer);
+
+                        // Update quarterly stats for review
+                        const latestPoints = reviewer.pointsHistory && reviewer.pointsHistory.length > 0
+                            ? reviewer.pointsHistory[reviewer.pointsHistory.length - 1].points
+                            : 0;
+                        await updateQuarterlyStats(reviewUsername, {
+                            reviews: 1,
+                            points: latestPoints
+                        });
 
                         // Update challenge progress for reviews
                         if (reviewer.activeChallenges && reviewer.activeChallenges.length > 0) {
@@ -918,7 +949,7 @@ export async function getPRRangeInfo() {
         // Update metadata
         metadata.firstPRFetched = metadata.firstPRFetched || firstPR;
         metadata.latestPRFetched = latestPR;
-        metadata.totalPRsInDB = prNumbers.length;
+        metadata.totalPRsInDB = prNumbers.length; // Unique PR numbers tracked
         metadata.dateRangeStart = metadata.dateRangeStart || oldestDate;
         metadata.dateRangeEnd = newestDate;
 
@@ -927,7 +958,8 @@ export async function getPRRangeInfo() {
         return {
             firstPR: metadata.firstPRFetched,
             latestPR: metadata.latestPRFetched,
-            totalPRs: metadata.totalPRsInDB,
+            totalPRs: totalPRs, // Total PR count across all contributors
+            uniquePRs: metadata.totalPRsInDB, // Unique PR numbers tracked
             totalReviews: totalReviews,
             dateRange: {
                 start: metadata.dateRangeStart,
@@ -1071,6 +1103,102 @@ export async function checkForDuplicates() {
         return duplicates;
     } catch (error) {
         console.error('Error checking for duplicates:', error);
+        throw error;
+    }
+}
+
+/**
+ * Fix duplicates by correcting counts and removing duplicate entries
+ * Returns statistics about what was fixed
+ */
+export async function fixDuplicates() {
+    try {
+        const contributors = await Contributor.find({});
+
+        const stats = {
+            contributorsFixed: 0,
+            prCountAdjustments: 0,
+            reviewCountAdjustments: 0,
+            duplicatePRsRemoved: 0,
+            duplicateReviewsRemoved: 0
+        };
+
+        for (const contributor of contributors) {
+            let modified = false;
+            const processedPRCount = contributor.processedPRs?.length || 0;
+            const processedReviewCount = contributor.processedReviews?.length || 0;
+
+            // FIX 1: Correct PR count mismatch
+            if (contributor.prCount !== processedPRCount) {
+                const diff = Math.abs(contributor.prCount - processedPRCount);
+                contributor.prCount = processedPRCount;
+                stats.prCountAdjustments += diff;
+                modified = true;
+            }
+
+            // FIX 2: Correct review count mismatch
+            if (contributor.reviewCount !== processedReviewCount) {
+                const diff = Math.abs(contributor.reviewCount - processedReviewCount);
+                contributor.reviewCount = processedReviewCount;
+                stats.reviewCountAdjustments += diff;
+                modified = true;
+            }
+
+            // FIX 3: Remove duplicate PRs from processedPRs array
+            if (contributor.processedPRs && contributor.processedPRs.length > 0) {
+                const seen = new Set();
+                const uniquePRs = [];
+
+                for (const pr of contributor.processedPRs) {
+                    const key = `${pr.prNumber}_${pr.action}`;
+                    if (!seen.has(key)) {
+                        seen.add(key);
+                        uniquePRs.push(pr);
+                    } else {
+                        stats.duplicatePRsRemoved++;
+                        modified = true;
+                    }
+                }
+
+                if (uniquePRs.length !== contributor.processedPRs.length) {
+                    contributor.processedPRs = uniquePRs;
+                    contributor.prCount = uniquePRs.length; // Update count to match
+                }
+            }
+
+            // FIX 4: Remove duplicate reviews from processedReviews array
+            if (contributor.processedReviews && contributor.processedReviews.length > 0) {
+                const seen = new Set();
+                const uniqueReviews = [];
+
+                for (const review of contributor.processedReviews) {
+                    const key = `${review.prNumber}_${review.reviewId}`;
+                    if (!seen.has(key)) {
+                        seen.add(key);
+                        uniqueReviews.push(review);
+                    } else {
+                        stats.duplicateReviewsRemoved++;
+                        modified = true;
+                    }
+                }
+
+                if (uniqueReviews.length !== contributor.processedReviews.length) {
+                    contributor.processedReviews = uniqueReviews;
+                    contributor.reviewCount = uniqueReviews.length; // Update count to match
+                }
+            }
+
+            // Save changes if modified
+            if (modified) {
+                await contributor.save();
+                stats.contributorsFixed++;
+            }
+        }
+
+        console.log('Duplicate fix complete:', stats);
+        return stats;
+    } catch (error) {
+        console.error('Error fixing duplicates:', error);
         throw error;
     }
 }

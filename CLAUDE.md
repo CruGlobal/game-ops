@@ -17,9 +17,11 @@ npm start
 docker-compose up --build
 
 # Access points:
-# - Application: http://localhost:3000  
+# - Application: http://localhost:3000
 # - Mongo Express (DB admin): http://localhost:8081 (admin/admin)
 ```
+
+**Important:** Docker Compose uses the `github-scoreboard` database name (configured in `docker-compose.yml` via `MONGO_URI`). All scripts and services must connect to `mongodb://localhost:27017/github-scoreboard` to access the production data.
 
 ### Environment Setup
 - Copy `.env.example` to `.env` in app directory and populate with actual values:
@@ -71,6 +73,7 @@ The application uses a dual database approach:
 - **NEW: Challenge participation** (activeChallenges, completedChallenges)
 - **NEW: Streak badges** (sevenDay, thirtyDay, ninetyDay, yearLong)
 - **PHASE 1: Duplicate prevention** (processedPRs, processedReviews arrays with PR numbers and dates)
+- **PHASE 2: Quarterly stats** (quarterlyStats subdocument with currentQuarter, prsThisQuarter, reviewsThisQuarter, pointsThisQuarter, quarter date range)
 
 **Challenge Schema** (`app/models/challenge.js`):
 - Challenge metadata (title, description, type, target, reward)
@@ -87,6 +90,21 @@ The application uses a dual database approach:
 - Fetch history array with timestamps, PR counts, and review counts
 - Singleton pattern - one record per repository
 
+**QuarterSettings Schema** (`app/models/quarterSettings.js`) - **PHASE 2**:
+- Singleton configuration (_id: 'quarter-config')
+- systemType: calendar, fiscal-us, academic, custom
+- q1StartMonth: 1-12 (defines quarter start)
+- Helper methods: getQuarterMonths(), getAllQuarters()
+- Modified timestamp and modifiedBy tracking
+
+**QuarterlyWinner Schema** (`app/models/quarterlyWinner.js`) - **PHASE 2**:
+- quarter: Unique identifier (e.g., "2025-Q1")
+- winner: Top contributor (username, avatarUrl, stats)
+- top3: Array of top 3 contributors with rank and stats
+- totalParticipants: Count of active contributors
+- archivedDate: Timestamp of quarter completion
+- Indexed by quarter for fast lookups
+
 ### Key Components
 
 **Controllers** (`app/controllers/`):
@@ -101,6 +119,7 @@ The application uses a dual database approach:
 - **NEW:** `streakService.js`: Streak tracking, streak badges, streak leaderboards
 - **NEW:** `challengeService.js`: Challenge lifecycle management, weekly auto-generation
 - **NEW:** `analyticsService.js`: Time-series data, heatmaps, growth metrics, CSV generation
+- **PHASE 2:** `quarterlyService.js`: Quarter calculation, quarterly stats management, leaderboards, winner archiving, reset automation
 
 **Routes** (`app/routes/`):
 - `contributorRoutes.js`: API endpoints for scoreboard data and admin functions
@@ -252,6 +271,107 @@ app/
   - Metadata tracking for audit trail
   - processedPRs and processedReviews arrays in Contributor schema
   - Indexed fields for performance (O(1) duplicate lookups)
+
+#### **PHASE 2: Quarterly Leaderboard System**
+- **Quarter Configuration (Admin):**
+  - Configurable quarter calculation systems (Calendar, Fiscal Year, Academic Year, Custom)
+  - Quarter start month customization (1-12)
+  - Live quarter preview with current quarter and date range
+  - Admin UI positioned between Notification Settings and Data Overview
+  - Persistent configuration stored in MongoDB
+
+- **Quarterly Tracking:**
+  - Automatic quarterly stats tracking per contributor
+  - quarterlyStats subdocument: currentQuarter, quarterStartDate, quarterEndDate
+  - Track PRs, reviews, and points per quarter
+  - Indexed by quarter and points for fast leaderboard queries
+  - Automatic reset at quarter boundaries via cron job
+
+- **Multi-Timeframe Leaderboards:**
+  - **All-Time Leaderboard:** Total points earned across all time
+  - **Quarterly Leaderboard:** Current quarter rankings with real-time updates
+  - **Hall of Fame:** Past quarterly winners and top 3 contributors
+  - Tabbed interface on leaderboard page (7 tabs total)
+  - Search and sort functionality across all timeframes
+
+- **Quarter Boundary Management:**
+  - Daily cron job checks for new quarter
+  - Automatic archiving of winners before reset
+  - QuarterlyWinner records with winner details and top 3
+  - Reset all contributors' quarterly stats to 0
+  - WebSocket notifications for quarterly resets
+  - Audit trail with archived dates
+
+- **Data Models:**
+  - **QuarterSettings:** Singleton pattern for quarter config (systemType, q1StartMonth)
+  - **QuarterlyWinner:** Hall of fame records (quarter, winner, top3, totalParticipants)
+  - **Contributor.quarterlyStats:** Embedded quarterly tracking data
+
+- **API Endpoints:**
+  - GET `/api/admin/quarter-config` - Get current quarter configuration
+  - POST `/api/admin/quarter-config` - Update quarter system (triggers reset if quarter changes)
+  - GET `/api/leaderboard/all-time` - All-time leaderboard by total points
+  - GET `/api/leaderboard/quarterly` - Current quarter leaderboard
+  - GET `/api/leaderboard/quarterly/:quarter` - Specific quarter leaderboard
+  - GET `/api/leaderboard/hall-of-fame` - Past quarterly winners
+
+- **Frontend Features:**
+  - Tabbed leaderboard UI with All-Time, This Quarter, Hall of Fame
+  - Quarter info display showing current quarter and date range
+  - Quarterly card design with quarter-specific stats
+  - Hall of Fame cards with winner crown, avatar, and top 3 list
+  - Real-time updates via WebSocket
+
+#### **Historical Data Backfill System**
+- **Purpose:** Populate database with historical PR/review data from GitHub when deploying to production or filling data gaps
+
+- **Key Features:**
+  - Configurable date range (start date to end date)
+  - GitHub rate limit handling with automatic pause/resume
+  - Real-time progress tracking via WebSocket
+  - Duplicate prevention (automatically skips already-processed PRs)
+  - Can process months or years of historical data
+  - Safe to interrupt and restart
+  - Runs on server (can close browser while running)
+
+- **Admin UI:**
+  - Date pickers for start/end date range
+  - Rate limit respect toggle
+  - Start/Stop controls
+  - Live progress bar with statistics:
+    - PRs processed
+    - Reviews processed
+    - API calls remaining
+    - Estimated time remaining
+    - Current status
+
+- **API Endpoints:**
+  - POST `/api/admin/backfill/start` - Start backfill process (requires: startDate, endDate, checkRateLimits)
+  - POST `/api/admin/backfill/stop` - Stop running backfill
+  - GET `/api/admin/backfill/status` - Get current backfill status and progress
+
+- **Process Flow:**
+  1. Counts total PRs in date range
+  2. Fetches PRs in 100-PR batches
+  3. For each PR, checks if already processed (duplicate prevention)
+  4. Adds PR to contributor's record
+  5. Fetches and processes reviews for each PR
+  6. Monitors GitHub rate limit (5,000 requests/hour)
+  7. Auto-pauses when rate limit low, resumes after reset
+  8. Emits progress updates via WebSocket every PR
+  9. Updates database statistics on completion
+
+- **Use Cases:**
+  - **Initial Production Deployment:** Fetch last 3-6 months of historical data
+  - **Filling Data Gaps:** Fill September gap when cron job was paused
+  - **Full Historical Import:** Import all data since repository creation
+  - **Data Recovery:** Re-process specific date ranges after issues
+
+- **Performance:**
+  - ~100 PRs per minute (with rate limit checks)
+  - ~6,000 PRs per hour maximum
+  - Large backfills (6+ months) can take several hours
+  - Progress persists through browser close
 
 #### **NEW: Modern UI/UX**
 - CSS design system with custom properties (60+ design tokens)
@@ -415,6 +535,7 @@ Defined in `app/config/points-config.js`:
 1. **Fetch PRs:** `fetchAndStorePRs()` - Fetch yesterday's merged PRs
 2. **Award Badges:** `awardBadgesAndBills()` - Check and award milestone badges
 3. **Check Streaks:** Verify contributor streaks, award streak badges
+4. **Check Quarterly Reset:** `checkAndResetIfNewQuarter()` - Detect quarter boundaries, archive winners, reset stats
 
 ### Weekly Jobs (runs Monday 00:00 UTC)
 1. **Generate Challenges:** `generateWeeklyChallenges()` - Create 3 new weekly challenges
