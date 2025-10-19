@@ -515,9 +515,28 @@ export const awardBadges = async (pullRequestNumber = null) => {
                     };
                     await dbClient.update(updateParams).promise(); // Update the contributor in the database
                 } else {
-                    contributor.badges = contributor.badges || [];
-                    contributor.badges.push({ badge: badgeAwarded, date: new Date().toISOString() });
-                    await contributor.save(); // Save the contributor to the database
+                    // Build update object for atomic update to avoid version conflicts
+                    const updateData = {
+                        $push: { badges: { badge: badgeAwarded, date: new Date().toISOString() } },
+                        $set: {}
+                    };
+
+                    // Set the appropriate flag based on which badge was awarded
+                    if (badgeAwarded === '1st PR badge') updateData.$set.firstPrAwarded = true;
+                    else if (badgeAwarded === '1st Review badge') updateData.$set.firstReviewAwarded = true;
+                    else if (badgeAwarded === '10 PR badge') updateData.$set.first10PrsAwarded = true;
+                    else if (badgeAwarded === '10 Reviews badge') updateData.$set.first10ReviewsAwarded = true;
+                    else if (badgeAwarded === '50 PR badge') updateData.$set.first50PrsAwarded = true;
+                    else if (badgeAwarded === '50 Reviews badge') updateData.$set.first50ReviewsAwarded = true;
+                    else if (badgeAwarded === '100 PR badge') updateData.$set.first100PrsAwarded = true;
+                    else if (badgeAwarded === '100 Reviews badge') updateData.$set.first100ReviewsAwarded = true;
+                    else if (badgeAwarded === '500 PR badge') updateData.$set.first500PrsAwarded = true;
+                    else if (badgeAwarded === '500 Reviews badge') updateData.$set.first500ReviewsAwarded = true;
+                    else if (badgeAwarded === '1000 PR badge') updateData.$set.first1000PrsAwarded = true;
+                    else if (badgeAwarded === '1000 Reviews badge') updateData.$set.first1000ReviewsAwarded = true;
+
+                    // Use findByIdAndUpdate to atomically update without version conflicts
+                    await Contributor.findByIdAndUpdate(contributor._id, updateData, { new: true });
                 }
             }
         }
@@ -1190,7 +1209,13 @@ export async function fixDuplicates() {
 
             // Save changes if modified
             if (modified) {
-                await contributor.save();
+                // Use findByIdAndUpdate to avoid version conflicts
+                await Contributor.findByIdAndUpdate(contributor._id, {
+                    prCount: contributor.prCount,
+                    reviewCount: contributor.reviewCount,
+                    processedPRs: contributor.processedPRs,
+                    processedReviews: contributor.processedReviews
+                });
                 stats.contributorsFixed++;
             }
         }

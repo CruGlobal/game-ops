@@ -94,10 +94,12 @@ describe('Duplicate Detection and Repair', () => {
                 createTestContributor({
                     username: 'clean',
                     prCount: 2,
+                    reviewCount: 0,  // Set to 0 to match empty processedReviews
                     processedPRs: [
                         { prNumber: 100, action: 'authored', processedDate: new Date() },
                         { prNumber: 101, action: 'authored', processedDate: new Date() }
-                    ]
+                    ],
+                    processedReviews: []  // Explicitly set to empty array
                 })
             );
 

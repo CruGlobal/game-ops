@@ -449,13 +449,7 @@ describe('Quarterly API Endpoints', () => {
         });
 
         it('should trigger quarter reset if quarter changed', async () => {
-            // Set old config with Q1 in January
-            await QuarterSettings.create({
-                _id: 'quarter-config',
-                systemType: 'calendar',
-                q1StartMonth: 1
-            });
-
+            // beforeEach already creates default config with calendar/January
             // Create contributors with current stats
             await Contributor.create(
                 createTestContributor({
