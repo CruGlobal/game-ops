@@ -2,8 +2,15 @@ import { Octokit } from '@octokit/rest';
 import dbClient from '../config/db-config.js';
 import Contributor from '../models/contributor.js';
 import FetchDate from '../models/fetchDate.js';
+import PRMetadata from '../models/prMetadata.js';
 import mongoSanitize from 'express-mongo-sanitize';
 import fetch from 'node-fetch';
+import { emitPRUpdate, emitBadgeAwarded, emitLeaderboardUpdate, emitReviewUpdate } from '../utils/socketEmitter.js';
+import { updateStreak, checkStreakBadges } from './streakService.js';
+import { calculatePoints, awardPoints, awardReviewPoints } from './pointsService.js';
+import { checkAndAwardAchievements } from './achievementService.js';
+import { updateChallengeProgress } from './challengeService.js';
+import { checkAndResetIfNewQuarter, updateQuarterlyStats } from './quarterlyService.js';
 
 // Initialize Octokit with GitHub token and custom fetch
 const octokit = new Octokit({
@@ -87,8 +94,10 @@ export const initializeDatabase = async () => {
         }
 
         console.log('Database initialized successfully');
+        return 'Database initialized successfully.';
     } catch (err) {
         console.error('Error initializing database', err);
+        throw err;
     }
 };
 
@@ -136,6 +145,28 @@ export const updateContributor = async (username, type, date, merged = false) =>
             contributor.reviews.push({ date: date, count: 1 });
         }
         await contributor.save(); // Save the contributor to the database
+
+        // Emit socket event for real-time updates
+        if (type === 'prCount') {
+            emitPRUpdate({
+                username: contributor.username,
+                prCount: contributor.prCount
+            });
+        } else {
+            emitReviewUpdate({
+                username: contributor.username,
+                reviewCount: contributor.reviewCount
+            });
+        }
+
+        // Emit leaderboard update for live UI updates
+        emitLeaderboardUpdate({
+            username: contributor.username,
+            pullRequestCount: contributor.pullRequestCount || 0,
+            reviewCount: contributor.reviewCount || 0,
+            totalPoints: contributor.totalPoints || 0,
+            avatarUrl: contributor.avatarUrl
+        });
     }
 };
 
@@ -153,6 +184,13 @@ const updateLastFetchDate = async (date) => {
 // Fetch pull requests and update contributors' PR counts
 export const fetchPullRequests = async () => {
     try {
+        // Check if we've entered a new quarter and reset if needed
+        await checkAndResetIfNewQuarter();
+
+        let prsAdded = 0;
+        let reviewsAdded = 0;
+        const processStartTime = Date.now();
+
         const lastFetchDate = await getLastFetchDate();
         const { data: pullRequests } = await octokit.rest.pulls.list({
             owner: repoOwner,
@@ -169,7 +207,93 @@ export const fetchPullRequests = async () => {
             const username = pr.user.login;
             const date = new Date(pr.updated_at);
             const merged = !!pr.merged_at; // Check if the PR is merged
-            await updateContributor(username, 'prCount', date, merged); // Pass the date to updateContributor
+
+            // Gamification: Update streak, award points, check achievements
+            try {
+                let contributor = await Contributor.findOne({ username });
+
+                // For merged PRs only
+                if (merged) {
+                    // ✅ FIX: Check for duplicates BEFORE updating (if contributor exists)
+                    const alreadyProcessed = contributor?.processedPRs?.some(
+                        p => p.prNumber === pr.number && p.action === 'authored'
+                    );
+
+                    if (alreadyProcessed) {
+                        // Skip this PR - already processed
+                        continue;
+                    }
+
+                    // Not a duplicate - safe to process
+                    await updateContributor(username, 'prCount', date, merged);
+
+                    // Re-fetch contributor (updateContributor may have created it)
+                    contributor = await Contributor.findOne({ username });
+
+                    if (contributor) {
+                        // Add to processedPRs array
+                        if (!contributor.processedPRs) {
+                            contributor.processedPRs = [];
+                        }
+                        contributor.processedPRs.push({
+                            prNumber: pr.number,
+                            prTitle: pr.title,
+                            action: 'authored',
+                            processedDate: new Date()
+                        });
+                        prsAdded++;
+
+                    // Update streak
+                    await updateStreak(contributor, pr.merged_at);
+                    await checkStreakBadges(contributor);
+
+                    // Award points based on PR labels
+                    const pointsData = calculatePoints(pr, contributor);
+                    await awardPoints(contributor, pointsData.points, 'PR Merged', pr.number);
+
+                    // Update quarterly stats
+                    await updateQuarterlyStats(username, {
+                        prs: 1,
+                        points: pointsData.points
+                    });
+
+                    // Update challenge progress
+                    if (contributor.activeChallenges && contributor.activeChallenges.length > 0) {
+                        const { checkLabelMatch } = await import('./challengeService.js');
+
+                        for (const activeChallenge of contributor.activeChallenges) {
+                            const challenge = await import('../models/challenge.js').then(m => m.default.findById(activeChallenge.challengeId));
+
+                            if (!challenge) continue;
+
+                            let shouldIncrement = false;
+
+                            // Check challenge type
+                            if (challenge.type === 'pr-merge') {
+                                shouldIncrement = true;
+                            } else if (challenge.type === 'okr-label') {
+                                // Check if PR labels match challenge filters
+                                const prLabels = pr.labels || [];
+                                shouldIncrement = checkLabelMatch(prLabels, challenge.labelFilters);
+                            }
+
+                            if (shouldIncrement) {
+                                await updateChallengeProgress(username, challenge._id.toString(), 1);
+                            }
+                        }
+                    }
+
+                    // Check and award achievements
+                    await checkAndAwardAchievements(contributor);
+
+                        // Save contributor with updated processedPRs
+                        await contributor.save();
+                    }  // End if (contributor)
+                }  // End if (merged)
+            } catch (gamificationError) {
+                console.error('Gamification error for PR:', pr.number, gamificationError);
+                // Don't fail the whole process if gamification fails
+            }
 
             const { data: reviews } = await octokit.rest.pulls.listReviews({
                 owner: repoOwner,
@@ -182,8 +306,98 @@ export const fetchPullRequests = async () => {
                 const reviewUsername = review.user.login;
                 const reviewDate = new Date(review.submitted_at);
                 await updateContributor(reviewUsername, 'reviewCount', reviewDate); // Pass the date to updateContributor
+
+                // Gamification: Award review points and check achievements
+                try {
+                    const reviewer = await Contributor.findOne({ username: reviewUsername });
+                    if (reviewer) {
+                        // Track processed review to prevent duplicates
+                        const alreadyProcessedReview = reviewer.processedReviews?.some(
+                            r => r.prNumber === pr.number && r.reviewId === review.id
+                        );
+
+                        if (!alreadyProcessedReview) {
+                            // Add to processedReviews array
+                            if (!reviewer.processedReviews) {
+                                reviewer.processedReviews = [];
+                            }
+                            reviewer.processedReviews.push({
+                                prNumber: pr.number,
+                                reviewId: review.id,
+                                processedDate: new Date()
+                            });
+                            reviewsAdded++;
+                        }
+
+                        await awardReviewPoints(reviewer);
+
+                        // Update quarterly stats for review
+                        const latestPoints = reviewer.pointsHistory && reviewer.pointsHistory.length > 0
+                            ? reviewer.pointsHistory[reviewer.pointsHistory.length - 1].points
+                            : 0;
+                        await updateQuarterlyStats(reviewUsername, {
+                            reviews: 1,
+                            points: latestPoints
+                        });
+
+                        // Update challenge progress for reviews
+                        if (reviewer.activeChallenges && reviewer.activeChallenges.length > 0) {
+                            for (const activeChallenge of reviewer.activeChallenges) {
+                                const challenge = await import('../models/challenge.js').then(m => m.default.findById(activeChallenge.challengeId));
+                                if (challenge && challenge.type === 'review') {
+                                    await updateChallengeProgress(reviewUsername, challenge._id.toString(), 1);
+                                }
+                            }
+                        }
+
+                        await checkAndAwardAchievements(reviewer);
+
+                        // Save reviewer with updated processedReviews
+                        await reviewer.save();
+                    }
+                } catch (gamificationError) {
+                    console.error('Gamification error for review:', review.id, gamificationError);
+                }
             }
           }
+        }
+
+        // Update metadata
+        try {
+            let metadata = await PRMetadata.findOne({
+                repoOwner: repoOwner,
+                repoName: repoName
+            });
+
+            if (!metadata) {
+                metadata = new PRMetadata({
+                    repoOwner: repoOwner,
+                    repoName: repoName
+                });
+            }
+
+            // Update metadata fields
+            metadata.lastFetchDate = new Date();
+
+            // Add to fetch history
+            metadata.fetchHistory.push({
+                fetchDate: new Date(),
+                prRangeFetched: `Auto fetch (${pullRequests.length} PRs processed)`,
+                prsAdded: prsAdded,
+                reviewsAdded: reviewsAdded
+            });
+
+            // Keep only last 20 fetch history records
+            if (metadata.fetchHistory.length > 20) {
+                metadata.fetchHistory = metadata.fetchHistory.slice(-20);
+            }
+
+            await metadata.save();
+
+            console.log(`Updated metadata: ${prsAdded} PRs, ${reviewsAdded} reviews added`);
+        } catch (metadataError) {
+            console.error('Error updating metadata:', metadataError);
+            // Don't fail the whole operation if metadata update fails
         }
 
         await updateLastFetchDate(new Date()); // Update the last fetch date
@@ -221,15 +435,15 @@ export const awardBadges = async (pullRequestNumber = null) => {
                 badgeImage = '1st_review_badge.png';
                 contributor.firstReviewAwarded = true;
             } else if (contributor.prCount >= 10 && !contributor.first10PrsAwarded) {
-                badgeAwarded = '10 PRs badge';
-                badgeImage = '10_pr_badge.png';
+                badgeAwarded = '10 PR badge';
+                badgeImage = '10_prs_badge.png';
                 contributor.first10PrsAwarded = true;
             } else if (contributor.reviewCount >= 10 && !contributor.first10ReviewsAwarded) {
                 badgeAwarded = '10 Reviews badge';
-                badgeImage = '10_review_badge.png';
+                badgeImage = '10_reviews_badge.png';
                 contributor.first10ReviewsAwarded = true;
             } else if (contributor.prCount >= 50 && !contributor.first50PrsAwarded) {
-                badgeAwarded = '50 PRs badge';
+                badgeAwarded = '50 PR badge';
                 badgeImage = '50_prs_badge.png';
                 contributor.first50PrsAwarded = true;
             } else if (contributor.reviewCount >= 50 && !contributor.first50ReviewsAwarded) {
@@ -237,7 +451,7 @@ export const awardBadges = async (pullRequestNumber = null) => {
                 badgeImage = '50_reviews_badge.png';
                 contributor.first50ReviewsAwarded = true;
             } else if (contributor.prCount >= 100 && !contributor.first100PrsAwarded) {
-                badgeAwarded = '100 PRs badge';
+                badgeAwarded = '100 PR badge';
                 badgeImage = '100_prs_badge.png';
                 contributor.first100PrsAwarded = true;
             } else if (contributor.reviewCount >= 100 && !contributor.first100ReviewsAwarded) {
@@ -245,7 +459,7 @@ export const awardBadges = async (pullRequestNumber = null) => {
                 badgeImage = '100_reviews_badge.png';
                 contributor.first100ReviewsAwarded = true;
             } else if (contributor.prCount >= 500 && !contributor.first500PrsAwarded) {
-                badgeAwarded = '500 PRs badge';
+                badgeAwarded = '500 PR badge';
                 badgeImage = '500_prs_badge.png';
                 contributor.first500PrsAwarded = true;
             } else if (contributor.reviewCount >= 500 && !contributor.first500ReviewsAwarded) {
@@ -253,7 +467,7 @@ export const awardBadges = async (pullRequestNumber = null) => {
                 badgeImage = '500_reviews_badge.png';
                 contributor.first500ReviewsAwarded = true;
             } else if (contributor.prCount >= 1000 && !contributor.first1000PrsAwarded) {
-                badgeAwarded = '1000 PRs badge';
+                badgeAwarded = '1000 PR badge';
                 badgeImage = '1000_prs_badge.png';
                 contributor.first1000PrsAwarded = true;
             } else if (contributor.reviewCount >= 1000 && !contributor.first1000ReviewsAwarded) {
@@ -267,6 +481,13 @@ export const awardBadges = async (pullRequestNumber = null) => {
                 console.log(`🎉 Congratulations @${contributor.username}, you've earned the ${badgeAwarded}! 🎉\n\n![Badge](${domain}/images/${badgeImage})`);
 
                 results.push({ username: contributor.username, badge: badgeAwarded, badgeImage: badgeImage });
+
+                // Emit socket event for badge notification
+                emitBadgeAwarded({
+                    username: contributor.username,
+                    badgeName: badgeAwarded,
+                    badgeType: 'achievement'
+                });
 
                 if (process.env.NODE_ENV === 'production') {
                     const updateParams = {
@@ -416,7 +637,7 @@ export const getTopReviewersDateRange = async (startDate, endDate, page, limit) 
     return { reviewers, totalReviews };
 };
 
-// Get the top contributors based on PR count
+// Get the top contributors based on PR count with gamification data
 export const getTopContributors = async () => {
     let contributors;
     if (process.env.NODE_ENV === 'production') {
@@ -424,18 +645,22 @@ export const getTopContributors = async () => {
             TableName: 'Contributors',
             FilterExpression: 'NOT contains(username, :bot)',
             ExpressionAttributeValues: { ':bot': '[bot]' },
-            ProjectionExpression: 'username, prCount, avatarUrl, badges, totalBillsAwarded',
+            ProjectionExpression: 'username, prCount, reviewCount, avatarUrl, badges, totalBillsAwarded, totalPoints, currentStreak, longestStreak, streakBadges',
             Limit: 50,
         };
         const data = await dbClient.scan(params).promise();
         contributors = data.Items.sort((a, b) => b.prCount - a.prCount); // Sort contributors by PR count
     } else {
-        contributors = await Contributor.find({ username: { $not: /\[bot\]$/ } }).sort({ prCount: -1 }).limit(50).select('username prCount avatarUrl badges totalBillsAwarded');
+        contributors = await Contributor.find({ username: { $not: /\[bot\]$/ } })
+            .sort({ prCount: -1 })
+            .limit(50)
+            .select('username prCount reviewCount avatarUrl badges totalBillsAwarded totalPoints currentStreak longestStreak streakBadges')
+            .lean();
     }
     return contributors;
 };
 
-// Get the top reviewers based on review count
+// Get the top reviewers based on review count with gamification data
 export const getTopReviewers = async () => {
     let reviewers;
     if (process.env.NODE_ENV === 'production') {
@@ -443,15 +668,33 @@ export const getTopReviewers = async () => {
             TableName: 'Contributors',
             FilterExpression: 'NOT contains(username, :bot)',
             ExpressionAttributeValues: { ':bot': '[bot]' },
-            ProjectionExpression: 'username, reviewCount, avatarUrl, badges,totalBillsAwarded',
+            ProjectionExpression: 'username, prCount, reviewCount, avatarUrl, badges, totalBillsAwarded, totalPoints, currentStreak, longestStreak, streakBadges',
             Limit: 50,
         };
         const data = await dbClient.scan(params).promise();
         reviewers = data.Items.sort((a, b) => b.reviewCount - a.reviewCount); // Sort reviewers by review count
     } else {
-        reviewers = await Contributor.find({ username: { $not: /\[bot\]$/ } }).sort({ reviewCount: -1 }).limit(50).select('username reviewCount avatarUrl badges totalBillsAwarded');
+        reviewers = await Contributor.find({ username: { $not: /\[bot\]$/ } })
+            .sort({ reviewCount: -1 })
+            .limit(50)
+            .select('username prCount reviewCount avatarUrl badges totalBillsAwarded totalPoints currentStreak longestStreak streakBadges')
+            .lean();
     }
     return reviewers;
+};
+
+// Get a single contributor by username
+export const getContributorByUsername = async (username) => {
+    if (process.env.NODE_ENV === 'production') {
+        const params = {
+            TableName: 'Contributors',
+            Key: { username }
+        };
+        const data = await dbClient.get(params).promise();
+        return data.Item || null;
+    } else {
+        return await Contributor.findOne({ username }).lean();
+    }
 };
 
 // Award bills and vonettes to contributors based on their contributions
@@ -475,32 +718,41 @@ export const awardBillsAndVonettes = async (pullRequestNumber = null, test = fal
             let billsAwarded = null;
             let billsImage = null;
             let billsValue = 0;
+            let hasMilestone = false;
 
-            if (contributor.prCount >= 10 && !contributor.first10PrsAwarded) {
-                billsAwarded = 'Bill';
-                billsImage = '1_bill_57X27.png';
-                billsValue += 1;
-                contributor.first10PrsAwarded = true;
-            } else if (contributor.reviewCount >= 10 && !contributor.first10ReviewsAwarded) {
-                billsAwarded = 'Bill';
-                billsImage = '1_bill_57X27.png';
-                billsValue += 1;
-                contributor.first10ReviewsAwarded = true;
-           }  else if ((contributor.prCount >= 500 && !contributor.first500PrsAwarded) || (contributor.reviewCount >= 500 && !contributor.first500ReviewsAwarded)) {
+            // Check for Vonette first (highest priority)
+            if ((contributor.prCount >= 500 && !contributor.first500PrsAwarded) || (contributor.reviewCount >= 500 && !contributor.first500ReviewsAwarded)) {
                 billsAwarded = 'Vonette';
                 billsImage = '5_vonett_57_25.png';
-                billsValue += 5;
+                billsValue = 5;
+                hasMilestone = true;
                 if (contributor.prCount >= 500) contributor.first500PrsAwarded = true;
                 if (contributor.reviewCount >= 500) contributor.first500ReviewsAwarded = true;
-           }
+            }
+            // Check for initial Bill milestones (10 PRs or 10 reviews) - only award once
+            else if ((contributor.prCount >= 10 && !contributor.first10PrsAwarded) || (contributor.reviewCount >= 10 && !contributor.first10ReviewsAwarded)) {
+                // Only award if they haven't received ANY initial milestone bill yet
+                if ((contributor.totalBillsAwarded || 0) === 0) {
+                    billsAwarded = 'Bill';
+                    billsImage = '1_bill_57X27.png';
+                    billsValue = 1;
+                    hasMilestone = true;
+                    if (contributor.prCount >= 10) contributor.first10PrsAwarded = true;
+                    if (contributor.reviewCount >= 10) contributor.first10ReviewsAwarded = true;
+                }
+            }
 
-            const totalContributions = contributor.prCount + contributor.reviewCount;
-            const newBills = Math.floor(totalContributions / 100) - (contributor.totalBillsAwarded || 0);
+            // Check for incremental bills (every 100 total contributions)
+            // Only award incremental if NO milestone was awarded
+            if (!hasMilestone) {
+                const totalContributions = contributor.prCount + contributor.reviewCount;
+                const newBills = Math.floor(totalContributions / 100) - (contributor.totalBillsAwarded || 0);
 
-            if (newBills > 0) {
-                billsAwarded = 'Bill';
-                billsImage = '1_bill_57X27.png';
-                billsValue += newBills;
+                if (newBills > 0) {
+                    billsAwarded = 'Bill';
+                    billsImage = '1_bill_57X27.png';
+                    billsValue = newBills;
+                }
             }
 
             if (billsValue > 0) {
@@ -632,5 +884,321 @@ function updateChange(blocked, userRaised, user, changeType) {
         if (changeType === "change") {
             blocked.push([user, userRaised, 1, 0]);
         }
+    }
+}
+
+/**
+ * Get PR fetch range information and database statistics
+ * @returns {Object} PR metadata and statistics
+ */
+export async function getPRRangeInfo() {
+    try {
+        // Get or create metadata record
+        let metadata = await PRMetadata.findOne({
+            repoOwner: repoOwner,
+            repoName: repoName
+        });
+
+        // If no metadata exists, calculate from existing data
+        if (!metadata) {
+            metadata = new PRMetadata({
+                repoOwner: repoOwner,
+                repoName: repoName
+            });
+        }
+
+        // Calculate statistics from contributor data
+        const contributors = await Contributor.find({});
+
+        let totalPRs = 0;
+        let totalReviews = 0;
+        let oldestDate = null;
+        let newestDate = null;
+        let allPRNumbers = new Set();
+
+        contributors.forEach(contributor => {
+            totalPRs += contributor.prCount || 0;
+            totalReviews += contributor.reviewCount || 0;
+
+            // Collect PR numbers from processed PRs
+            if (contributor.processedPRs) {
+                contributor.processedPRs.forEach(pr => {
+                    allPRNumbers.add(pr.prNumber);
+                });
+            }
+
+            // Find date ranges from contribution history
+            if (contributor.contributions && contributor.contributions.length > 0) {
+                contributor.contributions.forEach(contrib => {
+                    const contribDate = new Date(contrib.date);
+                    if (!oldestDate || contribDate < oldestDate) {
+                        oldestDate = contribDate;
+                    }
+                    if (!newestDate || contribDate > newestDate) {
+                        newestDate = contribDate;
+                    }
+                });
+            }
+        });
+
+        // Calculate PR range from collected numbers
+        const prNumbers = Array.from(allPRNumbers).sort((a, b) => a - b);
+        const firstPR = prNumbers.length > 0 ? prNumbers[0] : null;
+        const latestPR = prNumbers.length > 0 ? prNumbers[prNumbers.length - 1] : null;
+
+        // Update metadata
+        metadata.firstPRFetched = metadata.firstPRFetched || firstPR;
+        metadata.latestPRFetched = latestPR;
+        metadata.totalPRsInDB = prNumbers.length; // Unique PR numbers tracked
+        metadata.dateRangeStart = metadata.dateRangeStart || oldestDate;
+        metadata.dateRangeEnd = newestDate;
+
+        await metadata.save();
+
+        return {
+            firstPR: metadata.firstPRFetched,
+            latestPR: metadata.latestPRFetched,
+            totalPRs: totalPRs, // Total PR count across all contributors
+            uniquePRs: metadata.totalPRsInDB, // Unique PR numbers tracked
+            totalReviews: totalReviews,
+            dateRange: {
+                start: metadata.dateRangeStart,
+                end: metadata.dateRangeEnd
+            },
+            lastFetch: metadata.lastFetchDate,
+            fetchHistory: metadata.fetchHistory.slice(-5) // Last 5 fetches
+        };
+    } catch (error) {
+        console.error('Error getting PR range info:', error);
+        throw error;
+    }
+}
+
+/**
+ * Check for duplicate PRs in the database
+ * @returns {Object} Duplicate detection results
+ */
+export async function checkForDuplicates() {
+    try {
+        const contributors = await Contributor.find({}).lean();
+
+        const duplicates = {
+            hasDuplicates: false,
+            duplicateCount: 0,
+            details: [],
+            summary: {
+                duplicatePRs: 0,
+                duplicateReviews: 0,
+                affectedContributors: 0
+            }
+        };
+
+        // Track all PR numbers and their occurrences
+        const prOccurrences = new Map(); // prNumber -> [contributors who have it]
+        const reviewOccurrences = new Map(); // prNumber_reviewId -> [contributors]
+
+        contributors.forEach(contributor => {
+            // Check for duplicate PRs within same contributor
+            if (contributor.processedPRs && contributor.processedPRs.length > 0) {
+                const prCounts = {};
+                contributor.processedPRs.forEach(pr => {
+                    const prNum = pr.prNumber;
+                    prCounts[prNum] = (prCounts[prNum] || 0) + 1;
+
+                    // Track across contributors
+                    if (!prOccurrences.has(prNum)) {
+                        prOccurrences.set(prNum, []);
+                    }
+                    prOccurrences.get(prNum).push({
+                        username: contributor.username,
+                        action: pr.action,
+                        date: pr.processedDate
+                    });
+                });
+
+                // Find duplicates within contributor
+                Object.entries(prCounts).forEach(([prNum, count]) => {
+                    if (count > 1) {
+                        duplicates.hasDuplicates = true;
+                        duplicates.duplicateCount++;
+                        duplicates.details.push({
+                            type: 'PR',
+                            prNumber: parseInt(prNum),
+                            contributor: contributor.username,
+                            occurrences: count,
+                            issue: `PR #${prNum} counted ${count} times for ${contributor.username}`
+                        });
+                    }
+                });
+            }
+
+            // Check for duplicate reviews
+            if (contributor.processedReviews && contributor.processedReviews.length > 0) {
+                const reviewCounts = {};
+                contributor.processedReviews.forEach(review => {
+                    const key = `${review.prNumber}_${review.reviewId}`;
+                    reviewCounts[key] = (reviewCounts[key] || 0) + 1;
+
+                    if (!reviewOccurrences.has(key)) {
+                        reviewOccurrences.set(key, []);
+                    }
+                    reviewOccurrences.get(key).push({
+                        username: contributor.username,
+                        date: review.processedDate
+                    });
+                });
+
+                Object.entries(reviewCounts).forEach(([key, count]) => {
+                    if (count > 1) {
+                        duplicates.hasDuplicates = true;
+                        duplicates.duplicateCount++;
+                        const [prNum, reviewId] = key.split('_');
+                        duplicates.details.push({
+                            type: 'Review',
+                            prNumber: parseInt(prNum),
+                            reviewId: parseInt(reviewId),
+                            contributor: contributor.username,
+                            occurrences: count,
+                            issue: `Review #${reviewId} on PR #${prNum} counted ${count} times for ${contributor.username}`
+                        });
+                    }
+                });
+            }
+
+            // Check if prCount matches processedPRs length
+            const processedCount = contributor.processedPRs ? contributor.processedPRs.length : 0;
+            if (contributor.prCount !== processedCount) {
+                duplicates.hasDuplicates = true;
+                duplicates.details.push({
+                    type: 'Mismatch',
+                    contributor: contributor.username,
+                    totalPRs: contributor.prCount,
+                    processedPRs: processedCount,
+                    difference: Math.abs(contributor.prCount - processedCount),
+                    issue: `prCount (${contributor.prCount}) doesn't match processedPRs length (${processedCount})`
+                });
+            }
+
+            // Check if reviewCount matches processedReviews length
+            const processedReviewCount = contributor.processedReviews ? contributor.processedReviews.length : 0;
+            if (contributor.reviewCount !== processedReviewCount) {
+                duplicates.hasDuplicates = true;
+                duplicates.details.push({
+                    type: 'Mismatch',
+                    contributor: contributor.username,
+                    totalReviews: contributor.reviewCount,
+                    processedReviews: processedReviewCount,
+                    difference: Math.abs(contributor.reviewCount - processedReviewCount),
+                    issue: `reviewCount (${contributor.reviewCount}) doesn't match processedReviews length (${processedReviewCount})`
+                });
+            }
+        });
+
+        // Calculate summary
+        duplicates.summary.duplicatePRs = duplicates.details.filter(d => d.type === 'PR').length;
+        duplicates.summary.duplicateReviews = duplicates.details.filter(d => d.type === 'Review').length;
+        duplicates.summary.mismatches = duplicates.details.filter(d => d.type === 'Mismatch').length;
+        duplicates.summary.affectedContributors = new Set(duplicates.details.map(d => d.contributor)).size;
+
+        return duplicates;
+    } catch (error) {
+        console.error('Error checking for duplicates:', error);
+        throw error;
+    }
+}
+
+/**
+ * Fix duplicates by correcting counts and removing duplicate entries
+ * Returns statistics about what was fixed
+ */
+export async function fixDuplicates() {
+    try {
+        const contributors = await Contributor.find({});
+
+        const stats = {
+            contributorsFixed: 0,
+            prCountAdjustments: 0,
+            reviewCountAdjustments: 0,
+            duplicatePRsRemoved: 0,
+            duplicateReviewsRemoved: 0
+        };
+
+        for (const contributor of contributors) {
+            let modified = false;
+            const processedPRCount = contributor.processedPRs?.length || 0;
+            const processedReviewCount = contributor.processedReviews?.length || 0;
+
+            // FIX 1: Correct PR count mismatch
+            if (contributor.prCount !== processedPRCount) {
+                const diff = Math.abs(contributor.prCount - processedPRCount);
+                contributor.prCount = processedPRCount;
+                stats.prCountAdjustments += diff;
+                modified = true;
+            }
+
+            // FIX 2: Correct review count mismatch
+            if (contributor.reviewCount !== processedReviewCount) {
+                const diff = Math.abs(contributor.reviewCount - processedReviewCount);
+                contributor.reviewCount = processedReviewCount;
+                stats.reviewCountAdjustments += diff;
+                modified = true;
+            }
+
+            // FIX 3: Remove duplicate PRs from processedPRs array
+            if (contributor.processedPRs && contributor.processedPRs.length > 0) {
+                const seen = new Set();
+                const uniquePRs = [];
+
+                for (const pr of contributor.processedPRs) {
+                    const key = `${pr.prNumber}_${pr.action}`;
+                    if (!seen.has(key)) {
+                        seen.add(key);
+                        uniquePRs.push(pr);
+                    } else {
+                        stats.duplicatePRsRemoved++;
+                        modified = true;
+                    }
+                }
+
+                if (uniquePRs.length !== contributor.processedPRs.length) {
+                    contributor.processedPRs = uniquePRs;
+                    contributor.prCount = uniquePRs.length; // Update count to match
+                }
+            }
+
+            // FIX 4: Remove duplicate reviews from processedReviews array
+            if (contributor.processedReviews && contributor.processedReviews.length > 0) {
+                const seen = new Set();
+                const uniqueReviews = [];
+
+                for (const review of contributor.processedReviews) {
+                    const key = `${review.prNumber}_${review.reviewId}`;
+                    if (!seen.has(key)) {
+                        seen.add(key);
+                        uniqueReviews.push(review);
+                    } else {
+                        stats.duplicateReviewsRemoved++;
+                        modified = true;
+                    }
+                }
+
+                if (uniqueReviews.length !== contributor.processedReviews.length) {
+                    contributor.processedReviews = uniqueReviews;
+                    contributor.reviewCount = uniqueReviews.length; // Update count to match
+                }
+            }
+
+            // Save changes if modified
+            if (modified) {
+                await contributor.save();
+                stats.contributorsFixed++;
+            }
+        }
+
+        console.log('Duplicate fix complete:', stats);
+        return stats;
+    } catch (error) {
+        console.error('Error fixing duplicates:', error);
+        throw error;
     }
 }

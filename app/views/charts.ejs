@@ -3,52 +3,90 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GitHub Stars</title>
-    <link rel="stylesheet" href="charts.css">
+    <title>Charts - GitHub PR Scoreboard</title>
+    <link rel="stylesheet" href="/modern-design-system.css">
+    <link rel="stylesheet" href="/styles.css">
+    <link rel="stylesheet" href="/charts.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
-<h1>GitHub Stars</h1>
-<div class="hamburger-menu">
-        <button class="hamburger-button">&#9776;</button>
-        <%- include('partials/nav') %>
+<a href="#main-content" class="skip-link">Skip to main content</a>
+<div class="container">
+    <div class="header-section">
+        <h1>📊 GitHub Stars</h1>
+        <div class="hamburger-menu">
+            <button class="hamburger-button" aria-label="Toggle navigation menu" aria-expanded="false">&#9776;</button>
+            <%- include('partials/nav') %>
+        </div>
+    </div>
+
+    <main id="main-content">
+        <div class="page-description">
+            <p>Visualize top contributors with customizable time ranges and chart types.</p>
+        </div>
+
+        <div class="card">
+            <h2>Chart Configuration</h2>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label for="range">Time Range</label>
+                    <select id="range" name="range" class="form-control">
+                        <option value="1">1 Day</option>
+                        <option value="7">7 Days</option>
+                        <option value="30" selected>30 Days</option>
+                        <option value="60">60 Days</option>
+                        <option value="90">90 Days</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="monthlyRange">Monthly Range</label>
+                    <select id="monthlyRange" name="monthlyRange" class="form-control">
+                        <option value="1">1 Month</option>
+                        <option value="3" selected>3 Months</option>
+                        <option value="6">6 Months</option>
+                        <option value="12">12 Months</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="displayType">Display Type</label>
+                    <select id="displayType" name="displayType" class="form-control">
+                        <option value="barChart">Bar Chart</option>
+                        <option value="stackedBarChart">Stacked Bar Chart</option>
+                        <option value="lineChart">Line Chart</option>
+                        <option value="bubbleChart">Bubble Chart</option>
+                        <option value="monthlyAggregatedChart">Monthly Aggregated</option>
+                        <option value="dataTable">Data Table</option>
+                    </select>
+                </div>
+            </div>
+
+            <button id="fetchButton" class="btn btn-primary" style="margin-top: 16px;">
+                <span>📈 Generate Chart</span>
+            </button>
+        </div>
+
+        <div id="top-scores-results" class="results-container">
+            <!-- Results will be displayed here -->
+        </div>
+
+        <div class="card" id="chart-card" style="display: none;">
+            <h2>Monthly Aggregated View</h2>
+            <div class="chart-container">
+                <canvas id="monthlyAggregatedChart"></canvas>
+            </div>
+        </div>
+    </main>
 </div>
-<div>
-    <label for="range">Select Range:</label>
-    <select id="range" name="range">
-        <option value="1">1 Day</option>
-        <option value="7">7 Days</option>
-        <option value="30">30 Days</option>
-        <option value="60">60 Days</option>
-        <option value="90">90 Days</option>
-    </select>
-    <button id="fetchButton">Fetch Top Scores</button>
-</div>
-<div>
-    <label for="monthlyRange">Select Monthly Range:</label>
-    <select id="monthlyRange" name="monthlyRange">
-        <option value="1">1 Month</option>
-        <option value="3">3 Months</option>
-        <option value="6">6 Months</option>
-        <option value="12">12 Months</option>
-    </select>
-</div>
-<div>
-    <label for="displayType">Display Type:</label>
-    <select id="displayType" name="displayType">
-        <option value="barChart">Bar Chart</option>
-        <option value="stackedBarChart">Stacked Bar Chart</option>
-        <option value="dataTable">Data Table</option>
-        <option value="lineChart">Line Chart</option>
-        <option value="bubbleChart">Bubble Chart</option>
-        <option value="monthlyAggregatedChart">Monthly Aggregated Chart</option> <!-- New option -->
-    </select>
-</div>
-<div id="top-scores-results">
-</div>
-<div class="chart-container">
-  <canvas id="monthlyAggregatedChart"></canvas>
-</div>
+<!-- Socket.IO Client Library -->
+<script src="/socket.io/socket.io.js"></script>
+<!-- Custom Socket Client -->
+<script src="/notification-settings.js"></script>
+<script src="/socket-client.js"></script>
 <script src="/charts.js"></script>
+<!-- Theme Toggle -->
+<script nonce="lexicostatistics" src="/theme-toggle.js"></script>
+<script src="/init.js"></script>
 </body>
 </html>

@@ -59,3 +59,11 @@ resources/.arch-internal-preview.css
 
 # Info directory (development notes and guides)
 Info/
+DoNotCommit/
+
+# Claude documentation and notes
+claude notes:.md.markdown
+Claude Prompt to continue conversation:.md.markdown
+app/public/toast-test.html
+app/scripts/create-test-challenge.js
+.claude/settings.local.json

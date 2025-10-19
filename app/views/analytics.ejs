@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analytics Dashboard - GitHub PR Scoreboard</title>
+    <link rel="stylesheet" href="/modern-design-system.css">
+    <link rel="stylesheet" href="/styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+<a href="#main-content" class="skip-link">Skip to main content</a>
+<div class="container">
+    <div class="header-section">
+        <h1>📊 Analytics Dashboard</h1>
+        <div class="hamburger-menu">
+            <button class="hamburger-button" aria-label="Toggle navigation menu" aria-expanded="false">&#9776;</button>
+            <%- include('partials/nav') %>
+        </div>
+    </div>
+
+    <main id="main-content">
+
+        <!-- Time Period Selector -->
+        <div class="card" style="margin-bottom: 24px;">
+            <div class="flex gap-md" style="justify-content: center; align-items: center;">
+                <label for="timePeriod" style="font-weight: 600;">Time Period:</label>
+                <select id="timePeriod" class="btn btn-secondary" style="padding: 8px 16px;">
+                    <option value="7">Last 7 Days</option>
+                    <option value="30" selected>Last 30 Days</option>
+                    <option value="90">Last 90 Days</option>
+                    <option value="180">Last 6 Months</option>
+                </select>
+                <button id="refreshBtn" class="btn btn-primary">
+                    <span>🔄 Refresh Data</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Overview Stats -->
+        <div class="grid grid-4" style="margin-bottom: 24px;">
+            <div class="card">
+                <h3 style="margin-bottom: 12px; color: var(--color-primary);">Total PRs</h3>
+                <div id="totalPRs" class="stat-value">Loading...</div>
+                <div id="prGrowth" class="stat-growth"></div>
+            </div>
+            <div class="card">
+                <h3 style="margin-bottom: 12px; color: var(--color-secondary);">Total Reviews</h3>
+                <div id="totalReviews" class="stat-value">Loading...</div>
+                <div id="reviewGrowth" class="stat-growth"></div>
+            </div>
+            <div class="card">
+                <h3 style="margin-bottom: 12px; color: var(--color-success);">Total Points</h3>
+                <div id="totalPoints" class="stat-value">Loading...</div>
+                <div id="pointsGrowth" class="stat-growth"></div>
+            </div>
+            <div class="card">
+                <h3 style="margin-bottom: 12px; color: var(--color-warning);">Active Contributors</h3>
+                <div id="activeContributors" class="stat-value">Loading...</div>
+                <div id="contributorsGrowth" class="stat-growth"></div>
+            </div>
+        </div>
+
+        <!-- Growth Trends -->
+        <div class="grid grid-2" style="margin-bottom: 24px;">
+            <div class="card">
+                <h2 style="margin-bottom: 16px;">📈 Weekly Growth</h2>
+                <div id="weeklyGrowthContent">Loading...</div>
+            </div>
+            <div class="card">
+                <h2 style="margin-bottom: 16px;">📊 Monthly Growth</h2>
+                <div id="monthlyGrowthContent">Loading...</div>
+            </div>
+        </div>
+
+        <!-- Contribution Trends Chart -->
+        <div class="card" style="margin-bottom: 24px;">
+            <h2 style="margin-bottom: 16px;">Contribution Trends Over Time</h2>
+            <canvas id="trendsChart" style="max-height: 400px;"></canvas>
+        </div>
+
+        <!-- Top Contributors Comparison -->
+        <div class="card" style="margin-bottom: 24px;">
+            <h2 style="margin-bottom: 16px;">🏆 Top Contributors Comparison</h2>
+            <canvas id="topContributorsChart" style="max-height: 350px;"></canvas>
+        </div>
+
+        <!-- Challenge Statistics -->
+        <div class="card" style="margin-bottom: 24px;">
+            <h2 style="margin-bottom: 16px;">🎯 Challenge Statistics</h2>
+            <div class="grid grid-3" id="challengeStats">
+                Loading...
+            </div>
+        </div>
+
+        <!-- Activity Heatmap -->
+        <div class="card" style="margin-bottom: 24px;">
+            <h2 style="margin-bottom: 16px;">🔥 Activity Heatmap (Day × Hour)</h2>
+            <div id="heatmapContainer" style="overflow-x: auto;">
+                <canvas id="heatmapChart" style="max-height: 400px;"></canvas>
+            </div>
+        </div>
+
+        <!-- Export Section -->
+        <div class="card">
+            <h2 style="margin-bottom: 16px;">📥 Export Data</h2>
+            <div class="flex gap-md" style="justify-content: center;">
+                <button class="btn btn-secondary" onclick="exportData('contributors')">
+                    📊 Export Contributors CSV
+                </button>
+                <button class="btn btn-secondary" onclick="exportData('challenges')">
+                    🎯 Export Challenges CSV
+                </button>
+                <button class="btn btn-secondary" onclick="exportData('activity')">
+                    📈 Export Activity CSV
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Socket.IO Client Library -->
+    <script src="/socket.io/socket.io.js"></script>
+    <!-- Custom Socket Client -->
+    <script src="/notification-settings.js"></script>
+    <script src="/socket-client.js"></script>
+    <script src="/scripts.js"></script>
+    <!-- Theme Toggle -->
+    </main>
+</div>
+
+<script nonce="lexicostatistics" src="/theme-toggle.js"></script>
+<!-- Analytics Client -->
+<script nonce="lexicostatistics" src="/analytics-client.js"></script>
+<script src="/init.js"></script>
+</body>
+</html>
+
+<style>
+.stat-value {
+    font-size: 36px;
+    font-weight: bold;
+    margin-bottom: 8px;
+    color: var(--text-primary);
+}
+
+.stat-growth {
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.stat-growth.positive {
+    color: var(--color-success);
+}
+
+.stat-growth.negative {
+    color: var(--color-danger);
+}
+
+.stat-growth.neutral {
+    color: var(--text-secondary);
+}
+
+.growth-item {
+    padding: 12px;
+    border-radius: var(--radius-md);
+    background: var(--bg-secondary);
+    margin-bottom: 8px;
+}
+
+.growth-label {
+    font-size: 14px;
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+}
+
+.growth-value {
+    font-size: 24px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.challenge-stat-item {
+    text-align: center;
+    padding: 16px;
+}
+
+.challenge-stat-value {
+    font-size: 28px;
+    font-weight: bold;
+    color: var(--color-primary);
+    margin-bottom: 4px;
+}
+
+.challenge-stat-label {
+    font-size: 14px;
+    color: var(--text-secondary);
+}
+</style>

@@ -14,7 +14,7 @@ export const login = [
     (req, res) => {
         const errors = validationResult(req);
         if (!errors.isEmpty()) {
-            return res.status(400).json({ errors: errors.array() });
+            return res.status(400).json({ message: 'Username and password are required' });
         }
 
         const { username, password } = req.body;
@@ -22,7 +22,7 @@ export const login = [
             const token = jwt.sign({ username }, JWT_SECRET, { expiresIn: '1h' });
             res.json({ token });
         } else {
-            res.status(401).json({ error: 'Invalid credentials' });
+            res.status(401).json({ message: 'Invalid credentials' });
         }
     }
 ];

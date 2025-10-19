@@ -14,9 +14,34 @@ import {
     topContributorsDateRange,
     awardBillsAndVonettesController,
     fetchActivityController,
-    getMonthlyAggregatedData
+    getMonthlyAggregatedData,
+    getAllAchievementsController,
+    getUserAchievementsController,
+    getAchievementProgressController,
+    getPointsLeaderboardController,
+    getPointsHistoryController,
+    getPointsSummaryController,
+    getStreakLeaderboardController,
+    getStreakStatsController,
+    getContributorController
 } from '../controllers/contributorController.js';
-import { getContributors, resetContributor, resetAllContributors } from '../controllers/adminController.js';
+import {
+    getContributors,
+    resetContributor,
+    resetAllContributors,
+    getPRRangeInfoController,
+    checkDuplicatesController,
+    fixDuplicatesController,
+    getQuarterInfoController,
+    getQuarterConfigController,
+    updateQuarterConfigController,
+    getAllTimeLeaderboardController,
+    getQuarterlyLeaderboardController,
+    getHallOfFameController,
+    startBackfillController,
+    stopBackfillController,
+    getBackfillStatusController
+} from '../controllers/adminController.js';
 import { authenticate } from '../middleware/authMiddleware.js';
 import { login } from '../controllers/authController.js';
 import { ensureAuthenticated } from '../middleware/ensureAuthenticated.js';
@@ -55,6 +80,31 @@ router.post('/admin/reset-contributor', authenticate, resetContributor);
 // Route to reset all contributors
 router.post('/admin/reset-all', authenticate, resetAllContributors);
 
+// PR Range Info and Data Statistics
+router.get('/admin/pr-range-info', ensureAuthenticated, getPRRangeInfoController);
+
+// Duplicate Detection & Fix
+router.get('/admin/duplicate-check', ensureAuthenticated, checkDuplicatesController);
+router.post('/admin/fix-duplicates', ensureAuthenticated, fixDuplicatesController);
+
+// Public Quarter Info (no auth required)
+router.get('/quarter-info', getQuarterInfoController);
+
+// Quarter Configuration (admin only)
+router.get('/admin/quarter-config', ensureAuthenticated, getQuarterConfigController);
+router.post('/admin/quarter-config', ensureAuthenticated, updateQuarterConfigController);
+
+// Historical Data Backfill (admin only)
+router.post('/admin/backfill/start', ensureAuthenticated, startBackfillController);
+router.post('/admin/backfill/stop', ensureAuthenticated, stopBackfillController);
+router.get('/admin/backfill/status', ensureAuthenticated, getBackfillStatusController);
+
+// Leaderboard Routes
+router.get('/leaderboard/all-time', getAllTimeLeaderboardController);
+router.get('/leaderboard/quarterly', getQuarterlyLeaderboardController);
+router.get('/leaderboard/quarterly/:quarter', getQuarterlyLeaderboardController);
+router.get('/leaderboard/hall-of-fame', getHallOfFameController);
+
 // Route to get the list of badge images
 router.get('/badges', (req, res) => {
     const imagesDir = path.join(__dirname, '../public/images/badges');
@@ -87,5 +137,23 @@ router.get('/activity', fetchActivityController);
 // Route to get monthly aggregated data
 router.get('/monthly-aggregated-data', getMonthlyAggregatedData);
 
+// Gamification Routes
+
+// Achievement routes
+router.get('/achievements', getAllAchievementsController);
+router.get('/:username/achievements', getUserAchievementsController);
+router.get('/:username/achievement-progress', getAchievementProgressController);
+
+// Points routes
+router.get('/leaderboard/points', getPointsLeaderboardController);
+router.get('/:username/points-history', getPointsHistoryController);
+router.get('/:username/points-summary', getPointsSummaryController);
+
+// Streak routes
+router.get('/leaderboard/streaks', getStreakLeaderboardController);
+router.get('/:username/streak', getStreakStatsController);
+
+// Get single contributor by username
+router.get('/contributors/:username', getContributorController);
 
 export default router;

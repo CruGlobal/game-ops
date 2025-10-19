@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Challenges - GitHub PR Scoreboard</title>
+    <link rel="stylesheet" href="/modern-design-system.css">
+    <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<a href="#main-content" class="skip-link">Skip to main content</a>
+<div class="container">
+    <div class="header-section">
+        <div class="page-header-with-nav">
+            <button class="back-button" id="backButton">
+                ← Back to Leaderboard
+            </button>
+            <div class="hamburger-menu">
+                <button class="hamburger-button" aria-label="Toggle navigation menu" aria-expanded="false">&#9776;</button>
+                <%- include('partials/nav') %>
+            </div>
+        </div>
+        <h1>🎯 Weekly Challenges</h1>
+        <p class="page-description">Compete in weekly challenges to earn extra points and exclusive rewards!</p>
+    </div>
+
+    <main id="main-content">
+        <!-- Active Challenges Section -->
+        <section id="active-challenges" class="challenges-section">
+            <h2>Active Challenges</h2>
+            <p class="section-hint">Join challenges to track your progress and compete with others!</p>
+            <div id="challenges-grid" class="challenges-grid">
+                <div class="loading-message">Loading challenges...</div>
+            </div>
+        </section>
+
+        <!-- My Challenges Section -->
+        <section id="my-challenges" class="challenges-section" style="display: none;">
+            <h2>My Active Challenges</h2>
+            <div id="my-challenges-list">
+                <!-- Populated via JavaScript -->
+            </div>
+        </section>
+
+        <!-- Completed Challenges Section -->
+        <section id="completed-challenges" class="challenges-section">
+            <h2>Recently Completed</h2>
+            <div id="completed-challenges-list">
+                <p class="empty-message">No completed challenges yet. Check back after challenges end!</p>
+            </div>
+        </section>
+    </main>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="/notification-settings.js"></script>
+<script nonce="lexicostatistics" src="/socket-client.js"></script>
+<script nonce="lexicostatistics" src="/challenges-client.js"></script>
+<!-- Theme Toggle -->
+<script nonce="lexicostatistics" src="/theme-toggle.js"></script>
+<script src="/init.js"></script>
+</body>
+</html>

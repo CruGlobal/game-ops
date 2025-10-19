@@ -3,28 +3,70 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="activity_style.css">
-    <title>GitHub Activity</title>
+    <title>Activity - GitHub PR Scoreboard</title>
+    <link rel="stylesheet" href="/modern-design-system.css">
+    <link rel="stylesheet" href="/styles.css">
+    <link rel="stylesheet" href="/activity_style.css">
 </head>
 <body>
-    <h1>GitHub Activity</h1>
-    <div class="hamburger-menu">
-        <button class="hamburger-button">&#9776;</button>
-        <%- include('partials/nav') %>
+<a href="#main-content" class="skip-link">Skip to main content</a>
+<div class="container">
+    <div class="header-section">
+        <h1>📈 GitHub Activity</h1>
+        <div class="hamburger-menu">
+            <button class="hamburger-button" aria-label="Toggle navigation menu" aria-expanded="false">&#9776;</button>
+            <%- include('partials/nav') %>
+        </div>
     </div>
-    <div>
-        <label for="pr_from">PR From:</label>
-        <input type="number" id="pr_from" name="pr_from">
-        <label for="pr_to">PR To:</label>
-        <input type="number" id="pr_to" name="pr_to">
-        <button id="fetchButton">Fetch Activity</button>
-    </div>
-    <div id="progress-container">
-        <div id="progress-bar"></div>
-    </div>
-    <div id="activity-results">
-        <!-- Results will be displayed here -->
-    </div>
+
+    <main id="main-content">
+        <div class="page-description">
+            <p>Fetch and analyze GitHub Pull Request activity for a specific PR number range.</p>
+        </div>
+
+        <div class="card">
+            <h2>PR Range Selection</h2>
+            <form id="activity-form" class="form-horizontal">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="pr_from">From PR #</label>
+                        <input type="number" id="pr_from" name="pr_from"
+                               placeholder="Start PR number"
+                               class="form-control"
+                               min="1">
+                    </div>
+                    <div class="form-group">
+                        <label for="pr_to">To PR #</label>
+                        <input type="number" id="pr_to" name="pr_to"
+                               placeholder="End PR number"
+                               class="form-control"
+                               min="1">
+                    </div>
+                </div>
+                <button type="submit" id="fetchButton" class="btn btn-primary">
+                    <span>🔍 Fetch Activity</span>
+                </button>
+            </form>
+        </div>
+
+        <div id="progress-container" class="progress-container" style="display: none;">
+            <div class="progress-bar-wrapper">
+                <div id="progress-bar" class="progress-bar"></div>
+            </div>
+            <p id="progress-text" class="progress-text">Loading...</p>
+        </div>
+
+        <div id="activity-results" class="results-container">
+            <!-- Results will be displayed here -->
+        </div>
+    </main>
+</div>
+    <!-- Socket.IO Client Library -->
+    <script src="/socket.io/socket.io.js"></script>
+    <!-- Custom Socket Client -->
+    <script src="/notification-settings.js"></script>
+    <script src="/socket-client.js"></script>
     <script src="/activity_script.js"></script>
+    <script src="/init.js"></script>
 </body>
 </html>

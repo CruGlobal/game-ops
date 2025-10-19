@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Leaderboard - GitHub PR Scoreboard</title>
+    <link rel="stylesheet" href="/modern-design-system.css">
+    <link rel="stylesheet" href="/styles.css">
+    <link rel="stylesheet" href="/leaderboard.css">
+    <link rel="stylesheet" href="/animations.css">
+</head>
+<body>
+<a href="#main-content" class="skip-link">Skip to main content</a>
+<div class="container">
+    <div class="header-section">
+        <h1>🏆 Leaderboard</h1>
+        <div class="hamburger-menu">
+            <button class="hamburger-button" aria-label="Toggle navigation menu" aria-expanded="false">&#9776;</button>
+            <%- include('partials/nav') %>
+        </div>
+    </div>
+
+    <!-- Search and Filter Bar -->
+    <div class="controls-section" role="search" aria-label="Leaderboard controls">
+        <div class="search-bar">
+            <input
+                type="text"
+                id="search-input"
+                placeholder="🔍 Search contributors..."
+                aria-label="Search contributors by username"
+            />
+        </div>
+        <div class="filter-dropdown">
+            <label for="sort-select">Sort by:</label>
+            <select id="sort-select" aria-label="Sort leaderboard by criteria">
+                <option value="prCount">Pull Requests</option>
+                <option value="reviewCount">Reviews</option>
+                <option value="totalPoints">Total Points</option>
+                <option value="currentStreak">Current Streak</option>
+                <option value="longestStreak">Longest Streak</option>
+            </select>
+        </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs" role="tablist" aria-label="Leaderboard categories">
+        <button class="tab-button active" data-tab="all-time" role="tab" aria-selected="true" aria-controls="all-time" id="tab-all-time">🌟 All-Time</button>
+        <button class="tab-button" data-tab="quarterly" role="tab" aria-selected="false" aria-controls="quarterly" id="tab-quarterly">📅 This Quarter</button>
+        <button class="tab-button" data-tab="hall-of-fame" role="tab" aria-selected="false" aria-controls="hall-of-fame" id="tab-hall-of-fame">🏆 Hall of Fame</button>
+        <button class="tab-button" data-tab="contributors" role="tab" aria-selected="false" aria-controls="contributors" id="tab-contributors">👨‍💻 Top Contributors</button>
+        <button class="tab-button" data-tab="reviewers" role="tab" aria-selected="false" aria-controls="reviewers" id="tab-reviewers">👀 Top Reviewers</button>
+        <button class="tab-button" data-tab="points" role="tab" aria-selected="false" aria-controls="points" id="tab-points">⭐ Top Points</button>
+        <button class="tab-button" data-tab="streaks" role="tab" aria-selected="false" aria-controls="streaks" id="tab-streaks">🔥 Top Streaks</button>
+    </div>
+
+    <!-- All-Time Leaderboard Tab -->
+    <main id="main-content">
+        <div class="tab-content active" id="all-time" role="tabpanel" aria-labelledby="tab-all-time">
+            <div class="quarter-info" id="all-time-info">
+                <p class="quarter-description">All-time top contributors based on total points earned</p>
+            </div>
+            <div class="leaderboard-grid" id="all-time-grid" aria-live="polite" aria-atomic="false"></div>
+        </div>
+
+        <!-- Quarterly Leaderboard Tab -->
+        <div class="tab-content" id="quarterly" role="tabpanel" aria-labelledby="tab-quarterly" hidden>
+            <div class="quarter-info" id="quarterly-info">
+                <h3 id="current-quarter-title">Loading...</h3>
+                <p id="current-quarter-dates" class="quarter-description">Loading quarter information...</p>
+            </div>
+            <div class="leaderboard-grid" id="quarterly-grid" aria-live="polite" aria-atomic="false"></div>
+        </div>
+
+        <!-- Hall of Fame Tab -->
+        <div class="tab-content" id="hall-of-fame" role="tabpanel" aria-labelledby="tab-hall-of-fame" hidden>
+            <div class="quarter-info">
+                <p class="quarter-description">Past quarterly champions and top performers</p>
+            </div>
+            <div class="hall-of-fame-container" id="hall-of-fame-container" aria-live="polite" aria-atomic="false"></div>
+        </div>
+
+        <!-- Top Contributors Tab -->
+        <div class="tab-content" id="contributors" role="tabpanel" aria-labelledby="tab-contributors" hidden>
+            <div class="leaderboard-grid" id="contributors-grid" aria-live="polite" aria-atomic="false"></div>
+        </div>
+
+        <!-- Top Reviewers Tab -->
+        <div class="tab-content" id="reviewers" role="tabpanel" aria-labelledby="tab-reviewers" hidden>
+            <div class="leaderboard-grid" id="reviewers-grid" aria-live="polite" aria-atomic="false"></div>
+        </div>
+
+        <!-- Top Points Tab -->
+        <div class="tab-content" id="points" role="tabpanel" aria-labelledby="tab-points" hidden>
+            <div class="leaderboard-grid" id="points-grid" aria-live="polite" aria-atomic="false"></div>
+        </div>
+
+        <!-- Top Streaks Tab -->
+        <div class="tab-content" id="streaks" role="tabpanel" aria-labelledby="tab-streaks" hidden>
+            <div class="leaderboard-grid" id="streaks-grid" aria-live="polite" aria-atomic="false"></div>
+        </div>
+    </main>
+</div>
+
+<!-- Socket.IO Client Library -->
+<script src="/socket.io/socket.io.js"></script>
+<!-- Custom Scripts -->
+<script src="/notification-settings.js"></script>
+<script src="/confetti.js"></script>
+<script nonce="lexicostatistics" src="/socket-client.js"></script>
+<script nonce="lexicostatistics" src="/leaderboard-client.js"></script>
+<script nonce="lexicostatistics" src="/theme-toggle.js"></script>
+<script src="/init.js"></script>
+</body>
+</html>

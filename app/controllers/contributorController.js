@@ -1,5 +1,8 @@
-import { awardBillsAndVonettes, fetchActivityData, fetchPullRequests, awardBadges, getTopContributors, getTopReviewers, getTopContributorsDateRange, getTopReviewersDateRange, initializeDatabase } from '../services/contributorService.js';
+import { awardBillsAndVonettes, fetchActivityData, fetchPullRequests, awardBadges, getTopContributors, getTopReviewers, getTopContributorsDateRange, getTopReviewersDateRange, initializeDatabase, getContributorByUsername } from '../services/contributorService.js';
 import Contributor from '../models/contributor.js';
+import { getStreakStats, getStreakLeaderboard } from '../services/streakService.js';
+import { getPointsLeaderboard, getPointsHistory, getPointsSummary } from '../services/pointsService.js';
+import { getAchievementProgress, getAllAchievements, getEarnedAchievements } from '../services/achievementService.js';
 
 // Controller to initialize the database
 export const initializeDatabaseController = async (req, res) => {
@@ -24,10 +27,12 @@ export const fetchPRs = async (req, res) => {
 // Function to fetch pull requests for the cron job
 export const fetchPRsCron = async () => {
     try {
-        await fetchPullRequests(); // Fetch pull requests and update data
+        const result = await fetchPullRequests(); // Fetch pull requests and update data
         console.log('Pull requests fetched and data updated.');
+        return result || 'Completed';
     } catch (err) {
         console.error('Error fetching pull requests:', err); // Handle errors
+        throw err;
     }
 };
 
@@ -36,8 +41,10 @@ export const awardContributorBadgesCron = async (pullRequestNumber) => {
     try {
         const results = await awardBadges(pullRequestNumber); // Award badges
         console.log({ message: 'Badges awarded successfully.', results });
+        return results;
     } catch (err) {
         console.error({ message: 'Error awarding badges.' }); // Handle errors
+        throw err;
     }
 };
 
@@ -166,6 +173,112 @@ export const getMonthlyAggregatedData = async (req, res) => {
         ]);
 
         res.json(data);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+};
+
+// Gamification Controllers
+
+// Get all achievements catalog
+export const getAllAchievementsController = async (req, res) => {
+    try {
+        const achievements = getAllAchievements();
+        res.json({ achievements });
+    } catch (err) {
+        res.status(500).json({ error: 'Error fetching achievements' });
+    }
+};
+
+// Get user's earned achievements
+export const getUserAchievementsController = async (req, res) => {
+    try {
+        const { username } = req.params;
+        const result = await getEarnedAchievements(username);
+        res.json(result);
+    } catch (err) {
+        res.status(404).json({ error: err.message });
+    }
+};
+
+// Get achievement progress for a user
+export const getAchievementProgressController = async (req, res) => {
+    try {
+        const { username } = req.params;
+        const progress = await getAchievementProgress(username);
+        res.json(progress);
+    } catch (err) {
+        res.status(404).json({ error: err.message });
+    }
+};
+
+// Get points leaderboard
+export const getPointsLeaderboardController = async (req, res) => {
+    try {
+        const limit = parseInt(req.query.limit) || 10;
+        const leaderboard = await getPointsLeaderboard(limit);
+        res.json({ leaderboard });
+    } catch (err) {
+        res.status(500).json({ error: 'Error fetching points leaderboard' });
+    }
+};
+
+// Get user's points history
+export const getPointsHistoryController = async (req, res) => {
+    try {
+        const { username } = req.params;
+        const limit = parseInt(req.query.limit) || 50;
+        const history = await getPointsHistory(username, limit);
+        res.json(history);
+    } catch (err) {
+        res.status(404).json({ error: err.message });
+    }
+};
+
+// Get user's points summary
+export const getPointsSummaryController = async (req, res) => {
+    try {
+        const { username } = req.params;
+        const summary = await getPointsSummary(username);
+        res.json(summary);
+    } catch (err) {
+        res.status(404).json({ error: err.message });
+    }
+};
+
+// Get streak leaderboard
+export const getStreakLeaderboardController = async (req, res) => {
+    try {
+        const limit = parseInt(req.query.limit) || 10;
+        const leaderboard = await getStreakLeaderboard(limit);
+        res.json({ leaderboard });
+    } catch (err) {
+        res.status(500).json({ error: 'Error fetching streak leaderboard' });
+    }
+};
+
+// Get user's streak stats
+export const getStreakStatsController = async (req, res) => {
+    try {
+        const { username } = req.params;
+        const stats = await getStreakStats(username);
+        res.json(stats);
+    } catch (err) {
+        res.status(404).json({ error: err.message });
+    }
+};
+
+// Get a single contributor by username
+export const getContributorController = async (req, res) => {
+    try {
+        const { username } = req.params;
+        const contributor = await getContributorByUsername(username);
+
+        if (!contributor) {
+            return res.status(404).json({ error: 'Contributor not found' });
+        }
+
+        res.json(contributor);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

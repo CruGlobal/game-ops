@@ -7,15 +7,25 @@ import cors from 'cors';
 import cron from 'node-cron';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { createServer } from 'http';
+import { Server } from 'socket.io';
 import contributorRoutes from './routes/contributorRoutes.js';
 import healthRoutes from './routes/healthRoutes.js';
-import { awardBillsAndVonettesController, fetchPRs, fetchPRsCron, awardContributorBadges, awardContributorBadgesCron } from './controllers/contributorController.js';
+import challengeRoutes from './routes/challengeRoutes.js';
+import analyticsRoutes from './routes/analyticsRoutes.js';
+import { fetchPRsCron, awardContributorBadgesCron } from './controllers/contributorController.js';
+import { awardBillsAndVonettes } from './services/contributorService.js';
+import { generateWeeklyChallenges, checkExpiredChallenges } from './services/challengeService.js';
+import { checkAndResetIfNewQuarter } from './services/quarterlyService.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import logger from './utils/logger.js';
 import session from 'express-session';
 import passport from './config/passport.js';
 import jwt from 'jsonwebtoken';
 import { ensureAuthenticated } from './middleware/ensureAuthenticated.js';
+import { socketConfig, SOCKET_EVENTS } from './config/websocket-config.js';
+import { setSocketIO } from './utils/socketEmitter.js';
+import testRoutes from './routes/testRoutes.js';
 
 
 dotenv.config();
@@ -34,8 +44,9 @@ app.use(helmet({
     contentSecurityPolicy: {
         directives: {
             defaultSrc: ["'self'"],
-            scriptSrc: ["'self'", "https://cdn.jsdelivr.net", "'nonce-lexicostatistics'"],
-            imgSrc: ["'self'", "data:", "https://github.com", "https://avatars.githubusercontent.com"]
+            scriptSrc: ["'self'", "https://cdn.jsdelivr.net", "https://cdn.socket.io", "'nonce-lexicostatistics'"],
+            imgSrc: ["'self'", "data:", "https://github.com", "https://avatars.githubusercontent.com"],
+            connectSrc: ["'self'", "https://cdn.jsdelivr.net", "ws://localhost:3000", "wss://localhost:3000"]
         }
     }
 }));
@@ -53,9 +64,13 @@ app.use((req, res, next) => {
     next();
 });
 
+// Rate limiting - environment-aware configuration
 const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000,
-    max: 500,
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: process.env.NODE_ENV === 'production' ? 500 : 10000, // 10k for dev, 500 for prod
+    message: 'Too many requests from this IP, please try again later.',
+    standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+    legacyHeaders: false, // Disable the `X-RateLimit-*` headers
 });
 app.use(limiter);
 
@@ -68,28 +83,90 @@ app.use(session({
 app.use(passport.initialize());
 app.use(passport.session());
 
+// Create HTTP server and initialize Socket.IO
+const httpServer = createServer(app);
+const io = new Server(httpServer, socketConfig);
+
+// Set Socket.IO instance for use in other modules
+setSocketIO(io);
+
+// Socket.IO connection handling
+io.on(SOCKET_EVENTS.CONNECTION, (socket) => {
+    logger.info('Client connected', { socketId: socket.id });
+
+    socket.on(SOCKET_EVENTS.SUBSCRIBE_UPDATES, () => {
+        socket.join('scoreboard-updates');
+        logger.info('Client subscribed to updates', { socketId: socket.id });
+    });
+
+    socket.on(SOCKET_EVENTS.UNSUBSCRIBE_UPDATES, () => {
+        socket.leave('scoreboard-updates');
+        logger.info('Client unsubscribed from updates', { socketId: socket.id });
+    });
+
+    socket.on(SOCKET_EVENTS.DISCONNECT, () => {
+        logger.info('Client disconnected', { socketId: socket.id });
+    });
+});
+
 // Set the view engine to EJS
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
-// Root route to render the index.ejs template
+// Root route - redirect to leaderboard
 app.get('/', (req, res) => {
-    res.render('index');
+    res.redirect('/leaderboard');
 });
 
-// Route to render the activity.ejs template
+// Route to render the leaderboard.ejs template (new home page)
+app.get('/leaderboard', (req, res) => {
+    res.render('leaderboard');
+});
+
+// Route to render the challenges.ejs template
+app.get('/challenges', (req, res) => {
+    res.render('challenges');
+});
+
+// Route to render individual profile pages
+app.get('/profile/:username', async (req, res) => {
+    try {
+        const { username } = req.params;
+
+        // Import contributorService
+        const { getContributorByUsername } = await import('./services/contributorService.js');
+        const contributor = await getContributorByUsername(username);
+
+        if (!contributor) {
+            return res.status(404).render('error', {
+                errorCode: 404,
+                errorMessage: 'Contributor Not Found',
+                errorDescription: `The contributor "${username}" could not be found in our database.`
+            });
+        }
+
+        res.render('profile', { contributor });
+    } catch (error) {
+        logger.error('Error loading profile page', { error: error.message, username: req.params.username });
+        res.status(500).render('error', {
+            errorCode: 500,
+            errorMessage: 'Server Error',
+            errorDescription: 'An error occurred while loading the profile page. Please try again later.'
+        });
+    }
+});
+
+// Admin routes
 app.get('/activity', (req, res) => {
     res.render('activity');
 });
 
-// Route to render the charts.ejs template
 app.get('/charts', (req, res) => {
     res.render('charts');
 });
 
-// Route to render the top-cat.ejs template
-app.get('/top-cat', (req, res) => {
-    res.render('top-cat');
+app.get('/analytics', (req, res) => {
+    res.render('analytics');
 });
 
 // Routes for GitHub authentication
@@ -107,7 +184,11 @@ app.get('/auth/github/callback',
     }
 );
 
-// Protect the admin route
+// Protect admin routes - more specific routes first
+app.get('/admin/okr-challenges', ensureAuthenticated, (req, res) => {
+    res.render('okr-challenges', { user: req.user });
+});
+
 app.get('/admin', ensureAuthenticated, (req, res) => {
     res.render('admin', { user: req.user });
 });
@@ -115,13 +196,21 @@ app.get('/admin', ensureAuthenticated, (req, res) => {
 app.use(express.static('public'));
 app.use('/api', contributorRoutes);
 app.use('/api', healthRoutes);
+app.use('/api/challenges', challengeRoutes);
+app.use('/api/analytics', analyticsRoutes);
+
+// Test routes (development only)
+if (process.env.NODE_ENV !== 'production') {
+    app.use('/api', testRoutes);
+    logger.info('Test routes enabled for WebSocket testing');
+}
 
 //Schedule tasks to be run on the server
 cron.schedule('0 * * * *', async () => {
     logger.info('Running hourly task to fetch PRs and reviews');
     try {
-        //await fetchPRsCron();
-        logger.info('Data fetched successfully');
+        const result = await fetchPRsCron();
+        logger.info('Data fetched successfully', { result });
     } catch (error) {
         logger.error('Error fetching data', { error: error.message });
     }
@@ -130,8 +219,8 @@ cron.schedule('0 * * * *', async () => {
 cron.schedule('0 * * * *', async () => {
     logger.info('Running hourly task to award badges');
     try {
-        //await awardContributorBadgesCron();
-        logger.info('Badges awarded successfully');
+        const result = await awardContributorBadgesCron();
+        logger.info('Badges awarded successfully', { badgesCount: result?.length || 0 });
     } catch (error) {
         logger.error('Error awarding badges', { error: error.message });
     }
@@ -140,10 +229,53 @@ cron.schedule('0 * * * *', async () => {
 cron.schedule('0 0 * * *', async () => {
     logger.info('Running daily task to award Bills and Vonettes');
     try {
-        //await awardBillsAndVonettes();
-        logger.info('Bills and Vonettes awarded successfully');
+        const results = await awardBillsAndVonettes();
+        logger.info('Bills and Vonettes awarded successfully', { billsCount: results?.length || 0, results });
     } catch (error) {
         logger.error('Error awarding Bills and Vonettes', { error: error.message });
+    }
+});
+
+// Gamification Cron Jobs
+
+// Generate new challenges every Monday at midnight
+cron.schedule('0 0 * * 1', async () => {
+    logger.info('Running weekly task to generate challenges');
+    try {
+        const challenges = await generateWeeklyChallenges();
+        logger.info('Weekly challenges generated', { count: challenges.length });
+    } catch (error) {
+        logger.error('Error generating weekly challenges', { error: error.message });
+    }
+});
+
+// Check expired challenges daily at midnight
+cron.schedule('0 0 * * *', async () => {
+    logger.info('Running daily task to check expired challenges');
+    try {
+        const count = await checkExpiredChallenges();
+        logger.info('Expired challenges checked', { updatedCount: count });
+    } catch (error) {
+        logger.error('Error checking expired challenges', { error: error.message });
+    }
+});
+
+// Check and reset quarterly stats daily at midnight
+cron.schedule('0 0 * * *', async () => {
+    logger.info('Running daily task to check quarterly reset');
+    try {
+        const result = await checkAndResetIfNewQuarter();
+        if (result.quarterChanged) {
+            logger.info('Quarterly stats reset completed', {
+                oldQuarter: result.oldQuarter,
+                newQuarter: result.newQuarter,
+                winnersArchived: result.winnersArchived
+            });
+        } else {
+            logger.info('No quarterly reset needed');
+        }
+    } catch (error) {
+        logger.error('Error checking quarterly reset', { error: error.message });
     }
 });
 
@@ -158,10 +290,11 @@ process.on('SIGINT', () => {
     process.exit(0);
 });
 
-app.listen(port, () => {
-    logger.info('GitHub PR Scoreboard app started', { 
+httpServer.listen(port, () => {
+    logger.info('GitHub PR Scoreboard app started', {
         port,
         environment: process.env.NODE_ENV || 'development',
-        url: `http://localhost:${port}`
+        url: `http://localhost:${port}`,
+        websocket: 'enabled'
     });
 });

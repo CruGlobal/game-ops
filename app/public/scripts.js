@@ -43,6 +43,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const createContributorListItem = (contributor) => {
         const listItem = document.createElement('li');
         listItem.className = 'list-item';
+        listItem.setAttribute('data-username', contributor.username);
         listItem.innerHTML = `
             <div class="profile-column">
                 <div class="profile">
@@ -50,7 +51,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     <span>${contributor.username}</span>
                 </div>
             </div>
-            <div class="pr-count-column">${contributor.prCount || 0}</div>
+            <div class="pr-count-column pr-count">${contributor.prCount || 0}</div>
             <div class="total-bills-column">${contributor.totalBillsAwarded || 0}</div>
             <div class="badges-column">${(contributor.badges || []).map(badge => /pr|prs/i.test(badge.badge) ? `<img src="/images/badges/${badge.badge.replace(/ /g, '_').toLowerCase()}.png" alt="${badge.badge}" class="badge">` : '').join('')}</div>
         `;
@@ -60,6 +61,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const createReviewerListItem = (reviewer) => {
         const listItem = document.createElement('li');
         listItem.className = 'list-item';
+        listItem.setAttribute('data-username', reviewer.username);
         listItem.innerHTML = `
             <div class="profile-column">
                 <div class="profile">
@@ -67,29 +69,35 @@ document.addEventListener('DOMContentLoaded', async () => {
                     <span>${reviewer.username}</span>
                 </div>
             </div>
-            <div class="review-count-column">${reviewer.reviewCount || 0}</div>
+            <div class="review-count-column review-count">${reviewer.reviewCount || 0}</div>
             <div class="total-bills-column">${reviewer.totalBillsAwarded || 0}</div>
             <div class="badges-column">${(reviewer.badges || []).map(badge => /review|reviews/i.test(badge.badge) ? `<img src="/images/badges/${badge.badge.replace(/ /g, '_').toLowerCase()}.png" alt="${badge.badge}" class="badge">` : '').join('')}</div>
         `;
         return listItem;
     };
 
-    try {
-        const [topContributors, topReviewers] = await Promise.all([
-            fetchData('/api/top-contributors'),
-            fetchData('/api/top-reviewers')
-        ]);
+    // Only fetch and populate if the elements exist on this page
+    if (topContributorsList && topReviewersList) {
+        try {
+            const [topContributors, topReviewers] = await Promise.all([
+                fetchData('/api/top-contributors'),
+                fetchData('/api/top-reviewers')
+            ]);
 
-        topContributors.forEach(contributor => {
-            topContributorsList.appendChild(createContributorListItem(contributor));
-        });
+            topContributors.forEach(contributor => {
+                topContributorsList.appendChild(createContributorListItem(contributor));
+            });
 
-        topReviewers.forEach(reviewer => {
-            topReviewersList.appendChild(createReviewerListItem(reviewer));
-        });
-        // Explicitly set the 'active' class on the contributors tab content
-        contributorsTabContent.classList.add('active');
-    } catch (error) {
-        console.error('Error fetching contributors or reviewers:', error);
+            topReviewers.forEach(reviewer => {
+                topReviewersList.appendChild(createReviewerListItem(reviewer));
+            });
+
+            // Explicitly set the 'active' class on the contributors tab content
+            if (contributorsTabContent) {
+                contributorsTabContent.classList.add('active');
+            }
+        } catch (error) {
+            console.error('Error fetching contributors or reviewers:', error);
+        }
     }
 });
