@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterAll } from '@jest/globals';
+import { describe, it, expect, beforeEach } from '@jest/globals';
 import request from 'supertest';
 import express from 'express';
 import mongoose from 'mongoose';
@@ -13,7 +13,7 @@ import contributorRoutes from '../../routes/contributorRoutes.js';
 // Create test app
 const app = express();
 app.use(express.json());
-app.use('/', contributorRoutes);
+app.use('/api', contributorRoutes);
 
 describe('Quarterly API Endpoints', () => {
     beforeEach(async () => {
@@ -27,10 +27,6 @@ describe('Quarterly API Endpoints', () => {
             systemType: 'calendar',
             q1StartMonth: 1
         });
-    });
-
-    afterAll(async () => {
-        await mongoose.connection.close();
     });
 
     describe('GET /api/leaderboard/all-time', () => {

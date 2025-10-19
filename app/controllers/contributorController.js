@@ -3,6 +3,7 @@ import Contributor from '../models/contributor.js';
 import { getStreakStats, getStreakLeaderboard } from '../services/streakService.js';
 import { getPointsLeaderboard, getPointsHistory, getPointsSummary } from '../services/pointsService.js';
 import { getAchievementProgress, getAllAchievements, getEarnedAchievements } from '../services/achievementService.js';
+import { getAllTimeLeaderboard, getQuarterlyLeaderboard, getHallOfFame, getQuarterConfig, updateQuarterConfig } from '../services/quarterlyService.js';
 
 // Controller to initialize the database
 export const initializeDatabaseController = async (req, res) => {
@@ -281,5 +282,72 @@ export const getContributorController = async (req, res) => {
         res.json(contributor);
     } catch (err) {
         res.status(500).json({ error: err.message });
+    }
+};
+
+// Get all-time leaderboard
+export const getAllTimeLeaderboardController = async (req, res) => {
+    try {
+        const limit = parseInt(req.query.limit) || 50;
+        const leaderboard = await getAllTimeLeaderboard(limit);
+        res.json({ success: true, data: leaderboard });
+    } catch (err) {
+        res.status(500).json({ success: false, message: 'Error fetching all-time leaderboard', error: err.message });
+    }
+};
+
+// Get quarterly leaderboard
+export const getQuarterlyLeaderboardController = async (req, res) => {
+    try {
+        const { quarter } = req.params;
+        const limit = parseInt(req.query.limit) || 50;
+        const leaderboard = await getQuarterlyLeaderboard(quarter, limit);
+        res.json({ success: true, data: leaderboard });
+    } catch (err) {
+        res.status(500).json({ success: false, message: 'Error fetching quarterly leaderboard', error: err.message });
+    }
+};
+
+// Get Hall of Fame
+export const getHallOfFameController = async (req, res) => {
+    try {
+        const limit = parseInt(req.query.limit) || 20;
+        const hallOfFame = await getHallOfFame(limit);
+        res.json({ success: true, data: hallOfFame });
+    } catch (err) {
+        res.status(500).json({ success: false, message: 'Error fetching Hall of Fame', error: err.message });
+    }
+};
+
+// Get quarter configuration
+export const getQuarterConfigController = async (req, res) => {
+    try {
+        const config = await getQuarterConfig();
+        res.json({ success: true, config });
+    } catch (err) {
+        res.status(500).json({ success: false, message: 'Error fetching quarter config', error: err.message });
+    }
+};
+
+// Update quarter configuration
+export const updateQuarterConfigController = async (req, res) => {
+    try {
+        const { systemType, q1StartMonth } = req.body;
+        const modifiedBy = req.user?.username || 'admin';
+
+        // Validate inputs
+        const validSystems = ['calendar', 'fiscal-us', 'academic', 'custom'];
+        if (!validSystems.includes(systemType)) {
+            return res.status(400).json({ success: false, message: 'Invalid system type' });
+        }
+
+        if (q1StartMonth < 1 || q1StartMonth > 12) {
+            return res.status(400).json({ success: false, message: 'q1StartMonth must be between 1 and 12' });
+        }
+
+        const config = await updateQuarterConfig(systemType, q1StartMonth, modifiedBy);
+        res.json({ success: true, config });
+    } catch (err) {
+        res.status(500).json({ success: false, message: 'Error updating quarter config', error: err.message });
     }
 };
