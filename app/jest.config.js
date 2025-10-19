@@ -11,8 +11,15 @@ export default {
   
   // Test file patterns
   testMatch: [
-    '**/__tests__/**/*.js',
+    '**/__tests__/**/*.test.js',
+    '**/__tests__/**/*.spec.js',
     '**/?(*.)+(spec|test).js'
+  ],
+
+  // Exclude setup files from test runs
+  testPathIgnorePatterns: [
+    '/node_modules/',
+    '/__tests__/setup.js'
   ],
   
   // Coverage configuration
