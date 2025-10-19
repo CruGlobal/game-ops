@@ -159,25 +159,28 @@ describe('QuarterlyService', () => {
                 q1StartMonth: 1
             });
 
+            // Get current quarter to ensure data matches
+            const currentQ = await getCurrentQuarter();
+
             await Contributor.create([
                 createTestContributor({
                     username: 'user1',
                     quarterlyStats: {
-                        currentQuarter: '2025-Q1',
+                        currentQuarter: currentQ,
                         pointsThisQuarter: 500
                     }
                 }),
                 createTestContributor({
                     username: 'user2',
                     quarterlyStats: {
-                        currentQuarter: '2025-Q1',
+                        currentQuarter: currentQ,
                         pointsThisQuarter: 300
                     }
                 }),
                 createTestContributor({
                     username: 'user3',
                     quarterlyStats: {
-                        currentQuarter: '2025-Q1',
+                        currentQuarter: currentQ,
                         pointsThisQuarter: 100
                     }
                 })
@@ -233,10 +236,12 @@ describe('QuarterlyService', () => {
         it('should respect limit parameter', async () => {
             const winners = [];
             for (let i = 0; i < 10; i++) {
+                const year = 2024 - Math.floor(i / 4);
+                const quarter = (i % 4) + 1;
                 winners.push({
-                    quarter: `2024-Q${i % 4 + 1}`,
-                    year: 2024,
-                    quarterNumber: i % 4 + 1,
+                    quarter: `${year}-Q${quarter}`,
+                    year: year,
+                    quarterNumber: quarter,
                     quarterStart: new Date(),
                     quarterEnd: new Date(),
                     winner: { username: `winner${i}`, pointsThisQuarter: 100 },
