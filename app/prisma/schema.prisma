@@ -1,0 +1,314 @@
+// This is your Prisma schema file
+// Learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// CONTRIBUTORS TABLE (Main)
+// ============================================
+model Contributor {
+  id       String   @id @default(cuid())
+  username String   @unique
+  
+  // Counts
+  prCount     Int      @default(0) @map("pr_count")
+  reviewCount Int      @default(0) @map("review_count")
+  avatarUrl   String?  @map("avatar_url")
+  lastUpdated DateTime @default(now()) @updatedAt @map("last_updated")
+  
+  // Badge flags (denormalized for performance)
+  firstPrAwarded          Boolean @default(false) @map("first_pr_awarded")
+  firstReviewAwarded      Boolean @default(false) @map("first_review_awarded")
+  first10PrsAwarded       Boolean @default(false) @map("first_10_prs_awarded")
+  first10ReviewsAwarded   Boolean @default(false) @map("first_10_reviews_awarded")
+  first50PrsAwarded       Boolean @default(false) @map("first_50_prs_awarded")
+  first50ReviewsAwarded   Boolean @default(false) @map("first_50_reviews_awarded")
+  first100PrsAwarded      Boolean @default(false) @map("first_100_prs_awarded")
+  first100ReviewsAwarded  Boolean @default(false) @map("first_100_reviews_awarded")
+  first500PrsAwarded      Boolean @default(false) @map("first_500_prs_awarded")
+  first500ReviewsAwarded  Boolean @default(false) @map("first_500_reviews_awarded")
+  first1000PrsAwarded     Boolean @default(false) @map("first_1000_prs_awarded")
+  first1000ReviewsAwarded Boolean @default(false) @map("first_1000_reviews_awarded")
+  
+  // Badges (flexible JSONB)
+  badges Json @default("[]") // Array of badge objects
+  
+  totalBillsAwarded Int @default(0) @map("total_bills_awarded")
+  
+  // Streak tracking
+  currentStreak        Int       @default(0) @map("current_streak")
+  lastContributionDate DateTime? @map("last_contribution_date")
+  longestStreak        Int       @default(0) @map("longest_streak")
+  
+  // Points system
+  totalPoints Int @default(0) @map("total_points")
+  
+  // Quarterly stats (embedded JSON)
+  quarterlyStats Json? @map("quarterly_stats") // { currentQuarter, quarterStartDate, ... }
+  
+  // Streak badges
+  sevenDayBadge   Boolean @default(false) @map("seven_day_badge")
+  thirtyDayBadge  Boolean @default(false) @map("thirty_day_badge")
+  ninetyDayBadge  Boolean @default(false) @map("ninety_day_badge")
+  yearLongBadge   Boolean @default(false) @map("year_long_badge")
+  
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  
+  // Relations
+  contributions        Contribution[]
+  reviews              Review[]
+  pointsHistory        PointHistory[]
+  achievements         Achievement[]
+  processedPRs         ProcessedPR[]
+  processedReviews     ProcessedReview[]
+  activeChallenges     ChallengeParticipant[]
+  completedChallenges  CompletedChallenge[]
+  
+  @@index([username])
+  @@index([totalPoints(sort: Desc)])
+  @@index([currentStreak(sort: Desc)])
+  @@map("contributors")
+}
+
+// ============================================
+// CONTRIBUTION TRACKING
+// ============================================
+model Contribution {
+  id            String      @id @default(cuid())
+  contributorId String      @map("contributor_id")
+  contributor   Contributor @relation(fields: [contributorId], references: [id], onDelete: Cascade)
+  
+  date   DateTime
+  count  Int      @default(0)
+  merged Boolean  @default(false)
+  
+  @@index([contributorId, date])
+  @@map("contributions")
+}
+
+model Review {
+  id            String      @id @default(cuid())
+  contributorId String      @map("contributor_id")
+  contributor   Contributor @relation(fields: [contributorId], references: [id], onDelete: Cascade)
+  
+  date  DateTime
+  count Int      @default(0)
+  
+  @@index([contributorId, date])
+  @@map("reviews")
+}
+
+// ============================================
+// POINTS & ACHIEVEMENTS
+// ============================================
+model PointHistory {
+  id            String      @id @default(cuid())
+  contributorId String      @map("contributor_id")
+  contributor   Contributor @relation(fields: [contributorId], references: [id], onDelete: Cascade)
+  
+  points    Int
+  reason    String
+  prNumber  Int?     @map("pr_number")
+  timestamp DateTime @default(now())
+  
+  @@index([contributorId, timestamp(sort: Desc)])
+  @@map("point_history")
+}
+
+model Achievement {
+  id            String      @id @default(cuid())
+  contributorId String      @map("contributor_id")
+  contributor   Contributor @relation(fields: [contributorId], references: [id], onDelete: Cascade)
+  
+  achievementId String   @map("achievement_id")
+  name          String
+  description   String
+  category      String
+  earnedAt      DateTime @default(now()) @map("earned_at")
+  
+  @@index([contributorId, earnedAt])
+  @@map("achievements")
+}
+
+// ============================================
+// PROCESSED TRACKING (Deduplication)
+// ============================================
+model ProcessedPR {
+  id            String      @id @default(cuid())
+  contributorId String      @map("contributor_id")
+  contributor   Contributor @relation(fields: [contributorId], references: [id], onDelete: Cascade)
+  
+  prNumber      Int      @map("pr_number")
+  prTitle       String?  @map("pr_title")
+  processedDate DateTime @default(now()) @map("processed_date")
+  action        String // 'authored' or 'reviewed'
+  
+  @@unique([contributorId, prNumber, action])
+  @@index([prNumber])
+  @@map("processed_prs")
+}
+
+model ProcessedReview {
+  id            String      @id @default(cuid())
+  contributorId String      @map("contributor_id")
+  contributor   Contributor @relation(fields: [contributorId], references: [id], onDelete: Cascade)
+  
+  prNumber      Int      @map("pr_number")
+  reviewId      Int?     @map("review_id")
+  processedDate DateTime @default(now()) @map("processed_date")
+  
+  @@unique([contributorId, prNumber, reviewId])
+  @@index([prNumber])
+  @@map("processed_reviews")
+}
+
+// ============================================
+// CHALLENGES
+// ============================================
+model Challenge {
+  id          String   @id @default(cuid())
+  title       String
+  description String
+  type        String // 'pr-merge', 'review', 'streak', 'points', 'team', 'okr-label'
+  target      Int
+  reward      Int
+  startDate   DateTime @map("start_date")
+  endDate     DateTime @map("end_date")
+  status      String   @default("upcoming") // 'upcoming', 'active', 'completed', 'expired'
+  difficulty  String   @default("medium") // 'easy', 'medium', 'hard'
+  category    String   @default("individual") // 'individual', 'community'
+  
+  // OKR fields (flexible JSON)
+  labelFilters Json? @map("label_filters") // Array of label strings
+  okrMetadata  Json? @map("okr_metadata") // { objective, keyResult, department, quarter }
+  
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  
+  participants ChallengeParticipant[]
+  
+  @@index([status, endDate])
+  @@map("challenges")
+}
+
+model ChallengeParticipant {
+  id          String   @id @default(cuid())
+  challengeId String   @map("challenge_id")
+  challenge   Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  
+  contributorId String      @map("contributor_id")
+  contributor   Contributor @relation(fields: [contributorId], references: [id], onDelete: Cascade)
+  
+  progress  Int      @default(0)
+  target    Int?
+  completed Boolean  @default(false)
+  joinedAt  DateTime @default(now()) @map("joined_at")
+  
+  @@unique([challengeId, contributorId])
+  @@index([challengeId, completed])
+  @@map("challenge_participants")
+}
+
+model CompletedChallenge {
+  id            String      @id @default(cuid())
+  contributorId String      @map("contributor_id")
+  contributor   Contributor @relation(fields: [contributorId], references: [id], onDelete: Cascade)
+  
+  challengeId String   @map("challenge_id")
+  completedAt DateTime @default(now()) @map("completed_at")
+  reward      Int
+  
+  @@index([contributorId, completedAt])
+  @@map("completed_challenges")
+}
+
+// ============================================
+// USERS (Authentication)
+// ============================================
+model User {
+  id        String   @id @default(cuid())
+  githubId  String   @unique @map("github_id")
+  username  String
+  createdAt DateTime @default(now()) @map("created_at")
+  
+  @@index([githubId])
+  @@map("users")
+}
+
+// ============================================
+// METADATA & SETTINGS
+// ============================================
+model PRMetadata {
+  id        String   @id @default(cuid())
+  repoOwner String   @default("cru-Luis-Rodriguez") @map("repo_owner")
+  repoName  String   @default("github-pr-scoreboard") @map("repo_name")
+  
+  firstPRFetched  Int?      @map("first_pr_fetched")
+  latestPRFetched Int?      @map("latest_pr_fetched")
+  totalPRsInDB    Int       @default(0) @map("total_prs_in_db")
+  dateRangeStart  DateTime? @map("date_range_start")
+  dateRangeEnd    DateTime? @map("date_range_end")
+  lastFetchDate   DateTime? @map("last_fetch_date")
+  
+  fetchHistory Json @default("[]") @map("fetch_history") // Array of fetch records
+  
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  
+  @@unique([repoOwner, repoName])
+  @@map("pr_metadata")
+}
+
+model QuarterSettings {
+  id String @id @default("quarter-config") // Singleton
+  
+  systemType     String @default("calendar") @map("system_type") // 'calendar', 'fiscal-us', 'academic', 'custom'
+  q1StartMonth   Int    @default(1) @map("q1_start_month")
+  customQuarters Json?  @map("custom_quarters") // Array of quarter definitions
+  
+  lastModified DateTime @default(now()) @updatedAt @map("last_modified")
+  modifiedBy   String   @default("system") @map("modified_by")
+  
+  createdAt DateTime @default(now()) @map("created_at")
+  
+  @@map("quarter_settings")
+}
+
+model QuarterlyWinner {
+  id      String @id @default(cuid())
+  quarter String @unique // "2025-Q1"
+  
+  year          Int      @map("year")
+  quarterNumber Int      @map("quarter_number") // 1-4
+  quarterStart  DateTime @map("quarter_start")
+  quarterEnd    DateTime @map("quarter_end")
+  
+  // Winner (embedded JSON for simplicity)
+  winner Json // { username, avatarUrl, prsThisQuarter, reviewsThisQuarter, pointsThisQuarter }
+  top3   Json // Array of top 3 contributors
+  
+  totalParticipants Int      @default(0) @map("total_participants")
+  archivedDate      DateTime @default(now()) @map("archived_date")
+  
+  createdAt DateTime @default(now()) @map("created_at")
+  
+  @@index([year(sort: Desc), quarterNumber(sort: Desc)])
+  @@map("quarterly_winners")
+}
+
+model FetchDate {
+  id   String   @id @default(cuid())
+  date DateTime
+  
+  createdAt DateTime @default(now()) @map("created_at")
+  
+  @@map("fetch_dates")
+}
