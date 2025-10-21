@@ -121,12 +121,13 @@ export const updateContributor = async (username, type, date, merged = false) =>
                 username,
                 avatarUrl: userData.avatar_url,
                 prCount: 0,
-                reviewCount: 0,
-                contributions: [],
-                reviews: []
+                reviewCount: 0
             }
         });
     }
+
+    // Extract date for aggregation (date only, no time)
+    const dateOnly = new Date(date.getFullYear(), date.getMonth(), date.getDate());
 
     const updateData = {
         avatarUrl: userData.avatar_url,
@@ -134,15 +135,61 @@ export const updateContributor = async (username, type, date, merged = false) =>
     };
 
     if (type === 'prCount') {
-        const contributions = contributor.contributions || [];
-        contributions.push({ date: date, count: 1, merged: merged });
         updateData.prCount = { increment: 1 };
-        updateData.contributions = contributions;
+        
+        // Create or update Contribution record (daily aggregate)
+        const existingContribution = await prisma.contribution.findFirst({
+            where: {
+                contributorId: contributor.id,
+                date: dateOnly
+            }
+        });
+
+        if (existingContribution) {
+            await prisma.contribution.update({
+                where: { id: existingContribution.id },
+                data: {
+                    count: { increment: 1 },
+                    merged: merged || existingContribution.merged
+                }
+            });
+        } else {
+            await prisma.contribution.create({
+                data: {
+                    contributorId: contributor.id,
+                    date: dateOnly,
+                    count: 1,
+                    merged: merged
+                }
+            });
+        }
     } else {
-        const reviews = contributor.reviews || [];
-        reviews.push({ date: date, count: 1 });
         updateData.reviewCount = { increment: 1 };
-        updateData.reviews = reviews;
+        
+        // Create or update Review record (daily aggregate)
+        const existingReview = await prisma.review.findFirst({
+            where: {
+                contributorId: contributor.id,
+                date: dateOnly
+            }
+        });
+
+        if (existingReview) {
+            await prisma.review.update({
+                where: { id: existingReview.id },
+                data: {
+                    count: { increment: 1 }
+                }
+            });
+        } else {
+            await prisma.review.create({
+                data: {
+                    contributorId: contributor.id,
+                    date: dateOnly,
+                    count: 1
+                }
+            });
+        }
     }
 
     const updated = await prisma.contributor.update({
@@ -563,104 +610,118 @@ export const awardBadges = async (pullRequestNumber = null) => {
 };
 
 export const getTopContributorsDateRange = async (startDate, endDate, page, limit) => {
-    let contributors;
-
-
-        contributors = await prisma.contributor.findMany({
-            where: {
-                username: {
-                    not: {
-                        endsWith: '[bot]'
-                    }
+    // Get contributors with their contributions in the date range
+    const contributors = await prisma.contributor.findMany({
+        where: {
+            username: {
+                not: {
+                    endsWith: '[bot]'
                 }
-            },
-            skip: (page - 1) * limit,
-            take: limit,
-            select: {
-                username: true,
-                contributions: true,
-                avatarUrl: true,
-                badges: true,
-                totalBillsAwarded: true
             }
-        });
-    
+        },
+        select: {
+            username: true,
+            avatarUrl: true,
+            badges: true,
+            totalBillsAwarded: true,
+            contributions: {
+                where: {
+                    date: {
+                        gte: startDate,
+                        lte: endDate
+                    },
+                    merged: true
+                }
+            }
+        }
+    });
 
-    // Calculate total pull requests for each contributor in the given date range
-    contributors = contributors.map(contributor => {
-        const totalPrCount = (contributor.contributions || [])
-            .filter(contribution => {
-                const contribDate = new Date(contribution.date);
-                return contribDate >= startDate && contribDate <= endDate && contribution.merged === true;
-            })
-            .reduce((total, contribution) => total + contribution.count, 0);
+    // Calculate total PR count for each contributor in the date range
+    const contributorsWithCounts = contributors.map(contributor => {
+        const totalPrCount = contributor.contributions.reduce((total, contribution) => {
+            return total + contribution.count;
+        }, 0);
         
         return { 
-            ...contributor, 
-            totalPrCount,
-            totalBillsAwarded: Number(contributor.totalBillsAwarded || 0)
+            username: contributor.username,
+            avatarUrl: contributor.avatarUrl,
+            badges: contributor.badges,
+            totalBillsAwarded: Number(contributor.totalBillsAwarded || 0),
+            totalPrCount
         };
     });
 
-    // Sort contributors by totalPrCount
-    contributors.sort((a, b) => b.totalPrCount - a.totalPrCount);
+    // Filter out contributors with 0 PRs and sort by totalPrCount
+    const sortedContributors = contributorsWithCounts
+        .filter(c => c.totalPrCount > 0)
+        .sort((a, b) => b.totalPrCount - a.totalPrCount);
+
+    // Apply pagination
+    const paginatedContributors = sortedContributors.slice((page - 1) * limit, page * limit);
 
     // Calculate total pull requests in the given date range
-    const totalPullRequests = contributors.reduce((total, contributor) => {
+    const totalPullRequests = sortedContributors.reduce((total, contributor) => {
         return total + contributor.totalPrCount;
     }, 0);
 
-    return { contributors, totalPullRequests };
+    return { contributors: paginatedContributors, totalPullRequests };
 };
 
 export const getTopReviewersDateRange = async (startDate, endDate, page, limit) => {
-    let reviewers;
-
-
-        reviewers = await prisma.contributor.findMany({
-            where: {
-                username: {
-                    not: {
-                        endsWith: '[bot]'
+    // Get reviewers with their reviews in the date range
+    const reviewers = await prisma.contributor.findMany({
+        where: {
+            username: {
+                not: {
+                    endsWith: '[bot]'
+                }
+            }
+        },
+        select: {
+            username: true,
+            avatarUrl: true,
+            badges: true,
+            totalBillsAwarded: true,
+            reviews: {
+                where: {
+                    date: {
+                        gte: startDate,
+                        lte: endDate
                     }
                 }
-            },
-            skip: (page - 1) * limit,
-            take: limit,
-            select: {
-                username: true,
-                reviews: true,
-                avatarUrl: true,
-                badges: true,
-                totalBillsAwarded: true
             }
-        });
-    
+        }
+    });
 
-    // Calculate total reviews for each reviewer in the given date range
-    reviewers = reviewers.map(reviewer => {
-        const totalReviewCount = (reviewer.reviews || [])
-            .filter(review => {
-                const reviewDate = new Date(review.date);
-                return reviewDate >= startDate && reviewDate <= endDate;
-            })
-            .reduce((total, review) => total + review.count, 0);
+    // Calculate total review count for each reviewer in the date range
+    const reviewersWithCounts = reviewers.map(reviewer => {
+        const totalReviewCount = reviewer.reviews.reduce((total, review) => {
+            return total + review.count;
+        }, 0);
+        
         return { 
-            ...reviewer, 
-            totalReviewCount,
-            totalBillsAwarded: Number(reviewer.totalBillsAwarded || 0)
+            username: reviewer.username,
+            avatarUrl: reviewer.avatarUrl,
+            badges: reviewer.badges,
+            totalBillsAwarded: Number(reviewer.totalBillsAwarded || 0),
+            totalReviewCount
         };
     });
 
-    // Sort reviewers by totalReviewCount
-    reviewers.sort((a, b) => b.totalReviewCount - a.totalReviewCount);
+    // Filter out reviewers with 0 reviews and sort by totalReviewCount
+    const sortedReviewers = reviewersWithCounts
+        .filter(r => r.totalReviewCount > 0)
+        .sort((a, b) => b.totalReviewCount - a.totalReviewCount);
+
+    // Apply pagination
+    const paginatedReviewers = sortedReviewers.slice((page - 1) * limit, page * limit);
 
     // Calculate total reviews in the given date range
-    const totalReviews = reviewers.reduce((total, reviewer) => {
+    const totalReviews = sortedReviewers.reduce((total, reviewer) => {
         return total + reviewer.totalReviewCount;
     }, 0);
 
-    return { reviewers, totalReviews };
+    return { reviewers: paginatedReviewers, totalReviews };
 };
 
 // Get the top contributors based on PR count with gamification data
@@ -1008,8 +1069,8 @@ export async function getPRRangeInfo() {
                 });
             }
 
-            // Find date ranges from contribution history
-            if (contributor.contributions && contributor.contributions.length > 0) {
+            // Find date ranges from contribution history (now a relation, not JSON array)
+            if (contributor.contributions && Array.isArray(contributor.contributions) && contributor.contributions.length > 0) {
                 contributor.contributions.forEach(contrib => {
                     const contribDate = new Date(contrib.date);
                     if (!oldestDate || contribDate < oldestDate) {
