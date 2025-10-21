@@ -40,6 +40,9 @@ export default {
   // Test timeout (increased for database operations)
   testTimeout: 30000,
   
+  // Run tests serially to prevent database conflicts
+  maxWorkers: 1,
+  
   // Verbose output
   verbose: true,
   

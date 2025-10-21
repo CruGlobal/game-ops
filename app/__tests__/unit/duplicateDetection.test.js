@@ -32,9 +32,9 @@ describe('Duplicate Detection and Repair', () => {
             // This test now verifies the function works with clean data
             await prisma.processedPR.createMany({
                 data: [
-                    { prNumber: 1, action: 'authored', processedDate: new Date(), contributorId: contributor.id },
-                    { prNumber: 2, action: 'authored', processedDate: new Date(), contributorId: contributor.id },
-                    { prNumber: 3, action: 'authored', processedDate: new Date(), contributorId: contributor.id }
+                    { prNumber: BigInt(1), action: 'authored', processedDate: new Date(), contributorId: contributor.id },
+                    { prNumber: BigInt(2), action: 'authored', processedDate: new Date(), contributorId: contributor.id },
+                    { prNumber: BigInt(3), action: 'authored', processedDate: new Date(), contributorId: contributor.id }
                 ]
             });
 
@@ -63,9 +63,9 @@ describe('Duplicate Detection and Repair', () => {
             // This test verifies the function works with clean data
             await prisma.processedReview.createMany({
                 data: [
-                    { prNumber: 100, reviewId: 1, processedDate: new Date(), contributorId: contributor.id },
-                    { prNumber: 101, reviewId: 2, processedDate: new Date(), contributorId: contributor.id },
-                    { prNumber: 102, reviewId: 3, processedDate: new Date(), contributorId: contributor.id }
+                    { prNumber: BigInt(100), reviewId: BigInt(1), processedDate: new Date(), contributorId: contributor.id },
+                    { prNumber: BigInt(101), reviewId: BigInt(2), processedDate: new Date(), contributorId: contributor.id },
+                    { prNumber: BigInt(102), reviewId: BigInt(3), processedDate: new Date(), contributorId: contributor.id }
                 ]
             });
 
@@ -90,16 +90,16 @@ describe('Duplicate Detection and Repair', () => {
 
             await prisma.processedPR.createMany({
                 data: [
-                    { prNumber: 1, action: 'authored', processedDate: new Date(), contributorId: contributor.id },
-                    { prNumber: 2, action: 'authored', processedDate: new Date(), contributorId: contributor.id },
-                    { prNumber: 3, action: 'authored', processedDate: new Date(), contributorId: contributor.id }
+                    { prNumber: BigInt(1), action: 'authored', processedDate: new Date(), contributorId: contributor.id },
+                    { prNumber: BigInt(2), action: 'authored', processedDate: new Date(), contributorId: contributor.id },
+                    { prNumber: BigInt(3), action: 'authored', processedDate: new Date(), contributorId: contributor.id }
                 ]
             });
 
             await prisma.processedReview.createMany({
                 data: [
-                    { prNumber: 10, reviewId: 1, processedDate: new Date(), contributorId: contributor.id },
-                    { prNumber: 11, reviewId: 2, processedDate: new Date(), contributorId: contributor.id }
+                    { prNumber: BigInt(10), reviewId: BigInt(1), processedDate: new Date(), contributorId: contributor.id },
+                    { prNumber: BigInt(11), reviewId: BigInt(2), processedDate: new Date(), contributorId: contributor.id }
                 ]
             });
 
@@ -122,8 +122,8 @@ describe('Duplicate Detection and Repair', () => {
 
             await prisma.processedPR.createMany({
                 data: [
-                    { prNumber: 100, action: 'authored', processedDate: new Date(), contributorId: contributor.id },
-                    { prNumber: 101, action: 'authored', processedDate: new Date(), contributorId: contributor.id }
+                    { prNumber: BigInt(100), action: 'authored', processedDate: new Date(), contributorId: contributor.id },
+                    { prNumber: BigInt(101), action: 'authored', processedDate: new Date(), contributorId: contributor.id }
                 ]
             });
 
