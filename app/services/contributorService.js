@@ -111,18 +111,6 @@ export const updateContributor = async (username, type, date, merged = false) =>
         username: username
     });
 
-    const updateExpression = type === 'prCount' ?
-            `set prCount = prCount + :val, avatarUrl = :avatarUrl, lastUpdated = :lastUpdated, contributions = list_append(if_not_exists(contributions, :empty_list), :new_entry)` :
-            `set reviewCount = reviewCount + :val, avatarUrl = :avatarUrl, lastUpdated = :lastUpdated, reviews = list_append(if_not_exists(reviews, :empty_list), :new_entry)`;
-
-    const expressionAttributeValues = {
-        ':val': 1,
-        ':avatarUrl': userData.avatar_url,
-        ':lastUpdated': new Date().toISOString(),
-        ':empty_list': [],
-        ':new_entry': [{ date: date.toISOString(), count: 1, merged: merged }],
-    };
-
     let contributor = await prisma.contributor.findUnique({
         where: { username: username }
     });

@@ -145,7 +145,7 @@ export const fetchActivityController = async (req, res) => {
 };
 
 // Get monthly aggregated data
-// TODO: Refactor to use Prisma - this uses MongoDB aggregation
+// TODO: Implement with Prisma aggregation queries
 export const getMonthlyAggregatedData = async (req, res) => {
     const range = parseInt(req.query.range, 10) || 1; // Default to 1 month if no range is provided
     const endDate = new Date();
@@ -153,37 +153,12 @@ export const getMonthlyAggregatedData = async (req, res) => {
     startDate.setMonth(endDate.getMonth() - range);
 
     try {
-        // This uses MongoDB aggregation - needs refactoring for Prisma
-        // For now, return an empty array
-        res.json([]);
-        
-        /* Original MongoDB aggregation code - needs Prisma refactor:
-        const data = await Contributor.aggregate([
-            { $unwind: '$contributions' },
-            { $match: { 'contributions.date': { $gte: startDate, $lte: endDate } } }, // Filter by date range
-            {
-                $group: {
-                    _id: {
-                        year: { $year: '$contributions.date' },
-                        month: { $month: '$contributions.date' }
-                    },
-                    totalPRs: { $sum: '$contributions.count' },
-                    totalReviews: { $sum: '$reviews.count' }
-                }
-            },
-            {
-                $project: {
-                    _id: 0,
-                    year: '$_id.year',
-                    month: '$_id.month',
-                    totalPRs: 1,
-                    totalReviews: 1
-                }
-            },
-            { $sort: { year: 1, month: 1 } }
-        ]);
-        res.json(data);
+        // Placeholder - needs implementation with Prisma aggregation
+        /* TODO: Implement with Prisma:
+        Use prisma.contribution.groupBy() or raw SQL aggregation
+        to group contributions by month and calculate totals
         */
+        res.json([]);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
