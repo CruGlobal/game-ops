@@ -485,17 +485,27 @@ export async function startBackfill(startDate, endDate, checkRateLimits = true) 
 
         const duration = Math.floor((backfillState.progress.endTime - backfillState.progress.startTime) / 1000);
 
-        logger.info(`Backfill ${backfillState.progress.status.toLowerCase()}. Found ${totalPRsFound} PRs. Added ${totalPRsProcessed} new PRs (${totalPRsFound - totalPRsProcessed} were duplicates). Added ${totalReviewsProcessed} reviews. Duration: ${duration}s`);
+        const statusMessage = backfillState.shouldStop ? 'stopped' : 'completed';
+        const detailedMessage = `Backfill ${statusMessage}. Found ${totalPRsFound} PRs in date range. ` +
+            `${totalPRsProcessed > 0 ? `Added ${totalPRsProcessed} new PRs. ` : 'All PRs already in database. '}` +
+            `${totalReviewsProcessed > 0 ? `Added ${totalReviewsProcessed} new reviews. ` : 'All reviews already in database. '}` +
+            `${totalPRsFound - totalPRsProcessed > 0 ? `Skipped ${totalPRsFound - totalPRsProcessed} duplicate PRs. ` : ''}` +
+            `Duration: ${duration}s`;
+
+        logger.info(detailedMessage);
 
         return {
             success: true,
-            message: `Backfill ${backfillState.progress.status.toLowerCase()}`,
+            message: `Backfill ${statusMessage}${totalPRsProcessed === 0 && totalReviewsProcessed === 0 ? ' - All data already imported' : ''}`,
             stats: {
                 totalPRsFound: totalPRsFound,
                 newPRs: totalPRsProcessed,
                 duplicatePRs: totalPRsFound - totalPRsProcessed,
                 totalReviews: totalReviewsProcessed,
-                duration: `${Math.floor(duration / 60)}m ${duration % 60}s`
+                duration: `${Math.floor(duration / 60)}m ${duration % 60}s`,
+                message: totalPRsProcessed === 0 && totalReviewsProcessed === 0
+                    ? 'No new data found - all PRs and reviews in this date range are already in the database'
+                    : `Successfully imported ${totalPRsProcessed} PRs and ${totalReviewsProcessed} reviews`
             }
         };
 

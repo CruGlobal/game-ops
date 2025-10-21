@@ -739,36 +739,57 @@ if (typeof socket !== 'undefined') {
         document.getElementById('backfill-rate-limit').textContent = (progress.rateLimit || 0).toLocaleString();
         document.getElementById('backfill-eta').textContent = progress.eta || 'Calculating...';
 
-        // If completed or stopped, update UI
+        // If completed or stopped, update UI and fetch final stats
         if (progress.status === 'Completed' || progress.status === 'Stopped' || progress.status === 'Error') {
             document.getElementById('start-backfill').style.display = 'inline-block';
             document.getElementById('stop-backfill').style.display = 'none';
 
-            // Show results
-            const resultsDiv = document.getElementById('backfill-results');
-            const resultsContent = document.getElementById('backfill-results-content');
+            // Fetch detailed results from server
+            fetch('/api/admin/backfill/status')
+                .then(res => res.json())
+                .then(statusResult => {
+                    const resultsDiv = document.getElementById('backfill-results');
+                    const resultsContent = document.getElementById('backfill-results-content');
 
-            if (progress.status === 'Completed') {
-                resultsDiv.className = 'alert alert-success';
-                resultsContent.innerHTML = `
-                    <strong>✅ Backfill Completed!</strong><br>
-                    Processed ${progress.processedPRs || 0} PRs and ${progress.processedReviews || 0} reviews.
-                `;
-            } else if (progress.status === 'Stopped') {
-                resultsDiv.className = 'alert alert-warning';
-                resultsContent.innerHTML = `
-                    <strong>⏸️ Backfill Stopped</strong><br>
-                    Processed ${progress.processedPRs || 0} PRs and ${progress.processedReviews || 0} reviews before stopping.
-                `;
-            } else if (progress.status === 'Error') {
-                resultsDiv.className = 'alert alert-danger';
-                resultsContent.innerHTML = `
-                    <strong>❌ Backfill Error</strong><br>
-                    ${progress.error || 'An unknown error occurred'}
-                `;
-            }
+                    if (progress.status === 'Completed') {
+                        const hasNewData = (progress.processedReviews || 0) > 0;
+                        resultsDiv.className = hasNewData ? 'alert alert-success' : 'alert alert-info';
+                        
+                        if (hasNewData) {
+                            resultsContent.innerHTML = `
+                                <strong>✅ Backfill Completed!</strong><br>
+                                Found ${progress.totalPRs || 0} PRs in date range.<br>
+                                Added ${progress.processedReviews || 0} new reviews.<br>
+                                ${(progress.totalPRs || 0) - (progress.processedReviews || 0) > 0 ? 
+                                    `Skipped ${(progress.totalPRs || 0) - (progress.processedReviews || 0)} PRs (already in database).` : ''}
+                            `;
+                        } else {
+                            resultsContent.innerHTML = `
+                                <strong>ℹ️ Backfill Completed - No New Data</strong><br>
+                                Found ${progress.totalPRs || 0} PRs in date range, but all were already in the database.<br>
+                                All reviews for these PRs are also already imported.<br>
+                                <em>This is normal if you've already run backfill for this date range or if the cron job has imported recent data.</em>
+                            `;
+                        }
+                    } else if (progress.status === 'Stopped') {
+                        resultsDiv.className = 'alert alert-warning';
+                        resultsContent.innerHTML = `
+                            <strong>⏸️ Backfill Stopped</strong><br>
+                            Processed ${progress.processedPRs || 0} PRs and ${progress.processedReviews || 0} reviews before stopping.
+                        `;
+                    } else if (progress.status === 'Error') {
+                        resultsDiv.className = 'alert alert-danger';
+                        resultsContent.innerHTML = `
+                            <strong>❌ Backfill Error</strong><br>
+                            ${progress.error || 'An unknown error occurred'}
+                        `;
+                    }
 
-            resultsDiv.style.display = 'block';
+                    resultsDiv.style.display = 'block';
+                })
+                .catch(err => {
+                    console.error('Error fetching backfill results:', err);
+                });
 
             // Refresh stats after backfill completes
             setTimeout(() => {
