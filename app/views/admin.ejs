@@ -736,88 +736,10 @@ document.getElementById('stop-backfill')?.addEventListener('click', async () => 
 });
 
 // Listen for backfill progress updates via WebSocket
-if (typeof socket !== 'undefined') {
-    socket.on('backfill-progress', (progress) => {
-        // Update progress bar
-        const progressBar = document.getElementById('backfill-progress-bar');
-        if (progressBar) {
-            progressBar.style.width = `${progress.percentage || 0}%`;
-        }
+// This will be set up after socket.io is loaded and initialized
 
-        // Update stats
-        document.getElementById('backfill-status').textContent = progress.status || 'Running';
-        document.getElementById('backfill-prs-count').textContent = (progress.processedPRs || 0).toLocaleString();
-        document.getElementById('backfill-reviews-count').textContent = (progress.processedReviews || 0).toLocaleString();
-        document.getElementById('backfill-rate-limit').textContent = (progress.rateLimit || 0).toLocaleString();
-        document.getElementById('backfill-eta').textContent = progress.eta || 'Calculating...';
-
-        // Update new items counts if available
-        if (progress.newPRsAdded !== undefined) {
-            const newDataText = `New: ${progress.newPRsAdded} PRs, ${progress.newReviewsAdded || 0} reviews`;
-            document.getElementById('backfill-status').textContent = `${progress.status || 'Running'} - ${newDataText}`;
-        }
-
-        // If completed or stopped, update UI and fetch final stats
-        if (progress.status === 'Completed' || progress.status === 'Stopped' || progress.status === 'Error') {
-            document.getElementById('start-backfill').style.display = 'inline-block';
-            document.getElementById('stop-backfill').style.display = 'none';
-
-            // Fetch detailed results from server
-            fetch('/api/admin/backfill/status')
-                .then(res => res.json())
-                .then(statusResult => {
-                    const resultsDiv = document.getElementById('backfill-results');
-                    const resultsContent = document.getElementById('backfill-results-content');
-
-                    if (progress.status === 'Completed') {
-                        const hasNewData = (progress.newPRsAdded || 0) > 0 || (progress.newReviewsAdded || 0) > 0;
-                        resultsDiv.className = hasNewData ? 'alert alert-success' : 'alert alert-info';
-                        
-                        if (hasNewData) {
-                            resultsContent.innerHTML = `
-                                <strong>✅ Backfill Completed!</strong><br>
-                                Found ${progress.totalPRs || 0} PRs in date range.<br>
-                                Added ${progress.newPRsAdded || 0} new PRs and ${progress.newReviewsAdded || 0} new reviews.<br>
-                                ${(progress.totalPRs || 0) - (progress.newPRsAdded || 0) > 0 ? 
-                                    `Skipped ${(progress.totalPRs || 0) - (progress.newPRsAdded || 0)} PRs (already in database).` : ''}
-                            `;
-                        } else {
-                            resultsContent.innerHTML = `
-                                <strong>ℹ️ Backfill Completed - No New Data</strong><br>
-                                Found ${progress.totalPRs || 0} PRs in date range, but all were already in the database.<br>
-                                All reviews for these PRs are also already imported.<br>
-                                <em>This is normal if you've already run backfill for this date range or if the cron job has imported recent data.</em>
-                            `;
-                        }
-                    } else if (progress.status === 'Stopped') {
-                        resultsDiv.className = 'alert alert-warning';
-                        resultsContent.innerHTML = `
-                            <strong>⏸️ Backfill Stopped</strong><br>
-                            Processed ${progress.processedPRs || 0} PRs and ${progress.processedReviews || 0} reviews before stopping.
-                        `;
-                    } else if (progress.status === 'Error') {
-                        resultsDiv.className = 'alert alert-danger';
-                        resultsContent.innerHTML = `
-                            <strong>❌ Backfill Error</strong><br>
-                            ${progress.error || 'An unknown error occurred'}
-                        `;
-                    }
-
-                    resultsDiv.style.display = 'block';
-                })
-                .catch(err => {
-                    console.error('Error fetching backfill results:', err);
-                });
-
-            // Refresh stats after backfill completes
-            setTimeout(() => {
-                loadPRRangeInfo();
-            }, 1000);
-        }
-    });
-
-    // Check backfill status on page load
-    (async () => {
+// Check backfill status on page load
+(async () => {
         try {
             const response = await fetch('/api/admin/backfill/status');
             const result = await response.json();
@@ -858,7 +780,105 @@ if (typeof socket !== 'undefined') {
             console.error('Error checking backfill status:', error);
         }
     })();
-}
+</script>
+
+<!-- Socket.IO Client Library -->
+<script src="/socket.io/socket.io.js"></script>
+<script>
+    // Initialize Socket.IO connection for real-time updates
+    const socket = io();
+    
+    // Join the scoreboard updates room
+    socket.on('connect', () => {
+        console.log('Connected to WebSocket server');
+        socket.emit('join-room', 'scoreboard-updates');
+    });
+    
+    socket.on('disconnect', () => {
+        console.log('Disconnected from WebSocket server');
+    });
+    
+        // Listen for backfill progress updates
+        socket.on('backfill-progress', (progress) => {
+            console.log('Received backfill progress:', progress);
+        
+            // Update progress bar
+            const progressBar = document.getElementById('backfill-progress-bar');
+            if (progressBar) {
+                progressBar.style.width = `${progress.percentage || 0}%`;
+            }
+
+            // Update stats
+            document.getElementById('backfill-status').textContent = progress.status || 'Running';
+            document.getElementById('backfill-prs-count').textContent = (progress.processedPRs || 0).toLocaleString();
+            document.getElementById('backfill-reviews-count').textContent = (progress.processedReviews || 0).toLocaleString();
+            document.getElementById('backfill-rate-limit').textContent = (progress.rateLimit || 0).toLocaleString();
+            document.getElementById('backfill-eta').textContent = progress.eta || 'Calculating...';
+
+            // Update new items counts if available
+            if (progress.newPRsAdded !== undefined) {
+                const newDataText = `New: ${progress.newPRsAdded} PRs, ${progress.newReviewsAdded || 0} reviews`;
+                document.getElementById('backfill-status').textContent = `${progress.status || 'Running'} - ${newDataText}`;
+            }
+
+            // If completed or stopped, update UI and fetch final stats
+            if (progress.status === 'Completed' || progress.status === 'Stopped' || progress.status === 'Error') {
+                document.getElementById('start-backfill').style.display = 'inline-block';
+                document.getElementById('stop-backfill').style.display = 'none';
+
+                // Fetch detailed results from server
+                fetch('/api/admin/backfill/status')
+                    .then(res => res.json())
+                    .then(statusResult => {
+                        const resultsDiv = document.getElementById('backfill-results');
+                        const resultsContent = document.getElementById('backfill-results-content');
+
+                        if (progress.status === 'Completed') {
+                            const hasNewData = (progress.newPRsAdded || 0) > 0 || (progress.newReviewsAdded || 0) > 0;
+                            resultsDiv.className = hasNewData ? 'alert alert-success' : 'alert alert-info';
+                        
+                            if (hasNewData) {
+                                resultsContent.innerHTML = `
+                                    <strong>✅ Backfill Completed!</strong><br>
+                                    Found ${progress.totalPRs || 0} PRs in date range.<br>
+                                    Added ${progress.newPRsAdded || 0} new PRs and ${progress.newReviewsAdded || 0} new reviews.<br>
+                                    ${(progress.totalPRs || 0) - (progress.newPRsAdded || 0) > 0 ? 
+                                        `Skipped ${(progress.totalPRs || 0) - (progress.newPRsAdded || 0)} PRs (already in database).` : ''}
+                                `;
+                            } else {
+                                resultsContent.innerHTML = `
+                                    <strong>ℹ️ Backfill Completed - No New Data</strong><br>
+                                    Found ${progress.totalPRs || 0} PRs in date range, but all were already in the database.<br>
+                                    All reviews for these PRs are also already imported.<br>
+                                    <em>This is normal if you've already run backfill for this date range or if the cron job has imported recent data.</em>
+                                `;
+                            }
+                        } else if (progress.status === 'Stopped') {
+                            resultsDiv.className = 'alert alert-warning';
+                            resultsContent.innerHTML = `
+                                <strong>⏸️ Backfill Stopped</strong><br>
+                                Processed ${progress.processedPRs || 0} PRs and ${progress.processedReviews || 0} reviews before stopping.
+                            `;
+                        } else if (progress.status === 'Error') {
+                            resultsDiv.className = 'alert alert-danger';
+                            resultsContent.innerHTML = `
+                                <strong>❌ Backfill Error</strong><br>
+                                ${progress.error || 'An unknown error occurred'}
+                            `;
+                        }
+
+                        resultsDiv.style.display = 'block';
+                    })
+                    .catch(err => {
+                        console.error('Error fetching backfill results:', err);
+                    });
+
+                // Refresh stats after backfill completes
+                setTimeout(() => {
+                    loadPRRangeInfo();
+                }, 1000);
+            }
+        });
 </script>
 </body>
 </html>
