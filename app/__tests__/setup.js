@@ -7,6 +7,12 @@ import dotenv from 'dotenv';
 import nock from 'nock';
 import { createRequire } from 'module';
 
+// Fix BigInt serialization for Jest worker communication
+// This allows BigInt values to be serialized to JSON in test results
+BigInt.prototype.toJSON = function() {
+  return this.toString();
+};
+
 // Get __dirname equivalent in ES modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
