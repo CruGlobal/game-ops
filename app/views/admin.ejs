@@ -202,6 +202,14 @@
                         <small class="form-hint">Automatically pause when approaching rate limits</small>
                     </div>
 
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="backfill-verbose-logging" />
+                            Enable Verbose Logging (Debug Mode)
+                        </label>
+                        <small class="form-hint">Show detailed activity in server logs for troubleshooting. Logs every PR/review processed.</small>
+                    </div>
+
                     <div class="button-group">
                         <button id="start-backfill" class="btn btn-primary">
                             <span>▶️ Start Backfill</span>
@@ -668,6 +676,7 @@ document.getElementById('start-backfill')?.addEventListener('click', async () =>
     const startDate = document.getElementById('backfill-start-date').value;
     const endDate = document.getElementById('backfill-end-date').value;
     const checkRateLimits = document.getElementById('backfill-check-rate-limit').checked;
+    const verboseLogging = document.getElementById('backfill-verbose-logging').checked;
 
     if (!startDate || !endDate) {
         showToast('Please select both start and end dates', 'error');
@@ -683,13 +692,16 @@ document.getElementById('start-backfill')?.addEventListener('click', async () =>
         const response = await fetch('/api/admin/backfill/start', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ startDate, endDate, checkRateLimits })
+            body: JSON.stringify({ startDate, endDate, checkRateLimits, verboseLogging })
         });
 
         const result = await response.json();
 
         if (result.success) {
-            showToast('Backfill started successfully', 'success');
+            const message = verboseLogging 
+                ? 'Backfill started with verbose logging enabled - check server logs for detailed activity' 
+                : 'Backfill started successfully';
+            showToast(message, 'success');
             document.getElementById('start-backfill').style.display = 'none';
             document.getElementById('stop-backfill').style.display = 'inline-block';
             document.getElementById('backfill-progress').style.display = 'block';
@@ -739,6 +751,12 @@ if (typeof socket !== 'undefined') {
         document.getElementById('backfill-rate-limit').textContent = (progress.rateLimit || 0).toLocaleString();
         document.getElementById('backfill-eta').textContent = progress.eta || 'Calculating...';
 
+        // Update new items counts if available
+        if (progress.newPRsAdded !== undefined) {
+            const newDataText = `New: ${progress.newPRsAdded} PRs, ${progress.newReviewsAdded || 0} reviews`;
+            document.getElementById('backfill-status').textContent = `${progress.status || 'Running'} - ${newDataText}`;
+        }
+
         // If completed or stopped, update UI and fetch final stats
         if (progress.status === 'Completed' || progress.status === 'Stopped' || progress.status === 'Error') {
             document.getElementById('start-backfill').style.display = 'inline-block';
@@ -752,16 +770,16 @@ if (typeof socket !== 'undefined') {
                     const resultsContent = document.getElementById('backfill-results-content');
 
                     if (progress.status === 'Completed') {
-                        const hasNewData = (progress.processedReviews || 0) > 0;
+                        const hasNewData = (progress.newPRsAdded || 0) > 0 || (progress.newReviewsAdded || 0) > 0;
                         resultsDiv.className = hasNewData ? 'alert alert-success' : 'alert alert-info';
                         
                         if (hasNewData) {
                             resultsContent.innerHTML = `
                                 <strong>✅ Backfill Completed!</strong><br>
                                 Found ${progress.totalPRs || 0} PRs in date range.<br>
-                                Added ${progress.processedReviews || 0} new reviews.<br>
-                                ${(progress.totalPRs || 0) - (progress.processedReviews || 0) > 0 ? 
-                                    `Skipped ${(progress.totalPRs || 0) - (progress.processedReviews || 0)} PRs (already in database).` : ''}
+                                Added ${progress.newPRsAdded || 0} new PRs and ${progress.newReviewsAdded || 0} new reviews.<br>
+                                ${(progress.totalPRs || 0) - (progress.newPRsAdded || 0) > 0 ? 
+                                    `Skipped ${(progress.totalPRs || 0) - (progress.newPRsAdded || 0)} PRs (already in database).` : ''}
                             `;
                         } else {
                             resultsContent.innerHTML = `

@@ -355,7 +355,7 @@ export async function getHallOfFameController(req, res) {
  */
 export async function startBackfillController(req, res) {
     try {
-        const { startDate, endDate, checkRateLimits } = req.body;
+        const { startDate, endDate, checkRateLimits, verboseLogging } = req.body;
 
         if (!startDate || !endDate) {
             return res.status(400).json({
@@ -364,7 +364,7 @@ export async function startBackfillController(req, res) {
             });
         }
 
-        const result = await startBackfill(startDate, endDate, checkRateLimits !== false);
+        const result = await startBackfill(startDate, endDate, checkRateLimits !== false, verboseLogging === true);
 
         res.json(result);
     } catch (error) {

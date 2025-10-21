@@ -11,11 +11,14 @@ const repoName = process.env.REPO_NAME || 'android';
 let backfillState = {
     isRunning: false,
     shouldStop: false,
+    verboseLogging: false,
     progress: {
         status: 'idle',
         totalPRs: 0,
         processedPRs: 0,
         processedReviews: 0,
+        newPRsAdded: 0,
+        newReviewsAdded: 0,
         currentPR: null,
         rateLimit: 5000,
         rateLimitReset: null,
@@ -108,6 +111,10 @@ function emitBackfillProgress() {
     progress.percentage = progress.totalPRs > 0
         ? Math.floor((progress.processedPRs / progress.totalPRs) * 100)
         : 0;
+
+    // Add new items tracking
+    progress.newPRsAdded = backfillState.newPRsAdded;
+    progress.newReviewsAdded = backfillState.newReviewsAdded;
 
     io.to('scoreboard-updates').emit('backfill-progress', progress);
 }
@@ -203,8 +210,14 @@ async function processPR(pr) {
 
             prAdded = 1;
             logger.debug(`Added PR #${pr.number} for ${username}`);
+            if (backfillState.verboseLogging) {
+                logger.info(`✅ [BACKFILL] Added NEW PR #${pr.number} by ${username} - "${pr.title}"`);
+            }
         } else {
             logger.debug(`PR #${pr.number} already processed for ${username}, but checking reviews...`);
+            if (backfillState.verboseLogging) {
+                logger.info(`⏭️  [BACKFILL] Skipped PR #${pr.number} (duplicate) - checking reviews`);
+            }
         }
 
         // ALWAYS fetch and process reviews, even if PR was already processed
@@ -300,6 +313,13 @@ async function processPR(pr) {
 
                         reviewsAdded++;
                         logger.debug(`Added review by ${reviewerUsername} on PR #${pr.number}`);
+                        if (backfillState.verboseLogging) {
+                            logger.info(`✅ [BACKFILL] Added NEW review by ${reviewerUsername} on PR #${pr.number}`);
+                        }
+                    } else {
+                        if (backfillState.verboseLogging) {
+                            logger.info(`⏭️  [BACKFILL] Skipped review by ${reviewerUsername} on PR #${pr.number} (duplicate)`);
+                        }
                     }
                 }
             }
@@ -320,14 +340,18 @@ async function processPR(pr) {
  * @param {String} startDate - ISO date string
  * @param {String} endDate - ISO date string
  * @param {Boolean} checkRateLimits - Whether to respect rate limits
+ * @param {Boolean} verboseLogging - Whether to enable verbose debug logging
  */
-export async function startBackfill(startDate, endDate, checkRateLimits = true) {
+export async function startBackfill(startDate, endDate, checkRateLimits = true, verboseLogging = false) {
     if (backfillState.isRunning) {
         return { success: false, message: 'Backfill is already running' };
     }
 
     backfillState.isRunning = true;
     backfillState.shouldStop = false;
+    backfillState.verboseLogging = verboseLogging;
+    backfillState.newPRsAdded = 0;
+    backfillState.newReviewsAdded = 0;
     backfillState.progress = {
         status: 'Initializing...',
         totalPRs: 0,
@@ -340,7 +364,7 @@ export async function startBackfill(startDate, endDate, checkRateLimits = true) 
         endTime: null
     };
 
-    logger.info(`Starting backfill from ${startDate} to ${endDate}`);
+    logger.info(`Starting backfill from ${startDate} to ${endDate}${verboseLogging ? ' (VERBOSE LOGGING ENABLED)' : ''}`);
 
     try {
         // Check initial rate limit
