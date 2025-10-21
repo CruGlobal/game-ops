@@ -19,11 +19,19 @@ import { prisma, createTestContributor } from '../setup.js';
 
 describe('ChallengeService', () => {
     beforeEach(async () => {
+        await prisma.completedChallenge.deleteMany({});
+        await prisma.challengeParticipant.deleteMany({});
         await prisma.challenge.deleteMany({});
+        await prisma.processedReview.deleteMany({});
+        await prisma.processedPR.deleteMany({});
+        await prisma.achievement.deleteMany({});
+        await prisma.pointHistory.deleteMany({});
+        await prisma.review.deleteMany({});
+        await prisma.contribution.deleteMany({});
         await prisma.contributor.deleteMany({});
     });
 
-    describe.skip('createChallenge', () => {
+    describe('createChallenge', () => {
         it('should create a new challenge successfully', async () => {
             const challengeData = {
                 title: 'Test Challenge',
@@ -46,7 +54,7 @@ describe('ChallengeService', () => {
             expect(challenge.target).toBe(5);
             expect(challenge.reward).toBe(250);
 
-            const saved = await Challenge.findById(challenge._id);
+            const saved = await prisma.challenge.findUnique({ where: { id: challenge.id } });
             expect(saved).toBeDefined();
         });
 
@@ -60,50 +68,52 @@ describe('ChallengeService', () => {
         });
     });
 
-    describe.skip('getActiveChallenges', () => {
+    describe('getActiveChallenges', () => {
         it('should return only active challenges with future end dates', async () => {
             const now = new Date();
             const future = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
             const past = new Date(now.getTime() - 1 * 24 * 60 * 60 * 1000);
 
-            await Challenge.create([
-                {
-                    title: 'Active Challenge 1',
-                    description: 'Test',
-                    type: 'pr-merge',
-                    target: 5,
-                    reward: 100,
-                    status: 'active',
-                    startDate: now,
-                    endDate: future,
-                    difficulty: 'easy',
-                    category: 'individual'
-                },
-                {
-                    title: 'Expired Challenge',
-                    description: 'Test',
-                    type: 'pr-merge',
-                    target: 5,
-                    reward: 100,
-                    status: 'active',
-                    startDate: past,
-                    endDate: past,
-                    difficulty: 'easy',
-                    category: 'individual'
-                },
-                {
-                    title: 'Inactive Challenge',
-                    description: 'Test',
-                    type: 'pr-merge',
-                    target: 5,
-                    reward: 100,
-                    status: 'expired',
-                    startDate: now,
-                    endDate: future,
-                    difficulty: 'easy',
-                    category: 'individual'
-                }
-            ]);
+            await prisma.challenge.createMany({
+                data: [
+                    {
+                        title: 'Active Challenge 1',
+                        description: 'Test',
+                        type: 'pr-merge',
+                        target: 5,
+                        reward: 100,
+                        status: 'active',
+                        startDate: now,
+                        endDate: future,
+                        difficulty: 'easy',
+                        category: 'individual'
+                    },
+                    {
+                        title: 'Expired Challenge',
+                        description: 'Test',
+                        type: 'pr-merge',
+                        target: 5,
+                        reward: 100,
+                        status: 'active',
+                        startDate: past,
+                        endDate: past,
+                        difficulty: 'easy',
+                        category: 'individual'
+                    },
+                    {
+                        title: 'Inactive Challenge',
+                        description: 'Test',
+                        type: 'pr-merge',
+                        target: 5,
+                        reward: 100,
+                        status: 'expired',
+                        startDate: now,
+                        endDate: future,
+                        difficulty: 'easy',
+                        category: 'individual'
+                    }
+                ]
+            });
 
             const active = await getActiveChallenges();
 
@@ -116,32 +126,34 @@ describe('ChallengeService', () => {
             const older = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
             const future = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
 
-            await Challenge.create([
-                {
-                    title: 'Newer Challenge',
-                    description: 'Test',
-                    type: 'pr-merge',
-                    target: 5,
-                    reward: 100,
-                    status: 'active',
-                    startDate: now,
-                    endDate: future,
-                    difficulty: 'easy',
-                    category: 'individual'
-                },
-                {
-                    title: 'Older Challenge',
-                    description: 'Test',
-                    type: 'pr-merge',
-                    target: 5,
-                    reward: 100,
-                    status: 'active',
-                    startDate: older,
-                    endDate: future,
-                    difficulty: 'easy',
-                    category: 'individual'
-                }
-            ]);
+            await prisma.challenge.createMany({
+                data: [
+                    {
+                        title: 'Newer Challenge',
+                        description: 'Test',
+                        type: 'pr-merge',
+                        target: 5,
+                        reward: 100,
+                        status: 'active',
+                        startDate: now,
+                        endDate: future,
+                        difficulty: 'easy',
+                        category: 'individual'
+                    },
+                    {
+                        title: 'Older Challenge',
+                        description: 'Test',
+                        type: 'pr-merge',
+                        target: 5,
+                        reward: 100,
+                        status: 'active',
+                        startDate: older,
+                        endDate: future,
+                        difficulty: 'easy',
+                        category: 'individual'
+                    }
+                ]
+            });
 
             const challenges = await getActiveChallenges();
 
@@ -150,226 +162,250 @@ describe('ChallengeService', () => {
         });
     });
 
-    describe.skip('getChallengeById', () => {
+    describe('getChallengeById', () => {
         it('should return challenge for valid ID', async () => {
-            const challenge = await Challenge.create({
-                title: 'Find Me',
-                description: 'Test',
-                type: 'pr-merge',
-                target: 5,
-                reward: 100,
-                status: 'active',
-                startDate: new Date(),
-                endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-                difficulty: 'easy',
-                category: 'individual'
+            const challenge = await prisma.challenge.create({
+                data: {
+                    title: 'Find Me',
+                    description: 'Test',
+                    type: 'pr-merge',
+                    target: 5,
+                    reward: 100,
+                    status: 'active',
+                    startDate: new Date(),
+                    endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+                    difficulty: 'easy',
+                    category: 'individual'
+                }
             });
 
-            const found = await getChallengeById(challenge._id);
+            const found = await getChallengeById(challenge.id);
 
             expect(found).toBeDefined();
             expect(found.title).toBe('Find Me');
         });
 
         it('should throw error for non-existent challenge', async () => {
-            const fakeId = '507f1f77bcf86cd799439011';
+            const fakeId = 'clnonexistent123';
 
             await expect(getChallengeById(fakeId)).rejects.toThrow('Challenge not found');
         });
     });
 
-    describe.skip('joinChallenge', () => {
+    describe('joinChallenge', () => {
         it('should allow contributor to join active challenge', async () => {
-            const contributor = await Contributor.create(
-                createTestContributor({ username: 'joiner' })
-            );
-
-            const challenge = await Challenge.create({
-                title: 'Join Me',
-                description: 'Test',
-                type: 'pr-merge',
-                target: 5,
-                reward: 250,
-                status: 'active',
-                startDate: new Date(),
-                endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-                difficulty: 'medium',
-                category: 'individual'
+            const contributor = await prisma.contributor.create({
+                data: createTestContributor({ username: 'joiner' })
             });
 
-            const result = await joinChallenge('joiner', challenge._id);
+            const challenge = await prisma.challenge.create({
+                data: {
+                    title: 'Join Me',
+                    description: 'Test',
+                    type: 'pr-merge',
+                    target: 5,
+                    reward: 250,
+                    status: 'active',
+                    startDate: new Date(),
+                    endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+                    difficulty: 'medium',
+                    category: 'individual'
+                }
+            });
+
+            const result = await joinChallenge('joiner', challenge.id);
 
             expect(result.challenge).toBeDefined();
             expect(result.contributor).toBeDefined();
 
             // Verify challenge has participant
-            const updatedChallenge = await Challenge.findById(challenge._id);
-            expect(updatedChallenge.participants).toHaveLength(1);
-            expect(updatedChallenge.participants[0].username).toBe('joiner');
-            expect(updatedChallenge.participants[0].progress).toBe(0);
+            const participants = await prisma.challengeParticipant.findMany({
+                where: { challengeId: challenge.id },
+                include: { contributor: true }
+            });
+            expect(participants).toHaveLength(1);
+            expect(participants[0].contributor.username).toBe('joiner');
+            expect(participants[0].progress).toBe(0);
 
-            // Verify contributor has active challenge
-            const updatedContributor = await Contributor.findOne({ username: 'joiner' });
+            // Verify contributor has active challenge (via relation)
+            const updatedContributor = await prisma.contributor.findUnique({ 
+                where: { username: 'joiner' },
+                include: { activeChallenges: true }
+            });
             expect(updatedContributor.activeChallenges).toHaveLength(1);
-            expect(updatedContributor.activeChallenges[0].target).toBe(5);
+            expect(updatedContributor.activeChallenges[0].challengeId).toBe(challenge.id);
         });
 
         it('should throw error if contributor does not exist', async () => {
-            const challenge = await Challenge.create({
-                title: 'Join Me',
-                description: 'Test',
-                type: 'pr-merge',
-                target: 5,
-                reward: 250,
-                status: 'active',
-                startDate: new Date(),
-                endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-                difficulty: 'medium',
-                category: 'individual'
+            const challenge = await prisma.challenge.create({
+                data: {
+                    title: 'Join Me',
+                    description: 'Test',
+                    type: 'pr-merge',
+                    target: 5,
+                    reward: 250,
+                    status: 'active',
+                    startDate: new Date(),
+                    endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+                    difficulty: 'medium',
+                    category: 'individual'
+                }
             });
 
-            await expect(joinChallenge('nonexistent', challenge._id)).rejects.toThrow(
+            await expect(joinChallenge('nonexistent', challenge.id)).rejects.toThrow(
                 'Contributor not found'
             );
         });
 
         it('should throw error if already joined', async () => {
-            const contributor = await Contributor.create(
-                createTestContributor({ username: 'alreadyJoined' })
-            );
-
-            const challenge = await Challenge.create({
-                title: 'Already Joined',
-                description: 'Test',
-                type: 'pr-merge',
-                target: 5,
-                reward: 250,
-                status: 'active',
-                startDate: new Date(),
-                endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-                difficulty: 'medium',
-                category: 'individual'
+            const contributor = await prisma.contributor.create({
+                data: createTestContributor({ username: 'alreadyJoined' })
             });
 
-            await joinChallenge('alreadyJoined', challenge._id);
+            const challenge = await prisma.challenge.create({
+                data: {
+                    title: 'Already Joined',
+                    description: 'Test',
+                    type: 'pr-merge',
+                    target: 5,
+                    reward: 250,
+                    status: 'active',
+                    startDate: new Date(),
+                    endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+                    difficulty: 'medium',
+                    category: 'individual'
+                }
+            });
 
-            await expect(joinChallenge('alreadyJoined', challenge._id)).rejects.toThrow(
+            await joinChallenge('alreadyJoined', challenge.id);
+
+            await expect(joinChallenge('alreadyJoined', challenge.id)).rejects.toThrow(
                 'Already joined this challenge'
             );
         });
 
         it('should throw error if challenge is not active', async () => {
-            const contributor = await Contributor.create(
-                createTestContributor({ username: 'lateJoiner' })
-            );
-
-            const challenge = await Challenge.create({
-                title: 'Expired',
-                description: 'Test',
-                type: 'pr-merge',
-                target: 5,
-                reward: 250,
-                status: 'expired',
-                startDate: new Date(),
-                endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-                difficulty: 'medium',
-                category: 'individual'
+            const contributor = await prisma.contributor.create({
+                data: createTestContributor({ username: 'lateJoiner' })
             });
 
-            await expect(joinChallenge('lateJoiner', challenge._id)).rejects.toThrow(
+            const challenge = await prisma.challenge.create({
+                data: {
+                    title: 'Expired',
+                    description: 'Test',
+                    type: 'pr-merge',
+                    target: 5,
+                    reward: 250,
+                    status: 'expired',
+                    startDate: new Date(),
+                    endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+                    difficulty: 'medium',
+                    category: 'individual'
+                }
+            });
+
+            await expect(joinChallenge('lateJoiner', challenge.id)).rejects.toThrow(
                 'Challenge is not active'
             );
         });
     });
 
-    describe.skip('updateChallengeProgress', () => {
+    describe('updateChallengeProgress', () => {
         it('should update progress for participant', async () => {
-            const contributor = await Contributor.create(
-                createTestContributor({ username: 'progressor' })
-            );
-
-            const challenge = await Challenge.create({
-                title: 'Progress Test',
-                description: 'Test',
-                type: 'pr-merge',
-                target: 10,
-                reward: 250,
-                status: 'active',
-                startDate: new Date(),
-                endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-                difficulty: 'medium',
-                category: 'individual',
-                participants: [{
-                    username: 'progressor',
-                    progress: 5,
-                    completed: false,
-                    joinedAt: new Date()
-                }]
+            const contributor = await prisma.contributor.create({
+                data: createTestContributor({ username: 'progressor' })
             });
 
-            contributor.activeChallenges.push({
-                challengeId: challenge._id,
-                progress: 5,
-                target: 10,
-                joined: new Date()
+            const challenge = await prisma.challenge.create({
+                data: {
+                    title: 'Progress Test',
+                    description: 'Test',
+                    type: 'pr-merge',
+                    target: 10,
+                    reward: 250,
+                    status: 'active',
+                    startDate: new Date(),
+                    endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+                    difficulty: 'medium',
+                    category: 'individual',
+                    participants: {
+                        create: {
+                            contributorId: contributor.id,
+                            progress: 5,
+                            completed: false,
+                            joinedAt: new Date()
+                        }
+                    }
+                }
             });
-            await contributor.save();
 
-            const result = await updateChallengeProgress('progressor', challenge._id, 2);
+            const result = await updateChallengeProgress('progressor', challenge.id, 2);
 
             expect(result.progress).toBe(7);
             expect(result.target).toBe(10);
             expect(result.completed).toBe(false);
 
-            const updatedChallenge = await Challenge.findById(challenge._id);
-            expect(updatedChallenge.participants[0].progress).toBe(7);
+            const participant = await prisma.challengeParticipant.findUnique({
+                where: {
+                    challengeId_contributorId: {
+                        challengeId: challenge.id,
+                        contributorId: contributor.id
+                    }
+                }
+            });
+            expect(participant.progress).toBe(7);
         });
 
         it('should mark challenge as completed when target reached', async () => {
-            const contributor = await Contributor.create(
-                createTestContributor({
+            const contributor = await prisma.contributor.create({
+                data: createTestContributor({
                     username: 'completer',
                     totalPoints: 100
                 })
-            );
-
-            const challenge = await Challenge.create({
-                title: 'Complete Me',
-                description: 'Test',
-                type: 'pr-merge',
-                target: 10,
-                reward: 250,
-                status: 'active',
-                startDate: new Date(),
-                endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-                difficulty: 'medium',
-                category: 'individual',
-                participants: [{
-                    username: 'completer',
-                    progress: 9,
-                    completed: false,
-                    joinedAt: new Date()
-                }]
             });
 
-            contributor.activeChallenges.push({
-                challengeId: challenge._id,
-                progress: 9,
-                target: 10,
-                joined: new Date()
+            const challenge = await prisma.challenge.create({
+                data: {
+                    title: 'Complete Me',
+                    description: 'Test',
+                    type: 'pr-merge',
+                    target: 10,
+                    reward: 250,
+                    status: 'active',
+                    startDate: new Date(),
+                    endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+                    difficulty: 'medium',
+                    category: 'individual',
+                    participants: {
+                        create: {
+                            contributorId: contributor.id,
+                            progress: 9,
+                            completed: false,
+                            joinedAt: new Date()
+                        }
+                    }
+                }
             });
-            await contributor.save();
 
-            await updateChallengeProgress('completer', challenge._id, 1);
+            await updateChallengeProgress('completer', challenge.id, 1);
 
-            const updatedChallenge = await Challenge.findById(challenge._id);
-            expect(updatedChallenge.participants[0].progress).toBe(10);
-            expect(updatedChallenge.participants[0].completed).toBe(true);
+            const participant = await prisma.challengeParticipant.findUnique({
+                where: {
+                    challengeId_contributorId: {
+                        challengeId: challenge.id,
+                        contributorId: contributor.id
+                    }
+                }
+            });
+            expect(participant.progress).toBe(10);
+            expect(participant.completed).toBe(true);
 
             // Check that contributor received points
-            const updatedContributor = await Contributor.findOne({ username: 'completer' });
-            expect(updatedContributor.totalPoints).toBe(350); // 100 + 250
-            expect(updatedContributor.activeChallenges).toHaveLength(0);
+            const updatedContributor = await prisma.contributor.findUnique({ 
+                where: { username: 'completer' },
+                include: { completedChallenges: true }
+            });
+            expect(Number(updatedContributor.totalPoints)).toBe(350); // 100 + 250
             expect(updatedContributor.completedChallenges).toHaveLength(1);
         });
 
@@ -380,102 +416,104 @@ describe('ChallengeService', () => {
         });
     });
 
-    describe.skip('completeChallenge', () => {
+    describe('completeChallenge', () => {
         it('should award points and move challenge to completed', async () => {
-            const contributor = await Contributor.create(
-                createTestContributor({
+            const contributor = await prisma.contributor.create({
+                data: createTestContributor({
                     username: 'winner',
                     totalPoints: 500
                 })
-            );
-
-            const challenge = await Challenge.create({
-                title: 'Completed Challenge',
-                description: 'Test',
-                type: 'pr-merge',
-                target: 10,
-                reward: 300,
-                status: 'active',
-                startDate: new Date(),
-                endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-                difficulty: 'hard',
-                category: 'individual'
             });
 
-            contributor.activeChallenges.push({
-                challengeId: challenge._id,
-                progress: 10,
-                target: 10,
-                joined: new Date()
+            const challenge = await prisma.challenge.create({
+                data: {
+                    title: 'Completed Challenge',
+                    description: 'Test',
+                    type: 'pr-merge',
+                    target: 10,
+                    reward: 300,
+                    status: 'active',
+                    startDate: new Date(),
+                    endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+                    difficulty: 'hard',
+                    category: 'individual'
+                }
             });
-            await contributor.save();
 
-            const result = await completeChallenge('winner', challenge._id);
+            const result = await completeChallenge('winner', challenge.id);
 
             expect(result.reward).toBe(300);
             expect(result.totalPoints).toBe(800); // 500 + 300
 
-            const updatedContributor = await Contributor.findOne({ username: 'winner' });
-            expect(updatedContributor.totalPoints).toBe(800);
-            expect(updatedContributor.activeChallenges).toHaveLength(0);
+            const updatedContributor = await prisma.contributor.findUnique({ 
+                where: { username: 'winner' },
+                include: { pointsHistory: true, completedChallenges: true }
+            });
+            expect(Number(updatedContributor.totalPoints)).toBe(800);
             expect(updatedContributor.completedChallenges).toHaveLength(1);
             expect(updatedContributor.pointsHistory).toHaveLength(1);
             expect(updatedContributor.pointsHistory[0].reason).toBe('Challenge Completed');
         });
 
         it('should throw error for non-existent challenge', async () => {
-            await Contributor.create(
-                createTestContributor({ username: 'user' })
-            );
+            await prisma.contributor.create({
+                data: createTestContributor({ username: 'user' })
+            });
 
             await expect(completeChallenge('user', 'fakeid')).rejects.toThrow();
         });
     });
 
-    describe.skip('getUserChallenges', () => {
-        it('should return user's active and completed challenges', async () => {
-            const challenge1 = await Challenge.create({
-                title: 'Active Challenge',
-                description: 'Test',
-                type: 'pr-merge',
-                target: 5,
-                reward: 100,
-                status: 'active',
-                startDate: new Date(),
-                endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-                difficulty: 'easy',
-                category: 'individual'
+    describe('getUserChallenges', () => {
+        it('should return user\'s active and completed challenges', async () => {
+            const contributor = await prisma.contributor.create({
+                data: createTestContributor({ username: 'challengeUser' })
             });
 
-            const challenge2 = await Challenge.create({
-                title: 'Completed Challenge',
-                description: 'Test',
-                type: 'review',
-                target: 10,
-                reward: 200,
-                status: 'expired',
-                startDate: new Date(),
-                endDate: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
-                difficulty: 'medium',
-                category: 'individual'
+            const challenge1 = await prisma.challenge.create({
+                data: {
+                    title: 'Active Challenge',
+                    description: 'Test',
+                    type: 'pr-merge',
+                    target: 5,
+                    reward: 100,
+                    status: 'active',
+                    startDate: new Date(),
+                    endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+                    difficulty: 'easy',
+                    category: 'individual',
+                    participants: {
+                        create: {
+                            contributorId: contributor.id,
+                            progress: 3,
+                            joinedAt: new Date()
+                        }
+                    }
+                }
             });
 
-            const contributor = await Contributor.create(
-                createTestContributor({
-                    username: 'challengeUser',
-                    activeChallenges: [{
-                        challengeId: challenge1._id,
-                        progress: 3,
-                        target: 5,
-                        joined: new Date()
-                    }],
-                    completedChallenges: [{
-                        challengeId: challenge2._id,
-                        completedAt: new Date(),
-                        reward: 200
-                    }]
-                })
-            );
+            const challenge2 = await prisma.challenge.create({
+                data: {
+                    title: 'Completed Challenge',
+                    description: 'Test',
+                    type: 'review',
+                    target: 10,
+                    reward: 200,
+                    status: 'expired',
+                    startDate: new Date(),
+                    endDate: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
+                    difficulty: 'medium',
+                    category: 'individual'
+                }
+            });
+
+            await prisma.completedChallenge.create({
+                data: {
+                    contributorId: contributor.id,
+                    challengeId: challenge2.id,
+                    reward: 200
+                }
+            });
 
             const result = await getUserChallenges('challengeUser');
 
@@ -492,7 +530,7 @@ describe('ChallengeService', () => {
         });
     });
 
-    describe.skip('generateWeeklyChallenges', () => {
+    describe('generateWeeklyChallenges', () => {
         it('should generate 3 random challenges', async () => {
             const challenges = await generateWeeklyChallenges();
 
@@ -530,92 +568,112 @@ describe('ChallengeService', () => {
         });
     });
 
-    describe.skip('checkExpiredChallenges', () => {
+    describe('checkExpiredChallenges', () => {
         it('should mark expired active challenges as expired', async () => {
             const past = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
 
-            await Challenge.create([
-                {
-                    title: 'Expired Challenge 1',
-                    description: 'Test',
-                    type: 'pr-merge',
-                    target: 5,
-                    reward: 100,
-                    status: 'active',
-                    startDate: past,
-                    endDate: past,
-                    difficulty: 'easy',
-                    category: 'individual'
-                },
-                {
-                    title: 'Expired Challenge 2',
-                    description: 'Test',
-                    type: 'review',
-                    target: 10,
-                    reward: 200,
-                    status: 'active',
-                    startDate: past,
-                    endDate: past,
-                    difficulty: 'medium',
-                    category: 'individual'
-                }
-            ]);
+            await prisma.challenge.createMany({
+                data: [
+                    {
+                        title: 'Expired Challenge 1',
+                        description: 'Test',
+                        type: 'pr-merge',
+                        target: 5,
+                        reward: 100,
+                        status: 'active',
+                        startDate: past,
+                        endDate: past,
+                        difficulty: 'easy',
+                        category: 'individual'
+                    },
+                    {
+                        title: 'Expired Challenge 2',
+                        description: 'Test',
+                        type: 'review',
+                        target: 10,
+                        reward: 200,
+                        status: 'active',
+                        startDate: past,
+                        endDate: past,
+                        difficulty: 'medium',
+                        category: 'individual'
+                    }
+                ]
+            });
 
             const count = await checkExpiredChallenges();
 
             expect(count).toBe(2);
 
-            const challenges = await Challenge.find({ status: 'expired' });
+            const challenges = await prisma.challenge.findMany({ 
+                where: { status: 'expired' } 
+            });
             expect(challenges).toHaveLength(2);
         });
 
         it('should not affect active challenges with future end dates', async () => {
             const future = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
-            await Challenge.create({
-                title: 'Active Challenge',
-                description: 'Test',
-                type: 'pr-merge',
-                target: 5,
-                reward: 100,
-                status: 'active',
-                startDate: new Date(),
-                endDate: future,
-                difficulty: 'easy',
-                category: 'individual'
+            await prisma.challenge.create({
+                data: {
+                    title: 'Active Challenge',
+                    description: 'Test',
+                    type: 'pr-merge',
+                    target: 5,
+                    reward: 100,
+                    status: 'active',
+                    startDate: new Date(),
+                    endDate: future,
+                    difficulty: 'easy',
+                    category: 'individual'
+                }
             });
 
             const count = await checkExpiredChallenges();
 
             expect(count).toBe(0);
 
-            const active = await Challenge.find({ status: 'active' });
+            const active = await prisma.challenge.findMany({ 
+                where: { status: 'active' } 
+            });
             expect(active).toHaveLength(1);
         });
     });
 
-    describe.skip('getChallengeLeaderboard', () => {
+    describe('getChallengeLeaderboard', () => {
         it('should return sorted leaderboard by progress', async () => {
-            const challenge = await Challenge.create({
-                title: 'Leaderboard Challenge',
-                description: 'Test',
-                type: 'pr-merge',
-                target: 10,
-                reward: 250,
-                status: 'active',
-                startDate: new Date(),
-                endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-                difficulty: 'medium',
-                category: 'individual',
-                participants: [
-                    { username: 'user1', progress: 8, completed: false, joinedAt: new Date() },
-                    { username: 'user2', progress: 10, completed: true, joinedAt: new Date() },
-                    { username: 'user3', progress: 5, completed: false, joinedAt: new Date() },
-                    { username: 'user4', progress: 7, completed: false, joinedAt: new Date() }
-                ]
+            // Create contributors first
+            const users = await Promise.all([
+                prisma.contributor.create({ data: createTestContributor({ username: 'user1' }) }),
+                prisma.contributor.create({ data: createTestContributor({ username: 'user2' }) }),
+                prisma.contributor.create({ data: createTestContributor({ username: 'user3' }) }),
+                prisma.contributor.create({ data: createTestContributor({ username: 'user4' }) })
+            ]);
+
+            const challenge = await prisma.challenge.create({
+                data: {
+                    title: 'Leaderboard Challenge',
+                    description: 'Test',
+                    type: 'pr-merge',
+                    target: 10,
+                    reward: 250,
+                    status: 'active',
+                    startDate: new Date(),
+                    endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+                    difficulty: 'medium',
+                    category: 'individual',
+                    participants: {
+                        create: [
+                            { contributorId: users[0].id, progress: 8, completed: false, joinedAt: new Date() },
+                            { contributorId: users[1].id, progress: 10, completed: true, joinedAt: new Date() },
+                            { contributorId: users[2].id, progress: 5, completed: false, joinedAt: new Date() },
+                            { contributorId: users[3].id, progress: 7, completed: false, joinedAt: new Date() }
+                        ]
+                    }
+                }
             });
 
-            const result = await getChallengeLeaderboard(challenge._id);
+            const result = await getChallengeLeaderboard(challenge.id);
 
             expect(result.challengeId).toBeDefined();
             expect(result.title).toBe('Leaderboard Challenge');
@@ -630,28 +688,39 @@ describe('ChallengeService', () => {
         });
 
         it('should limit leaderboard to top 20', async () => {
-            const participants = Array.from({ length: 25 }, (_, i) => ({
-                username: `user${i}`,
-                progress: i + 1,
-                completed: false,
-                joinedAt: new Date()
-            }));
+            // Create 25 contributors
+            const users = await Promise.all(
+                Array.from({ length: 25 }, (_, i) =>
+                    prisma.contributor.create({ 
+                        data: createTestContributor({ username: `user${i}` }) 
+                    })
+                )
+            );
 
-            const challenge = await Challenge.create({
-                title: 'Large Challenge',
-                description: 'Test',
-                type: 'pr-merge',
-                target: 100,
-                reward: 500,
-                status: 'active',
-                startDate: new Date(),
-                endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-                difficulty: 'hard',
-                category: 'individual',
-                participants
+            const challenge = await prisma.challenge.create({
+                data: {
+                    title: 'Large Challenge',
+                    description: 'Test',
+                    type: 'pr-merge',
+                    target: 100,
+                    reward: 500,
+                    status: 'active',
+                    startDate: new Date(),
+                    endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+                    difficulty: 'hard',
+                    category: 'individual',
+                    participants: {
+                        create: users.map((user, i) => ({
+                            contributorId: user.id,
+                            progress: i + 1,
+                            completed: false,
+                            joinedAt: new Date()
+                        }))
+                    }
+                }
             });
 
-            const result = await getChallengeLeaderboard(challenge._id);
+            const result = await getChallengeLeaderboard(challenge.id);
 
             expect(result.leaderboard).toHaveLength(20);
         });
@@ -663,67 +732,72 @@ describe('ChallengeService', () => {
         });
     });
 
-    describe.skip('Edge Cases', () => {
+    describe('Edge Cases', () => {
         it('should handle challenges with zero participants', async () => {
-            const challenge = await Challenge.create({
-                title: 'Empty Challenge',
-                description: 'Test',
-                type: 'pr-merge',
-                target: 5,
-                reward: 100,
-                status: 'active',
-                startDate: new Date(),
-                endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-                difficulty: 'easy',
-                category: 'individual'
+            const challenge = await prisma.challenge.create({
+                data: {
+                    title: 'Empty Challenge',
+                    description: 'Test',
+                    type: 'pr-merge',
+                    target: 5,
+                    reward: 100,
+                    status: 'active',
+                    startDate: new Date(),
+                    endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+                    difficulty: 'easy',
+                    category: 'individual'
+                }
             });
 
-            const result = await getChallengeLeaderboard(challenge._id);
+            const result = await getChallengeLeaderboard(challenge.id);
 
             expect(result.leaderboard).toHaveLength(0);
         });
 
         it('should handle progress updates beyond target', async () => {
-            const contributor = await Contributor.create(
-                createTestContributor({
+            const contributor = await prisma.contributor.create({
+                data: createTestContributor({
                     username: 'overachiever',
                     totalPoints: 0
                 })
-            );
-
-            const challenge = await Challenge.create({
-                title: 'Exceed Target',
-                description: 'Test',
-                type: 'pr-merge',
-                target: 5,
-                reward: 100,
-                status: 'active',
-                startDate: new Date(),
-                endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-                difficulty: 'easy',
-                category: 'individual',
-                participants: [{
-                    username: 'overachiever',
-                    progress: 4,
-                    completed: false,
-                    joinedAt: new Date()
-                }]
             });
 
-            contributor.activeChallenges.push({
-                challengeId: challenge._id,
-                progress: 4,
-                target: 5,
-                joined: new Date()
+            const challenge = await prisma.challenge.create({
+                data: {
+                    title: 'Exceed Target',
+                    description: 'Test',
+                    type: 'pr-merge',
+                    target: 5,
+                    reward: 100,
+                    status: 'active',
+                    startDate: new Date(),
+                    endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+                    difficulty: 'easy',
+                    category: 'individual',
+                    participants: {
+                        create: {
+                            contributorId: contributor.id,
+                            progress: 4,
+                            completed: false,
+                            joinedAt: new Date()
+                        }
+                    }
+                }
             });
-            await contributor.save();
 
             // Add progress that exceeds target
-            await updateChallengeProgress('overachiever', challenge._id, 3);
+            await updateChallengeProgress('overachiever', challenge.id, 3);
 
-            const updatedChallenge = await Challenge.findById(challenge._id);
-            expect(updatedChallenge.participants[0].progress).toBe(7); // Exceeds target
-            expect(updatedChallenge.participants[0].completed).toBe(true);
+            const participant = await prisma.challengeParticipant.findUnique({
+                where: {
+                    challengeId_contributorId: {
+                        challengeId: challenge.id,
+                        contributorId: contributor.id
+                    }
+                }
+            });
+            expect(participant.progress).toBe(7); // Exceeds target
+            expect(participant.completed).toBe(true);
         });
     });
 });

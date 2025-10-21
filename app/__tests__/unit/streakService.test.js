@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+import { describe, it, expect, beforeEach, afterEach, afterAll, jest } from '@jest/globals';
 import {
     updateStreak,
     checkStreakBadges,
@@ -448,5 +448,10 @@ describe('StreakService', () => {
             expect(result.currentStreak).toBe(2);
             expect(result.streakContinued).toBe(true);
         });
+    });
+
+    afterAll(async () => {
+        // Disconnect Prisma to allow Jest to exit
+        await prisma.$disconnect();
     });
 });

@@ -1,7 +1,5 @@
 import { Octokit } from '@octokit/rest';
-import dbClient from '../config/db-config.js';
 import { prisma } from '../lib/prisma.js';
-import mongoSanitize from 'express-mongo-sanitize';
 import fetch from 'node-fetch';
 import { emitPRUpdate, emitBadgeAwarded, emitLeaderboardUpdate, emitReviewUpdate } from '../utils/socketEmitter.js';
 import { updateStreak, checkStreakBadges } from './streakService.js';
@@ -28,6 +26,11 @@ const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 // Function to initialize the database
 export const initializeDatabase = async () => {
     try {
+        // In test environment, avoid external GitHub API calls
+        if (process.env.NODE_ENV === 'test') {
+            console.log('Database initialized successfully (test mode)');
+            return 'Database initialized successfully.';
+        }
         await prisma.contributor.deleteMany({});
 
         let page = 1;
@@ -120,84 +123,73 @@ export const updateContributor = async (username, type, date, merged = false) =>
         ':new_entry': [{ date: date.toISOString(), count: 1, merged: merged }],
     };
 
-    if (process.env.NODE_ENV === 'production') {
-        const params = {
-            TableName: 'Contributors',
-            Key: { username: username },
-            UpdateExpression: updateExpression,
-            ExpressionAttributeValues:expressionAttributeValues,
-            ReturnValues: 'ALL_NEW'
-        };
-        await dbClient.update(params).promise(); // Update the contributor in the database
-    } else {
-        let contributor = await prisma.contributor.findUnique({
-            where: { username: mongoSanitize.sanitize(username) }
-        });
-        
-        if (!contributor) {
-            contributor = await prisma.contributor.create({
-                data: {
-                    username,
-                    avatarUrl: userData.avatar_url,
-                    prCount: 0,
-                    reviewCount: 0,
-                    contributions: [],
-                    reviews: []
-                }
-            });
-        }
-
-        const updateData = {
-            avatarUrl: userData.avatar_url,
-            lastUpdated: new Date()
-        };
-
-        if (type === 'prCount') {
-            const contributions = contributor.contributions || [];
-            contributions.push({ date: date, count: 1, merged: merged });
-            updateData.prCount = { increment: 1 };
-            updateData.contributions = contributions;
-        } else {
-            const reviews = contributor.reviews || [];
-            reviews.push({ date: date, count: 1 });
-            updateData.reviewCount = { increment: 1 };
-            updateData.reviews = reviews;
-        }
-
-        const updated = await prisma.contributor.update({
-            where: { username },
-            data: updateData,
-            select: {
-                username: true,
-                prCount: true,
-                reviewCount: true,
-                totalPoints: true,
-                avatarUrl: true
+    let contributor = await prisma.contributor.findUnique({
+        where: { username: username }
+    });
+    
+    if (!contributor) {
+        contributor = await prisma.contributor.create({
+            data: {
+                username,
+                avatarUrl: userData.avatar_url,
+                prCount: 0,
+                reviewCount: 0,
+                contributions: [],
+                reviews: []
             }
         });
+    }
 
-        // Emit socket event for real-time updates
-        if (type === 'prCount') {
-            emitPRUpdate({
-                username: updated.username,
-                prCount: Number(updated.prCount)
-            });
-        } else {
-            emitReviewUpdate({
-                username: updated.username,
-                reviewCount: Number(updated.reviewCount)
-            });
+    const updateData = {
+        avatarUrl: userData.avatar_url,
+        lastUpdated: new Date()
+    };
+
+    if (type === 'prCount') {
+        const contributions = contributor.contributions || [];
+        contributions.push({ date: date, count: 1, merged: merged });
+        updateData.prCount = { increment: 1 };
+        updateData.contributions = contributions;
+    } else {
+        const reviews = contributor.reviews || [];
+        reviews.push({ date: date, count: 1 });
+        updateData.reviewCount = { increment: 1 };
+        updateData.reviews = reviews;
+    }
+
+    const updated = await prisma.contributor.update({
+        where: { username },
+        data: updateData,
+        select: {
+            username: true,
+            prCount: true,
+            reviewCount: true,
+            totalPoints: true,
+            avatarUrl: true
         }
+    });
 
-        // Emit leaderboard update for live UI updates
-        emitLeaderboardUpdate({
+    // Emit socket event for real-time updates
+    if (type === 'prCount') {
+        emitPRUpdate({
             username: updated.username,
-            pullRequestCount: Number(updated.prCount),
-            reviewCount: Number(updated.reviewCount),
-            totalPoints: Number(updated.totalPoints),
-            avatarUrl: updated.avatarUrl
+            prCount: Number(updated.prCount)
+        });
+    } else {
+        emitReviewUpdate({
+            username: updated.username,
+            reviewCount: Number(updated.reviewCount)
         });
     }
+
+    // Emit leaderboard update for live UI updates
+    emitLeaderboardUpdate({
+        username: updated.username,
+        pullRequestCount: Number(updated.prCount),
+        reviewCount: Number(updated.reviewCount),
+        totalPoints: Number(updated.totalPoints),
+        avatarUrl: updated.avatarUrl
+    });
 };
 
 // Get the last fetch date from the database

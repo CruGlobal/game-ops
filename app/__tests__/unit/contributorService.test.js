@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+import { describe, it, expect, beforeEach, afterEach, afterAll, jest } from '@jest/globals';
 import {
   awardBadges,
   awardBillsAndVonettes,
@@ -301,5 +301,10 @@ describe('ContributorService', () => {
       
       expect(result).toHaveLength(0);
     });
+  });
+
+  afterAll(async () => {
+    // Disconnect Prisma to allow Jest to exit
+    await prisma.$disconnect();
   });
 });

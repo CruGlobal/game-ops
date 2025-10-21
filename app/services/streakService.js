@@ -10,6 +10,10 @@ import logger from '../utils/logger.js';
  */
 export const updateStreak = async (contributor, contributionDate) => {
     try {
+        // Validate contributor identity early to catch invalid input
+        if (!contributor || typeof contributor.username !== 'string' || !contributor.username.trim()) {
+            throw new Error('Invalid contributor username');
+        }
         const today = new Date(contributionDate);
         today.setHours(0, 0, 0, 0);
 

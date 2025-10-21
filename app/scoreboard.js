@@ -2,7 +2,6 @@ import express from 'express';
 import dotenv from 'dotenv';
 import rateLimit from 'express-rate-limit';
 import helmet from 'helmet';
-import mongoSanitize from 'express-mongo-sanitize';
 import cors from 'cors';
 import cron from 'node-cron';
 import path from 'path';
@@ -50,7 +49,6 @@ app.use(helmet({
         }
     }
 }));
-app.use(mongoSanitize());
 app.use(cors());
 
 app.use((req, res, next) => {

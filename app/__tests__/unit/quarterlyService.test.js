@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from '@jest/globals';
+import { describe, it, expect, beforeEach, afterEach, afterAll } from '@jest/globals';
 import {
     getQuarterConfig,
     getCurrentQuarter,
@@ -416,5 +416,17 @@ describe('QuarterlyService', () => {
             // This should run without errors
             await expect(checkAndResetIfNewQuarter()).resolves.toBeDefined();
         });
+    });
+
+    afterEach(async () => {
+        // Clean up after tests
+        await prisma.quarterlyWinner.deleteMany({});
+        await prisma.quarterSettings.deleteMany({});
+        await prisma.contributor.deleteMany({});
+    });
+
+    afterAll(async () => {
+        // Disconnect Prisma to allow Jest to exit
+        await prisma.$disconnect();
     });
 });

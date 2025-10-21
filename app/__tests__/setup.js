@@ -46,9 +46,15 @@ beforeAll(async () => {
 
 // Global test teardown
 afterAll(async () => {
-  // Disconnect Prisma
+  // Disconnect Prisma and wait for connection pool to close
   if (prisma) {
-    await prisma.$disconnect();
+    try {
+      await prisma.$disconnect();
+      // Give Prisma time to fully close connections
+      await new Promise(resolve => setTimeout(resolve, 100));
+    } catch (error) {
+      console.error('Error disconnecting Prisma:', error);
+    }
   }
   
   // Clean up nock

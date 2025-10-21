@@ -43,6 +43,11 @@ describe('API Integration Tests', () => {
     await prisma.contributor.deleteMany({});
   });
 
+  afterAll(async () => {
+    // Disconnect Prisma to allow Jest to exit
+    await prisma.$disconnect();
+  });
+
   describe('GET /api/top-contributors', () => {
     it('should return top contributors successfully', async () => {
       // Create test data

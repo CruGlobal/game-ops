@@ -1,5 +1,5 @@
 // adminController.js
-import Contributor from '../models/contributor.js';
+import { prisma } from '../lib/prisma.js';
 import { body, validationResult } from 'express-validator';
 import { getPRRangeInfo, checkForDuplicates, fixDuplicates } from '../services/contributorService.js';
 import { startBackfill, stopBackfill, getBackfillStatus } from '../services/backfillService.js';
@@ -16,7 +16,7 @@ import {
 // Function to get all contributors
 export const getContributors = async (req, res) => {
     try {
-        const contributors = await Contributor.find();
+        const contributors = await prisma.contributor.findMany();
         res.status(200).json(contributors);
     } catch (err) {
         res.status(500).send('Error fetching contributors');
@@ -34,24 +34,30 @@ export const resetContributor = [
 
         const { username } = req.body;
         try {
-            const contributor = await Contributor.findOne({ username });
+            const contributor = await prisma.contributor.findUnique({
+                where: { username }
+            });
             if (!contributor) {
                 return res.status(404).send('Contributor not found');
             }
-            contributor.firstPrAwarded = false;
-            contributor.firstReviewAwarded = false;
-            contributor.first10PrsAwarded = false;
-            contributor.first10ReviewsAwarded = false;
-            contributor.first50PrsAwarded = false;
-            contributor.first50ReviewsAwarded = false;
-            contributor.first100PrsAwarded = false;
-            contributor.first100ReviewsAwarded = false;
-            contributor.first500PrsAwarded = false;
-            contributor.first500ReviewsAwarded = false;
-            contributor.first1000PrsAwarded = false;
-            contributor.first1000ReviewsAwarded = false;
-            contributor.badges = [];
-            await contributor.save();
+            await prisma.contributor.update({
+                where: { username },
+                data: {
+                    firstPrAwarded: false,
+                    firstReviewAwarded: false,
+                    first10PrsAwarded: false,
+                    first10ReviewsAwarded: false,
+                    first50PrsAwarded: false,
+                    first50ReviewsAwarded: false,
+                    first100PrsAwarded: false,
+                    first100ReviewsAwarded: false,
+                    first500PrsAwarded: false,
+                    first500ReviewsAwarded: false,
+                    first1000PrsAwarded: false,
+                    first1000ReviewsAwarded: false,
+                    badges: []
+                }
+            });
             res.status(200).send('Contributor reset successfully');
         } catch (err) {
             res.status(500).send('Error resetting contributor');
@@ -62,20 +68,22 @@ export const resetContributor = [
 // Function to reset all contributors' awards and badges
 export const resetAllContributors = async (req, res) => {
     try {
-        await Contributor.updateMany({}, {
-            firstPrAwarded: false,
-            firstReviewAwarded: false,
-            first10PrsAwarded: false,
-            first10ReviewsAwarded: false,
-            first50PrsAwarded: false,
-            first50ReviewsAwarded: false,
-            first100PrsAwarded: false,
-            first100ReviewsAwarded: false,
-            first500PrsAwarded: false,
-            first500ReviewsAwarded: false,
-            first1000PrsAwarded: false,
-            first1000ReviewsAwarded: false,
-            badges: []
+        await prisma.contributor.updateMany({
+            data: {
+                firstPrAwarded: false,
+                firstReviewAwarded: false,
+                first10PrsAwarded: false,
+                first10ReviewsAwarded: false,
+                first50PrsAwarded: false,
+                first50ReviewsAwarded: false,
+                first100PrsAwarded: false,
+                first100ReviewsAwarded: false,
+                first500PrsAwarded: false,
+                first500ReviewsAwarded: false,
+                first1000PrsAwarded: false,
+                first1000ReviewsAwarded: false,
+                badges: []
+            }
         });
         res.status(200).send('All contributors reset successfully');
     } catch (err) {
@@ -153,14 +161,13 @@ export async function fixDuplicatesController(req, res) {
 export async function getQuarterInfoController(req, res) {
     try {
         const currentQuarter = await getCurrentQuarter();
-        const quarterDates = await getQuarterDateRange(currentQuarter);
+        const { start, end } = await getQuarterDateRange(currentQuarter);
 
         res.json({
             success: true,
-            data: {
-                currentQuarter,
-                quarterDates
-            }
+            currentQuarter,
+            quarterStart: start,
+            quarterEnd: end
         });
     } catch (error) {
         console.error('Error in getQuarterInfoController:', error);
@@ -180,15 +187,14 @@ export async function getQuarterConfigController(req, res) {
     try {
         const config = await getQuarterConfig();
         const currentQuarter = await getCurrentQuarter();
-        const quarterDates = await getQuarterDateRange(currentQuarter);
+        const { start, end } = await getQuarterDateRange(currentQuarter);
 
         res.json({
             success: true,
-            data: {
-                config,
-                currentQuarter,
-                quarterDates
-            }
+            config,
+            currentQuarter,
+            quarterStart: start,
+            quarterEnd: end
         });
     } catch (error) {
         console.error('Error in getQuarterConfigController:', error);
@@ -209,6 +215,15 @@ export async function updateQuarterConfigController(req, res) {
         const { systemType, q1StartMonth } = req.body;
         const modifiedBy = req.user?.username || 'admin';
 
+        // Validation expected by tests
+        const allowedSystems = ['calendar', 'fiscal-us', 'academic', 'custom'];
+        if (!allowedSystems.includes(systemType)) {
+            return res.status(400).json({ success: false, message: 'Invalid system type' });
+        }
+        if (q1StartMonth < 1 || q1StartMonth > 12) {
+            return res.status(400).json({ success: false, message: 'q1StartMonth must be between 1 and 12' });
+        }
+
         const result = await updateQuarterConfig(
             systemType,
             q1StartMonth,
@@ -217,10 +232,10 @@ export async function updateQuarterConfigController(req, res) {
 
         res.json({
             success: true,
-            message: result.quarterChanged
-                ? `Quarter configuration updated. Quarter changed from ${result.oldQuarter} to ${result.newQuarter}.`
-                : 'Quarter configuration updated successfully.',
-            data: result
+            config: result.config,
+            quarterChanged: result.quarterChanged,
+            oldQuarter: result.oldQuarter,
+            newQuarter: result.newQuarter
         });
     } catch (error) {
         console.error('Error in updateQuarterConfigController:', error);
@@ -240,11 +255,8 @@ export async function getAllTimeLeaderboardController(req, res) {
     try {
         const limit = parseInt(req.query.limit) || 50;
         const leaderboard = await getAllTimeLeaderboard(limit);
-
-        res.json({
-            success: true,
-            data: leaderboard
-        });
+        const withRank = leaderboard.map((row, idx) => ({ ...row, rank: idx + 1 }));
+        res.json({ success: true, data: withRank });
     } catch (error) {
         console.error('Error in getAllTimeLeaderboardController:', error);
         res.status(500).json({
@@ -264,16 +276,13 @@ export async function getQuarterlyLeaderboardController(req, res) {
     try {
         const limit = parseInt(req.query.limit) || 50;
         const quarterString = req.params.quarter || await getCurrentQuarter();
-
-        const leaderboard = await getQuarterlyLeaderboard(quarterString, limit);
-
-        res.json({
-            success: true,
-            data: {
-                quarter: quarterString,
-                leaderboard
-            }
-        });
+        const { start, end } = await getQuarterDateRange(quarterString);
+        const raw = await getQuarterlyLeaderboard(quarterString, limit);
+        // Only include contributors with points > 0 and flatten pointsThisQuarter to top level
+        const data = raw
+            .filter(c => (c.quarterlyStats?.pointsThisQuarter || 0) > 0)
+            .map(c => ({ ...c, pointsThisQuarter: c.quarterlyStats?.pointsThisQuarter || 0 }));
+        res.json({ success: true, quarter: quarterString, quarterStart: start, quarterEnd: end, data });
     } catch (error) {
         console.error('Error in getQuarterlyLeaderboardController:', error);
         res.status(500).json({
@@ -281,6 +290,24 @@ export async function getQuarterlyLeaderboardController(req, res) {
             message: 'Failed to retrieve quarterly leaderboard',
             error: error.message
         });
+    }
+}
+
+// Archived quarterly leaderboard by quarter from Hall of Fame
+export async function getQuarterlyLeaderboardByQuarterController(req, res) {
+    try {
+        const { quarter } = req.params;
+        if (!/^\d{4}-Q[1-4]$/.test(quarter)) {
+            return res.status(400).json({ success: false, message: 'Invalid quarter format' });
+        }
+        const winner = await prisma.quarterlyWinner.findUnique({ where: { quarter } });
+        if (!winner) {
+            return res.status(404).json({ success: false, message: `Quarter ${quarter} not found` });
+        }
+        res.json({ success: true, quarter: winner.quarter, data: winner.top3 || [], totalParticipants: winner.totalParticipants });
+    } catch (error) {
+        console.error('Error in getQuarterlyLeaderboardByQuarterController:', error);
+        res.status(500).json({ success: false, message: 'Failed to retrieve archived quarter', error: error.message });
     }
 }
 

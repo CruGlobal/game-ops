@@ -1,14 +1,15 @@
-import Contributor from '../models/contributor.js';
+import { PrismaClient } from '@prisma/client';
 import { ACHIEVEMENTS, checkAchievements } from '../config/achievements-config.js';
 import { emitAchievementUnlocked } from '../utils/socketEmitter.js';
 import logger from '../utils/logger.js';
 import { Octokit } from '@octokit/rest';
 
+const prisma = new PrismaClient();
 const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
 
 /**
  * Check and award new achievements to a contributor
- * @param {Object} contributor - Contributor document
+ * @param {Object} contributor - Contributor object with stats
  * @returns {Array} Newly awarded achievements
  */
 export const checkAndAwardAchievements = async (contributor) => {
@@ -23,8 +24,6 @@ export const checkAndAwardAchievements = async (contributor) => {
         for (const achievement of newAchievements) {
             await awardAchievement(contributor, achievement);
         }
-
-        await contributor.save();
 
         logger.info('Achievements awarded', {
             username: contributor.username,
@@ -44,29 +43,44 @@ export const checkAndAwardAchievements = async (contributor) => {
 
 /**
  * Award a single achievement to a contributor
- * @param {Object} contributor - Contributor document
+ * @param {Object} contributor - Contributor object
  * @param {Object} achievement - Achievement object from config
  * @returns {Object} Achievement data
  */
 export const awardAchievement = async (contributor, achievement) => {
     try {
-        // Add achievement to contributor
-        contributor.achievements.push({
-            achievementId: achievement.id,
-            name: achievement.name,
-            description: achievement.description,
-            earnedAt: new Date(),
-            category: achievement.category
+        // Add achievement to database
+        await prisma.achievement.create({
+            data: {
+                contributorId: contributor.id,
+                achievementId: achievement.id,
+                name: achievement.name,
+                description: achievement.description,
+                category: achievement.category,
+                earnedAt: new Date()
+            }
         });
 
         // Award bonus points
-        contributor.totalPoints += achievement.points;
-        contributor.pointsHistory.push({
-            points: achievement.points,
-            reason: 'Achievement Unlocked',
-            prNumber: null,
-            timestamp: new Date()
-        });
+        await prisma.$transaction([
+            prisma.contributor.update({
+                where: { id: contributor.id },
+                data: {
+                    totalPoints: {
+                        increment: BigInt(achievement.points)
+                    }
+                }
+            }),
+            prisma.pointHistory.create({
+                data: {
+                    contributorId: contributor.id,
+                    points: BigInt(achievement.points),
+                    reason: 'Achievement Unlocked',
+                    prNumber: null,
+                    timestamp: new Date()
+                }
+            })
+        ]);
 
         // Emit WebSocket event
         emitAchievementUnlocked({
@@ -164,7 +178,13 @@ You've been awarded **${achievement.points} bonus points**! Keep up the great wo
  */
 export const getAchievementProgress = async (username) => {
     try {
-        const contributor = await Contributor.findOne({ username });
+        const contributor = await prisma.contributor.findUnique({
+            where: { username },
+            include: {
+                achievements: true,
+                completedChallenges: true
+            }
+        });
 
         if (!contributor) {
             throw new Error('Contributor not found');
@@ -173,6 +193,13 @@ export const getAchievementProgress = async (username) => {
         const earnedIds = new Set(contributor.achievements.map(a => a.achievementId));
         const progress = [];
 
+        // Convert BigInt to Number for calculations
+        const prCount = Number(contributor.prCount);
+        const reviewCount = Number(contributor.reviewCount);
+        const currentStreak = Number(contributor.currentStreak);
+        const totalPoints = Number(contributor.totalPoints);
+        const completedChallengesCount = contributor.completedChallenges?.length || 0;
+
         // Check progress for all achievements
         for (const [key, achievement] of Object.entries(ACHIEVEMENTS)) {
             const isEarned = earnedIds.has(achievement.id);
@@ -180,15 +207,15 @@ export const getAchievementProgress = async (username) => {
 
             // Determine current progress based on category
             if (achievement.category === 'pr-milestone') {
-                currentValue = contributor.prCount;
+                currentValue = prCount;
             } else if (achievement.category === 'streak') {
-                currentValue = contributor.currentStreak;
+                currentValue = currentStreak;
             } else if (achievement.category === 'review') {
-                currentValue = contributor.reviewCount;
+                currentValue = reviewCount;
             } else if (achievement.category === 'points') {
-                currentValue = contributor.totalPoints;
+                currentValue = totalPoints;
             } else if (achievement.category === 'challenge') {
-                currentValue = contributor.completedChallenges?.length || 0;
+                currentValue = completedChallengesCount;
             }
 
             progress.push({
@@ -229,8 +256,17 @@ export const getAllAchievements = () => {
  */
 export const getEarnedAchievements = async (username) => {
     try {
-        const contributor = await Contributor.findOne({ username })
-            .select('username achievements');
+        const contributor = await prisma.contributor.findUnique({
+            where: { username },
+            select: {
+                username: true,
+                achievements: {
+                    orderBy: {
+                        earnedAt: 'desc'
+                    }
+                }
+            }
+        });
 
         if (!contributor) {
             throw new Error('Contributor not found');

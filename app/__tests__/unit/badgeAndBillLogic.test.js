@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
+import { describe, it, expect, beforeEach, afterEach, afterAll } from '@jest/globals';
 import { awardBadges, awardBillsAndVonettes } from '../../services/contributorService.js';
 import { prisma } from '../../lib/prisma.js';
 import { createTestContributor } from '../setup.js';
@@ -14,6 +14,11 @@ describe('Badge and Bill Awarding Logic', () => {
     await prisma.processedPR.deleteMany({});
     await prisma.processedReview.deleteMany({});
     await prisma.contributor.deleteMany({});
+  });
+
+  afterAll(async () => {
+    // Disconnect Prisma to allow Jest to exit
+    await prisma.$disconnect();
   });
 
   describe('Badge Awarding Logic', () => {
@@ -439,7 +444,7 @@ describe('Badge and Bill Awarding Logic', () => {
 
         const updatedUser = await prisma.contributor.findUnique({ where: { username: 'complex_case' } });
         // Vonette awards 5 bills (milestones take precedence over incremental)
-        expect(updatedUser.totalBillsAwarded).toBe(5);
+        expect(Number(updatedUser.totalBillsAwarded)).toBe(5);
         expect(updatedUser.first500PrsAwarded).toBe(true);
       });
 

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from '@jest/globals';
+import { describe, it, expect, beforeEach, afterEach, afterAll } from '@jest/globals';
 import { checkForDuplicates, fixDuplicates } from '../../services/contributorService.js';
 import { prisma } from '../../lib/prisma.js';
 import { createTestContributor } from '../setup.js';
@@ -175,5 +175,10 @@ describe('Duplicate Detection and Repair', () => {
             expect(result.duplicatePRsRemoved).toBe(0);
             expect(result.duplicateReviewsRemoved).toBe(0);
         });
+    });
+
+    afterAll(async () => {
+        // Disconnect Prisma to allow Jest to exit
+        await prisma.$disconnect();
     });
 });

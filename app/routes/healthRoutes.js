@@ -1,9 +1,10 @@
 import express from 'express';
-import mongoose from 'mongoose';
+import { PrismaClient } from '@prisma/client';
 import { Octokit } from '@octokit/rest';
 import logger from '../utils/logger.js';
 
 const router = express.Router();
+const prisma = new PrismaClient();
 
 // Health check endpoint
 router.get('/health', async (req, res) => {
@@ -18,11 +19,19 @@ router.get('/health', async (req, res) => {
 
     try {
         // Database health check
-        const dbState = mongoose.connection.readyState;
-        health.checks.database = {
-            status: dbState === 1 ? 'healthy' : 'unhealthy',
-            state: ['disconnected', 'connected', 'connecting', 'disconnecting'][dbState] || 'unknown'
-        };
+        try {
+            await prisma.$queryRaw`SELECT 1`;
+            health.checks.database = {
+                status: 'healthy',
+                state: 'connected'
+            };
+        } catch (dbError) {
+            health.checks.database = {
+                status: 'unhealthy',
+                state: 'disconnected',
+                error: dbError.message
+            };
+        }
 
         // GitHub API health check
         if (process.env.GITHUB_TOKEN) {
@@ -71,13 +80,12 @@ router.get('/health', async (req, res) => {
 });
 
 // Readiness probe (for Kubernetes)
-router.get('/ready', (req, res) => {
-    const isReady = mongoose.connection.readyState === 1;
-    
-    if (isReady) {
+router.get('/ready', async (req, res) => {
+    try {
+        await prisma.$queryRaw`SELECT 1`;
         res.status(200).json({ status: 'ready' });
-    } else {
-        res.status(503).json({ status: 'not_ready' });
+    } catch (error) {
+        res.status(503).json({ status: 'not_ready', error: error.message });
     }
 });
 

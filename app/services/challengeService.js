@@ -89,25 +89,25 @@ export const getChallengeById = async (challengeId) => {
  */
 export const joinChallenge = async (username, challengeId) => {
     try {
-        const challenge = await prisma.challenge.findUnique({
-            where: { id: challengeId },
-            include: {
-                participants: {
-                    where: { username }
-                }
-            }
-        });
-
-        if (!challenge) {
-            throw new Error('Challenge not found');
-        }
-
         const contributor = await prisma.contributor.findUnique({
             where: { username }
         });
 
         if (!contributor) {
             throw new Error('Contributor not found. Only users with at least one merged PR can join challenges. Please contribute to the repository first.');
+        }
+
+        const challenge = await prisma.challenge.findUnique({
+            where: { id: challengeId },
+            include: {
+                participants: {
+                    where: { contributorId: contributor.id }
+                }
+            }
+        });
+
+        if (!challenge) {
+            throw new Error('Challenge not found');
         }
 
         // Check if already joined
@@ -120,29 +120,15 @@ export const joinChallenge = async (username, challengeId) => {
             throw new Error('Challenge is not active');
         }
 
-        // Add to challenge participants
+        // Add to challenge participants (this IS the active challenge list)
         await prisma.challengeParticipant.create({
             data: {
                 challengeId,
-                username,
+                contributorId: contributor.id,
                 progress: 0,
                 completed: false,
                 joinedAt: new Date()
             }
-        });
-
-        // Add to contributor's active challenges
-        const activeChallenges = contributor.activeChallenges || [];
-        activeChallenges.push({
-            challengeId,
-            progress: 0,
-            target: challenge.target,
-            joined: new Date()
-        });
-
-        await prisma.contributor.update({
-            where: { username },
-            data: { activeChallenges }
         });
 
         logger.info('User joined challenge', {
@@ -151,9 +137,15 @@ export const joinChallenge = async (username, challengeId) => {
             title: challenge.title
         });
 
+        // Return updated contributor with active challenges
+        const updatedContributor = await prisma.contributor.findUnique({
+            where: { username },
+            include: { activeChallenges: true }
+        });
+
         return {
             challenge,
-            contributor
+            contributor: updatedContributor
         };
     } catch (error) {
         logger.error('Error joining challenge', {
@@ -174,15 +166,24 @@ export const joinChallenge = async (username, challengeId) => {
  */
 export const updateChallengeProgress = async (username, challengeId, increment = 1) => {
     try {
+        const contributor = await prisma.contributor.findUnique({
+            where: { username },
+            select: { id: true }
+        });
+
+        if (!contributor) {
+            return null;
+        }
+
         const challenge = await prisma.challenge.findUnique({
             where: { id: challengeId }
         });
 
         const participant = await prisma.challengeParticipant.findUnique({
             where: {
-                challengeId_username: {
+                challengeId_contributorId: {
                     challengeId,
-                    username
+                    contributorId: contributor.id
                 }
             }
         });
@@ -197,9 +198,9 @@ export const updateChallengeProgress = async (username, challengeId, increment =
         if (newProgress >= challenge.target && !participant.completed) {
             await prisma.challengeParticipant.update({
                 where: {
-                    challengeId_username: {
+                    challengeId_contributorId: {
                         challengeId,
-                        username
+                        contributorId: contributor.id
                     }
                 },
                 data: {
@@ -211,9 +212,9 @@ export const updateChallengeProgress = async (username, challengeId, increment =
         } else {
             await prisma.challengeParticipant.update({
                 where: {
-                    challengeId_username: {
+                    challengeId_contributorId: {
                         challengeId,
-                        username
+                        contributorId: contributor.id
                     }
                 },
                 data: {
@@ -229,23 +230,6 @@ export const updateChallengeProgress = async (username, challengeId, increment =
                 progress: newProgress,
                 target: challenge.target,
                 percentComplete: (newProgress / challenge.target) * 100
-            });
-        }
-
-        // Update contributor's active challenge
-        const contributor = await prisma.contributor.findUnique({
-            where: { username },
-            select: { activeChallenges: true }
-        });
-
-        if (contributor && contributor.activeChallenges) {
-            const activeChallenges = contributor.activeChallenges.map(c =>
-                c.challengeId === challengeId ? { ...c, progress: newProgress } : c
-            );
-
-            await prisma.contributor.update({
-                where: { username },
-                data: { activeChallenges }
             });
         }
 
@@ -285,9 +269,8 @@ export const completeChallenge = async (username, challengeId) => {
         const contributor = await prisma.contributor.findUnique({
             where: { username },
             select: {
-                totalPoints: true,
-                activeChallenges: true,
-                completedChallenges: true
+                id: true,
+                totalPoints: true
             }
         });
 
@@ -298,34 +281,33 @@ export const completeChallenge = async (username, challengeId) => {
         // Award reward points
         const newTotalPoints = Number(contributor.totalPoints) + challenge.reward;
 
-        // Move from active to completed
-        const activeChallenges = (contributor.activeChallenges || []).filter(
-            c => c.challengeId !== challengeId
-        );
-
-        const completedChallenges = contributor.completedChallenges || [];
-        completedChallenges.push({
-            challengeId,
-            completedAt: new Date(),
-            reward: challenge.reward
-        });
-
-        await prisma.contributor.update({
-            where: { username },
-            data: {
-                totalPoints: newTotalPoints,
-                activeChallenges,
-                completedChallenges,
-                pointsHistory: {
-                    create: {
-                        points: challenge.reward,
-                        reason: 'Challenge Completed',
-                        prNumber: null,
-                        timestamp: new Date()
+        // Create completed challenge record and update points
+        await prisma.$transaction([
+            // Remove from active (ChallengeParticipant will be updated to completed=true by caller)
+            // Add to completed challenges
+            prisma.completedChallenge.create({
+                data: {
+                    contributorId: contributor.id,
+                    challengeId,
+                    reward: challenge.reward
+                }
+            }),
+            // Update contributor points
+            prisma.contributor.update({
+                where: { username },
+                data: {
+                    totalPoints: newTotalPoints,
+                    pointsHistory: {
+                        create: {
+                            points: challenge.reward,
+                            reason: 'Challenge Completed',
+                            prNumber: null,
+                            timestamp: new Date()
+                        }
                     }
                 }
-            }
-        });
+            })
+        ]);
 
         // Emit completion event
         emitChallengeCompleted({
@@ -367,8 +349,12 @@ export const getUserChallenges = async (username) => {
     try {
         const contributor = await prisma.contributor.findUnique({
             where: { username },
-            select: {
-                activeChallenges: true,
+            include: {
+                activeChallenges: {
+                    include: {
+                        challenge: true
+                    }
+                },
                 completedChallenges: true
             }
         });
@@ -377,11 +363,27 @@ export const getUserChallenges = async (username) => {
             throw new Error('Contributor not found');
         }
 
+        // Transform to match expected format
+        const activeChallenges = contributor.activeChallenges.map(ac => ({
+            challengeId: ac.challengeId,
+            progress: ac.progress,
+            target: ac.challenge.target,
+            joined: ac.joinedAt,
+            title: ac.challenge.title,
+            type: ac.challenge.type
+        }));
+
+        const completedChallenges = contributor.completedChallenges.map(cc => ({
+            challengeId: cc.challengeId,
+            completedAt: cc.completedAt,
+            reward: cc.reward
+        }));
+
         return {
             username,
-            activeChallenges: contributor.activeChallenges || [],
-            completedChallenges: contributor.completedChallenges || [],
-            totalCompleted: (contributor.completedChallenges || []).length
+            activeChallenges,
+            completedChallenges,
+            totalCompleted: completedChallenges.length
         };
     } catch (error) {
         logger.error('Error getting user challenges', {
@@ -517,6 +519,14 @@ export const getChallengeLeaderboard = async (challengeId) => {
             where: { id: challengeId },
             include: {
                 participants: {
+                    include: {
+                        contributor: {
+                            select: {
+                                username: true,
+                                avatarUrl: true
+                            }
+                        }
+                    },
                     orderBy: {
                         progress: 'desc'
                     },
@@ -529,11 +539,20 @@ export const getChallengeLeaderboard = async (challengeId) => {
             throw new Error('Challenge not found');
         }
 
+        // Transform participants to include username at top level
+        const leaderboard = challenge.participants.map(p => ({
+            username: p.contributor.username,
+            avatarUrl: p.contributor.avatarUrl,
+            progress: p.progress,
+            completed: p.completed,
+            joinedAt: p.joinedAt
+        }));
+
         return {
             challengeId: challenge.id,
             title: challenge.title,
             target: challenge.target,
-            leaderboard: challenge.participants
+            leaderboard
         };
     } catch (error) {
         logger.error('Error getting challenge leaderboard', {

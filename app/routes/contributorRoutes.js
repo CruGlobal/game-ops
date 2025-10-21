@@ -2,7 +2,6 @@ import express from 'express';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
-import Contributor from '../models/contributor.js';
 import { validateDateRange, validatePagination, validateRequest } from '../utils/validation.js';
 import {
     initializeDatabaseController,
@@ -37,6 +36,7 @@ import {
     updateQuarterConfigController,
     getAllTimeLeaderboardController,
     getQuarterlyLeaderboardController,
+    getQuarterlyLeaderboardByQuarterController,
     getHallOfFameController,
     startBackfillController,
     stopBackfillController,
@@ -102,7 +102,7 @@ router.get('/admin/backfill/status', ensureAuthenticated, getBackfillStatusContr
 // Leaderboard Routes
 router.get('/leaderboard/all-time', getAllTimeLeaderboardController);
 router.get('/leaderboard/quarterly', getQuarterlyLeaderboardController);
-router.get('/leaderboard/quarterly/:quarter', getQuarterlyLeaderboardController);
+router.get('/leaderboard/quarterly/:quarter', getQuarterlyLeaderboardByQuarterController);
 router.get('/leaderboard/hall-of-fame', getHallOfFameController);
 
 // Route to get the list of badge images
@@ -118,10 +118,14 @@ router.get('/badges', (req, res) => {
 });
 
 router.get('/auth/status', (req, res) => {
-    if (req.isAuthenticated()) {
-        res.json({ isAuthenticated: true, username: req.user.username });
-    } else {
-        res.json({ isAuthenticated: false });
+    try {
+        const isAuthed = typeof req.isAuthenticated === 'function' ? !!req.isAuthenticated() : false;
+        if (isAuthed) {
+            return res.json({ isAuthenticated: true, username: req.user?.username });
+        }
+        return res.json({ isAuthenticated: false });
+    } catch (e) {
+        return res.json({ isAuthenticated: false });
     }
 });
 
