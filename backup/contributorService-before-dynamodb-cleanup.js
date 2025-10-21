@@ -470,9 +470,13 @@ export const awardBadges = async (pullRequestNumber = null) => {
     const results = [];
     try {
         let contributors;
-
+        if (process.env.NODE_ENV === 'production') {
+            const params = { TableName: 'Contributors' };
+            const data = await dbClient.scan(params).promise();
+            contributors = data.Items;
+        } else {
             contributors = await prisma.contributor.findMany();
-        
+        }
 
         for (const contributor of contributors) {
             if (/\[bot\]$/.test(contributor.username)) {
@@ -544,7 +548,32 @@ export const awardBadges = async (pullRequestNumber = null) => {
                     badgeType: 'achievement'
                 });
 
-
+                if (process.env.NODE_ENV === 'production') {
+                    const updateParams = {
+                        TableName: 'Contributors',
+                        Key: { username: contributor.username },
+                        UpdateExpression: 'set prCount = :prCount, reviewCount = :reviewCount, firstPrAwarded = :firstPrAwarded, firstReviewAwarded = :firstReviewAwarded, first10PrsAwarded = :first10PrsAwarded, first10ReviewsAwarded = :first10ReviewsAwarded, first50PrsAwarded = :first50PrsAwarded, first50ReviewsAwarded = :first50ReviewsAwarded, first100PrsAwarded = :first100PrsAwarded, first100ReviewsAwarded = :first100ReviewsAwarded, first500PrsAwarded = :first500PrsAwarded, first500ReviewsAwarded = :first500ReviewsAwarded, first1000PrsAwarded = :first1000PrsAwarded, first1000ReviewsAwarded = :first1000ReviewsAwarded, badges = list_append(if_not_exists(badges, :empty_list), :new_badge)',
+                        ExpressionAttributeValues: {
+                            ':prCount': contributor.prCount,
+                            ':reviewCount': contributor.reviewCount,
+                            ':firstPrAwarded': contributor.firstPrAwarded,
+                            ':firstReviewAwarded': contributor.firstReviewAwarded,
+                            ':first10PrsAwarded': contributor.first10PrsAwarded,
+                            ':first10ReviewsAwarded': contributor.first10ReviewsAwarded,
+                            ':first50PrsAwarded': contributor.first50PrsAwarded,
+                            ':first50ReviewsAwarded': contributor.first50ReviewsAwarded,
+                            ':first100PrsAwarded': contributor.first100PrsAwarded,
+                            ':first100ReviewsAwarded': contributor.first100ReviewsAwarded,
+                            ':first500PrsAwarded': contributor.first500PrsAwarded,
+                            ':first500ReviewsAwarded': contributor.first500ReviewsAwarded,
+                            ':first1000PrsAwarded': contributor.first1000PrsAwarded,
+                            ':first1000ReviewsAwarded': contributor.first1000ReviewsAwarded,
+                            ':empty_list': [],
+                            ':new_badge': [{ badge: badgeAwarded, date: new Date().toISOString() }],
+                        },
+                    };
+                    await dbClient.update(updateParams).promise(); // Update the contributor in the database
+                } else {
                     const badges = contributor.badges || [];
                     badges.push({ badge: badgeAwarded, date: new Date().toISOString() });
                     await prisma.contributor.update({
@@ -565,7 +594,7 @@ export const awardBadges = async (pullRequestNumber = null) => {
                             first1000ReviewsAwarded: contributor.first1000ReviewsAwarded
                         }
                     });
-                
+                }
             }
         }
     } catch (err) {
@@ -577,7 +606,24 @@ export const awardBadges = async (pullRequestNumber = null) => {
 export const getTopContributorsDateRange = async (startDate, endDate, page, limit) => {
     let contributors;
 
-
+    if (process.env.NODE_ENV === 'production') {
+        const params = {
+            TableName: 'Contributors',
+            KeyConditionExpression: 'contributions.date BETWEEN :startDate AND :endDate',
+            FilterExpression: 'NOT contains(username, :bot)',
+            ExpressionAttributeValues: {
+                ':startDate': startDate.toISOString(),
+                ':endDate': endDate.toISOString(),
+                ':bot': '[bot]',
+                ':merged': true
+            },
+            ProjectionExpression: 'username, contributions, avatarUrl, badges, totalBillsAwarded',
+            Limit: limit,
+            ExclusiveStartKey: (page - 1) * limit
+        };
+        const data = await dbClient.query(params).promise();
+        contributors = data.Items;
+    } else {
         contributors = await prisma.contributor.findMany({
             where: {
                 username: {
@@ -596,7 +642,7 @@ export const getTopContributorsDateRange = async (startDate, endDate, page, limi
                 totalBillsAwarded: true
             }
         });
-    
+    }
 
     // Calculate total pull requests for each contributor in the given date range
     contributors = contributors.map(contributor => {
@@ -628,7 +674,23 @@ export const getTopContributorsDateRange = async (startDate, endDate, page, limi
 export const getTopReviewersDateRange = async (startDate, endDate, page, limit) => {
     let reviewers;
 
-
+    if (process.env.NODE_ENV === 'production') {
+        const params = {
+            TableName: 'Contributors',
+            KeyConditionExpression: 'reviews.date BETWEEN :startDate AND :endDate',
+            FilterExpression: 'NOT contains(username, :bot)',
+            ExpressionAttributeValues: {
+                ':startDate': startDate.toISOString(),
+                ':endDate': endDate.toISOString(),
+                ':bot': '[bot]'
+            },
+            ProjectionExpression: 'username, reviews, avatarUrl, badges, totalBillsAwarded',
+            Limit: limit,
+            ExclusiveStartKey: (page - 1) * limit
+        };
+        const data = await dbClient.query(params).promise();
+        reviewers = data.Items;
+    } else {
         reviewers = await prisma.contributor.findMany({
             where: {
                 username: {
@@ -647,7 +709,7 @@ export const getTopReviewersDateRange = async (startDate, endDate, page, limit) 
                 totalBillsAwarded: true
             }
         });
-    
+    }
 
     // Calculate total reviews for each reviewer in the given date range
     reviewers = reviewers.map(reviewer => {
@@ -678,7 +740,17 @@ export const getTopReviewersDateRange = async (startDate, endDate, page, limit) 
 // Get the top contributors based on PR count with gamification data
 export const getTopContributors = async () => {
     let contributors;
-
+    if (process.env.NODE_ENV === 'production') {
+        const params = {
+            TableName: 'Contributors',
+            FilterExpression: 'NOT contains(username, :bot)',
+            ExpressionAttributeValues: { ':bot': '[bot]' },
+            ProjectionExpression: 'username, prCount, reviewCount, avatarUrl, badges, totalBillsAwarded, totalPoints, currentStreak, longestStreak, streakBadges',
+            Limit: 50,
+        };
+        const data = await dbClient.scan(params).promise();
+        contributors = data.Items.sort((a, b) => b.prCount - a.prCount); // Sort contributors by PR count
+    } else {
         contributors = await prisma.contributor.findMany({
             where: {
                 username: {
@@ -717,14 +789,24 @@ export const getTopContributors = async () => {
             currentStreak: Number(c.currentStreak),
             longestStreak: Number(c.longestStreak)
         }));
-    
+    }
     return contributors;
 };
 
 // Get the top reviewers based on review count with gamification data
 export const getTopReviewers = async () => {
     let reviewers;
-
+    if (process.env.NODE_ENV === 'production') {
+        const params = {
+            TableName: 'Contributors',
+            FilterExpression: 'NOT contains(username, :bot)',
+            ExpressionAttributeValues: { ':bot': '[bot]' },
+            ProjectionExpression: 'username, prCount, reviewCount, avatarUrl, badges, totalBillsAwarded, totalPoints, currentStreak, longestStreak, streakBadges',
+            Limit: 50,
+        };
+        const data = await dbClient.scan(params).promise();
+        reviewers = data.Items.sort((a, b) => b.reviewCount - a.reviewCount); // Sort reviewers by review count
+    } else {
         reviewers = await prisma.contributor.findMany({
             where: {
                 username: {
@@ -763,13 +845,20 @@ export const getTopReviewers = async () => {
             currentStreak: Number(r.currentStreak),
             longestStreak: Number(r.longestStreak)
         }));
-    
+    }
     return reviewers;
 };
 
 // Get a single contributor by username
 export const getContributorByUsername = async (username) => {
-
+    if (process.env.NODE_ENV === 'production') {
+        const params = {
+            TableName: 'Contributors',
+            Key: { username }
+        };
+        const data = await dbClient.get(params).promise();
+        return data.Item || null;
+    } else {
         const contributor = await prisma.contributor.findUnique({
             where: { username }
         });
@@ -785,7 +874,7 @@ export const getContributorByUsername = async (username) => {
             longestStreak: Number(contributor.longestStreak),
             totalBillsAwarded: Number(contributor.totalBillsAwarded)
         };
-    
+    }
 };
 
 // Award bills and vonettes to contributors based on their contributions
@@ -793,9 +882,13 @@ export const awardBillsAndVonettes = async (pullRequestNumber = null, test = fal
     const results = [];
     try {
         let contributors;
-
+        if (process.env.NODE_ENV === 'production') {
+            const params = { TableName: 'Contributors' };
+            const data = await dbClient.scan(params).promise();
+            contributors = data.Items;
+        } else {
             contributors = await prisma.contributor.findMany();
-        
+        }
 
         for (const contributor of contributors) {
             if (/\[bot\]$/.test(contributor.username)) {
@@ -853,7 +946,18 @@ export const awardBillsAndVonettes = async (pullRequestNumber = null, test = fal
 
                 results.push({ username: contributor.username, bills: billsAwarded, billsImage: billsImage });
 
-
+                if (process.env.NODE_ENV === 'production') {
+                    const updateParams = {
+                        TableName: 'Contributors',
+                        Key: { username: contributor.username },
+                        UpdateExpression: 'set totalBillsAwarded = if_not_exists(totalBillsAwarded, :start) + :billsValue',
+                        ExpressionAttributeValues: {
+                            ':start': 0,
+                            ':billsValue': billsValue,
+                        },
+                    };
+                    await dbClient.update(updateParams).promise(); // Update the contributor in the database
+                } else {
                     await prisma.contributor.update({
                         where: { username: contributor.username },
                         data: {
@@ -866,7 +970,7 @@ export const awardBillsAndVonettes = async (pullRequestNumber = null, test = fal
                             first500ReviewsAwarded: contributor.first500ReviewsAwarded
                         }
                     });
-                
+                }
             }
         }
     } catch (err) {
