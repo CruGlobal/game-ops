@@ -1,5 +1,4 @@
-import Contributor from '../models/contributor.js';
-import Challenge from '../models/challenge.js';
+import { prisma } from '../lib/prisma.js';
 import logger from '../utils/logger.js';
 
 /**
@@ -10,14 +9,31 @@ import logger from '../utils/logger.js';
  */
 export const getContributorTrends = async (username, days = 30) => {
     try {
-        const contributor = await Contributor.findOne({ username });
+        const cutoffDate = new Date();
+        cutoffDate.setDate(cutoffDate.getDate() - days);
+
+        const contributor = await prisma.contributor.findUnique({
+            where: { username },
+            select: {
+                username: true,
+                contributions: true,
+                reviews: true,
+                pointsHistory: {
+                    where: {
+                        timestamp: {
+                            gte: cutoffDate
+                        }
+                    },
+                    orderBy: {
+                        timestamp: 'asc'
+                    }
+                }
+            }
+        });
 
         if (!contributor) {
             throw new Error('Contributor not found');
         }
-
-        const cutoffDate = new Date();
-        cutoffDate.setDate(cutoffDate.getDate() - days);
 
         // Filter contribution arrays for the time period
         const recentContributions = contributor.contributions
@@ -28,10 +44,11 @@ export const getContributorTrends = async (username, days = 30) => {
             ? contributor.reviews.filter(r => new Date(r.date) >= cutoffDate)
             : [];
 
-        // Get points history
-        const recentPoints = contributor.pointsHistory
-            ? contributor.pointsHistory.filter(p => new Date(p.timestamp) >= cutoffDate)
-            : [];
+        const recentPoints = contributor.pointsHistory.map(p => ({
+            ...p,
+            points: Number(p.points),
+            prNumber: p.prNumber ? Number(p.prNumber) : null
+        }));
 
         return {
             username,
@@ -65,7 +82,19 @@ export const getTeamAnalytics = async (days = 30) => {
         const cutoffDate = new Date();
         cutoffDate.setDate(cutoffDate.getDate() - days);
 
-        const contributors = await Contributor.find();
+        const contributors = await prisma.contributor.findMany({
+            select: {
+                contributions: true,
+                reviews: true,
+                pointsHistory: {
+                    where: {
+                        timestamp: {
+                            gte: cutoffDate
+                        }
+                    }
+                }
+            }
+        });
 
         // Aggregate contributions by date
         const contributionsByDate = {};
@@ -95,12 +124,10 @@ export const getTeamAnalytics = async (days = 30) => {
 
             // Process points
             if (contributor.pointsHistory) {
-                contributor.pointsHistory
-                    .filter(p => new Date(p.timestamp) >= cutoffDate)
-                    .forEach(p => {
-                        const dateKey = new Date(p.timestamp).toISOString().split('T')[0];
-                        pointsByDate[dateKey] = (pointsByDate[dateKey] || 0) + p.points;
-                    });
+                contributor.pointsHistory.forEach(p => {
+                    const dateKey = new Date(p.timestamp).toISOString().split('T')[0];
+                    pointsByDate[dateKey] = (pointsByDate[dateKey] || 0) + Number(p.points);
+                });
             }
         });
 
@@ -145,7 +172,12 @@ export const getActivityHeatmap = async (days = 90) => {
         const cutoffDate = new Date();
         cutoffDate.setDate(cutoffDate.getDate() - days);
 
-        const contributors = await Contributor.find();
+        const contributors = await prisma.contributor.findMany({
+            select: {
+                contributions: true,
+                reviews: true
+            }
+        });
 
         // Initialize heatmap (7 days × 24 hours)
         const heatmap = Array(7).fill(null).map(() => Array(24).fill(0));
@@ -197,20 +229,30 @@ export const getActivityHeatmap = async (days = 90) => {
  */
 export const getTopContributorsComparison = async (limit = 10) => {
     try {
-        const contributors = await Contributor.find()
-            .sort({ prCount: -1 })
-            .limit(limit)
-            .select('username prCount reviewCount totalPoints currentStreak avatarUrl');
+        const contributors = await prisma.contributor.findMany({
+            orderBy: {
+                prCount: 'desc'
+            },
+            take: limit,
+            select: {
+                username: true,
+                prCount: true,
+                reviewCount: true,
+                totalPoints: true,
+                currentStreak: true,
+                avatarUrl: true
+            }
+        });
 
         return {
             contributors: contributors.map(c => ({
                 username: c.username,
                 avatarUrl: c.avatarUrl,
-                prCount: c.prCount,
-                reviewCount: c.reviewCount,
-                totalPoints: c.totalPoints,
-                currentStreak: c.currentStreak,
-                totalContributions: c.prCount + c.reviewCount
+                prCount: Number(c.prCount),
+                reviewCount: Number(c.reviewCount),
+                totalPoints: Number(c.totalPoints),
+                currentStreak: Number(c.currentStreak),
+                totalContributions: Number(c.prCount) + Number(c.reviewCount)
             }))
         };
     } catch (error) {
@@ -227,8 +269,18 @@ export const getTopContributorsComparison = async (limit = 10) => {
  */
 export const getChallengeStats = async () => {
     try {
-        const challenges = await Challenge.find();
-        const contributors = await Contributor.find();
+        const challenges = await prisma.challenge.findMany({
+            include: {
+                participants: true
+            }
+        });
+        
+        const contributors = await prisma.contributor.findMany({
+            select: {
+                activeChallenges: true,
+                completedChallenges: true
+            }
+        });
 
         const totalChallenges = challenges.length;
         const activeChallenges = challenges.filter(c => c.status === 'active').length;
@@ -297,7 +349,12 @@ export const getGrowthTrends = async () => {
         const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
         const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
 
-        const contributors = await Contributor.find();
+        const contributors = await prisma.contributor.findMany({
+            select: {
+                contributions: true,
+                reviews: true
+            }
+        });
 
         // Count contributions for each period
         const countForPeriod = (startDate, endDate) => {
@@ -376,7 +433,21 @@ export const exportToCSV = async (type, options = {}) => {
         let csvData = '';
 
         if (type === 'contributors') {
-            const contributors = await Contributor.find().sort({ prCount: -1 });
+            const contributors = await prisma.contributor.findMany({
+                orderBy: {
+                    prCount: 'desc'
+                },
+                select: {
+                    username: true,
+                    prCount: true,
+                    reviewCount: true,
+                    totalPoints: true,
+                    currentStreak: true,
+                    longestStreak: true,
+                    totalBillsAwarded: true,
+                    badges: true
+                }
+            });
 
             // CSV Header
             csvData = 'Username,PR Count,Review Count,Total Points,Current Streak,Longest Streak,Total Bills,Badges\n';
@@ -384,11 +455,18 @@ export const exportToCSV = async (type, options = {}) => {
             // CSV Rows
             contributors.forEach(c => {
                 const badgeCount = c.badges ? c.badges.length : 0;
-                csvData += `"${c.username}",${c.prCount},${c.reviewCount},${c.totalPoints},${c.currentStreak},${c.longestStreak},${c.totalBillsAwarded},${badgeCount}\n`;
+                csvData += `"${c.username}",${Number(c.prCount)},${Number(c.reviewCount)},${Number(c.totalPoints)},${Number(c.currentStreak)},${Number(c.longestStreak)},${Number(c.totalBillsAwarded)},${badgeCount}\n`;
             });
 
         } else if (type === 'challenges') {
-            const challenges = await Challenge.find().sort({ startDate: -1 });
+            const challenges = await prisma.challenge.findMany({
+                orderBy: {
+                    startDate: 'desc'
+                },
+                include: {
+                    participants: true
+                }
+            });
 
             csvData = 'Title,Type,Target,Reward,Status,Participants,Completions,Start Date,End Date\n';
 

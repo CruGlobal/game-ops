@@ -1,8 +1,6 @@
 import { Octokit } from '@octokit/rest';
 import dbClient from '../config/db-config.js';
-import Contributor from '../models/contributor.js';
-import FetchDate from '../models/fetchDate.js';
-import PRMetadata from '../models/prMetadata.js';
+import { prisma } from '../lib/prisma.js';
 import mongoSanitize from 'express-mongo-sanitize';
 import fetch from 'node-fetch';
 import { emitPRUpdate, emitBadgeAwarded, emitLeaderboardUpdate, emitReviewUpdate } from '../utils/socketEmitter.js';
@@ -30,7 +28,7 @@ const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 // Function to initialize the database
 export const initializeDatabase = async () => {
     try {
-        await Contributor.deleteMany({});
+        await prisma.contributor.deleteMany({});
 
         let page = 1;
         let per_page = 100;
@@ -132,53 +130,91 @@ export const updateContributor = async (username, type, date, merged = false) =>
         };
         await dbClient.update(params).promise(); // Update the contributor in the database
     } else {
-        let contributor = await Contributor.findOne({ username: mongoSanitize.sanitize(username) });
+        let contributor = await prisma.contributor.findUnique({
+            where: { username: mongoSanitize.sanitize(username) }
+        });
+        
         if (!contributor) {
-            contributor = new Contributor({ username, avatarUrl: userData.avatar_url });
+            contributor = await prisma.contributor.create({
+                data: {
+                    username,
+                    avatarUrl: userData.avatar_url,
+                    prCount: 0,
+                    reviewCount: 0,
+                    contributions: [],
+                    reviews: []
+                }
+            });
         }
-        contributor[type] += 1;
-        contributor.avatarUrl = userData.avatar_url;
-        contributor.lastUpdated = Date.now();
+
+        const updateData = {
+            avatarUrl: userData.avatar_url,
+            lastUpdated: new Date()
+        };
+
         if (type === 'prCount') {
-            contributor.contributions.push({ date: date, count: 1, merged: merged });
+            const contributions = contributor.contributions || [];
+            contributions.push({ date: date, count: 1, merged: merged });
+            updateData.prCount = { increment: 1 };
+            updateData.contributions = contributions;
         } else {
-            contributor.reviews.push({ date: date, count: 1 });
+            const reviews = contributor.reviews || [];
+            reviews.push({ date: date, count: 1 });
+            updateData.reviewCount = { increment: 1 };
+            updateData.reviews = reviews;
         }
-        await contributor.save(); // Save the contributor to the database
+
+        const updated = await prisma.contributor.update({
+            where: { username },
+            data: updateData,
+            select: {
+                username: true,
+                prCount: true,
+                reviewCount: true,
+                totalPoints: true,
+                avatarUrl: true
+            }
+        });
 
         // Emit socket event for real-time updates
         if (type === 'prCount') {
             emitPRUpdate({
-                username: contributor.username,
-                prCount: contributor.prCount
+                username: updated.username,
+                prCount: Number(updated.prCount)
             });
         } else {
             emitReviewUpdate({
-                username: contributor.username,
-                reviewCount: contributor.reviewCount
+                username: updated.username,
+                reviewCount: Number(updated.reviewCount)
             });
         }
 
         // Emit leaderboard update for live UI updates
         emitLeaderboardUpdate({
-            username: contributor.username,
-            pullRequestCount: contributor.pullRequestCount || 0,
-            reviewCount: contributor.reviewCount || 0,
-            totalPoints: contributor.totalPoints || 0,
-            avatarUrl: contributor.avatarUrl
+            username: updated.username,
+            pullRequestCount: Number(updated.prCount),
+            reviewCount: Number(updated.reviewCount),
+            totalPoints: Number(updated.totalPoints),
+            avatarUrl: updated.avatarUrl
         });
     }
 };
 
 // Get the last fetch date from the database
 const getLastFetchDate = async () => {
-    const fetchDate = await FetchDate.findOne({}).sort({ date: -1 });
+    const fetchDate = await prisma.fetchDate.findFirst({
+        orderBy: { date: 'desc' }
+    });
     return fetchDate ? fetchDate.date : new Date(Date.now() - 90 * 24 * 60 * 60 * 1000); // Return the last fetch date or a default date
 };
 
 // Update the last fetch date in the database
 const updateLastFetchDate = async (date) => {
-    await FetchDate.updateOne({}, { date: date }, { upsert: true }); // Update or insert the fetch date
+    await prisma.fetchDate.upsert({
+        where: { id: 'last-fetch' },
+        update: { date },
+        create: { id: 'last-fetch', date }
+    });
 };
 
 // Fetch pull requests and update contributors' PR counts
@@ -210,14 +246,20 @@ export const fetchPullRequests = async () => {
 
             // Gamification: Update streak, award points, check achievements
             try {
-                let contributor = await Contributor.findOne({ username });
+                let contributor = await prisma.contributor.findUnique({
+                    where: { username },
+                    include: {
+                        processedPRs: {
+                            where: { prNumber: BigInt(pr.number), action: 'authored' }
+                        },
+                        activeChallenges: true
+                    }
+                });
 
                 // For merged PRs only
                 if (merged) {
                     // ✅ FIX: Check for duplicates BEFORE updating (if contributor exists)
-                    const alreadyProcessed = contributor?.processedPRs?.some(
-                        p => p.prNumber === pr.number && p.action === 'authored'
-                    );
+                    const alreadyProcessed = contributor?.processedPRs && contributor.processedPRs.length > 0;
 
                     if (alreadyProcessed) {
                         // Skip this PR - already processed
@@ -228,18 +270,23 @@ export const fetchPullRequests = async () => {
                     await updateContributor(username, 'prCount', date, merged);
 
                     // Re-fetch contributor (updateContributor may have created it)
-                    contributor = await Contributor.findOne({ username });
+                    contributor = await prisma.contributor.findUnique({
+                        where: { username },
+                        include: {
+                            activeChallenges: true
+                        }
+                    });
 
                     if (contributor) {
                         // Add to processedPRs array
-                        if (!contributor.processedPRs) {
-                            contributor.processedPRs = [];
-                        }
-                        contributor.processedPRs.push({
-                            prNumber: pr.number,
-                            prTitle: pr.title,
-                            action: 'authored',
-                            processedDate: new Date()
+                        await prisma.processedPR.create({
+                            data: {
+                                contributorUsername: username,
+                                prNumber: BigInt(pr.number),
+                                prTitle: pr.title,
+                                action: 'authored',
+                                processedDate: new Date()
+                            }
                         });
                         prsAdded++;
 
@@ -262,7 +309,9 @@ export const fetchPullRequests = async () => {
                         const { checkLabelMatch } = await import('./challengeService.js');
 
                         for (const activeChallenge of contributor.activeChallenges) {
-                            const challenge = await import('../models/challenge.js').then(m => m.default.findById(activeChallenge.challengeId));
+                            const challenge = await prisma.challenge.findUnique({
+                                where: { id: activeChallenge.challengeId }
+                            });
 
                             if (!challenge) continue;
 
@@ -278,16 +327,13 @@ export const fetchPullRequests = async () => {
                             }
 
                             if (shouldIncrement) {
-                                await updateChallengeProgress(username, challenge._id.toString(), 1);
+                                await updateChallengeProgress(username, challenge.id, 1);
                             }
                         }
                     }
 
                     // Check and award achievements
                     await checkAndAwardAchievements(contributor);
-
-                        // Save contributor with updated processedPRs
-                        await contributor.save();
                     }  // End if (contributor)
                 }  // End if (merged)
             } catch (gamificationError) {
@@ -309,22 +355,35 @@ export const fetchPullRequests = async () => {
 
                 // Gamification: Award review points and check achievements
                 try {
-                    const reviewer = await Contributor.findOne({ username: reviewUsername });
+                    const reviewer = await prisma.contributor.findUnique({
+                        where: { username: reviewUsername },
+                        include: {
+                            processedReviews: {
+                                where: {
+                                    reviewId: BigInt(review.id)
+                                }
+                            },
+                            pointsHistory: {
+                                orderBy: { timestamp: 'desc' },
+                                take: 1
+                            },
+                            activeChallenges: true
+                        }
+                    });
+                    
                     if (reviewer) {
                         // Track processed review to prevent duplicates
-                        const alreadyProcessedReview = reviewer.processedReviews?.some(
-                            r => r.prNumber === pr.number && r.reviewId === review.id
-                        );
+                        const alreadyProcessedReview = reviewer.processedReviews && reviewer.processedReviews.length > 0;
 
                         if (!alreadyProcessedReview) {
                             // Add to processedReviews array
-                            if (!reviewer.processedReviews) {
-                                reviewer.processedReviews = [];
-                            }
-                            reviewer.processedReviews.push({
-                                prNumber: pr.number,
-                                reviewId: review.id,
-                                processedDate: new Date()
+                            await prisma.processedReview.create({
+                                data: {
+                                    contributorUsername: reviewUsername,
+                                    prNumber: BigInt(pr.number),
+                                    reviewId: BigInt(review.id),
+                                    processedDate: new Date()
+                                }
                             });
                             reviewsAdded++;
                         }
@@ -333,7 +392,7 @@ export const fetchPullRequests = async () => {
 
                         // Update quarterly stats for review
                         const latestPoints = reviewer.pointsHistory && reviewer.pointsHistory.length > 0
-                            ? reviewer.pointsHistory[reviewer.pointsHistory.length - 1].points
+                            ? Number(reviewer.pointsHistory[0].points)
                             : 0;
                         await updateQuarterlyStats(reviewUsername, {
                             reviews: 1,
@@ -343,17 +402,16 @@ export const fetchPullRequests = async () => {
                         // Update challenge progress for reviews
                         if (reviewer.activeChallenges && reviewer.activeChallenges.length > 0) {
                             for (const activeChallenge of reviewer.activeChallenges) {
-                                const challenge = await import('../models/challenge.js').then(m => m.default.findById(activeChallenge.challengeId));
+                                const challenge = await prisma.challenge.findUnique({
+                                    where: { id: activeChallenge.challengeId }
+                                });
                                 if (challenge && challenge.type === 'review') {
-                                    await updateChallengeProgress(reviewUsername, challenge._id.toString(), 1);
+                                    await updateChallengeProgress(reviewUsername, challenge.id, 1);
                                 }
                             }
                         }
 
                         await checkAndAwardAchievements(reviewer);
-
-                        // Save reviewer with updated processedReviews
-                        await reviewer.save();
                     }
                 } catch (gamificationError) {
                     console.error('Gamification error for review:', review.id, gamificationError);
@@ -364,35 +422,44 @@ export const fetchPullRequests = async () => {
 
         // Update metadata
         try {
-            let metadata = await PRMetadata.findOne({
-                repoOwner: repoOwner,
-                repoName: repoName
+            let metadata = await prisma.pRMetadata.findUnique({
+                where: {
+                    repoOwner_repoName: {
+                        repoOwner,
+                        repoName
+                    }
+                }
             });
 
-            if (!metadata) {
-                metadata = new PRMetadata({
-                    repoOwner: repoOwner,
-                    repoName: repoName
-                });
-            }
-
-            // Update metadata fields
-            metadata.lastFetchDate = new Date();
-
-            // Add to fetch history
-            metadata.fetchHistory.push({
+            const fetchHistory = metadata?.fetchHistory || [];
+            fetchHistory.push({
                 fetchDate: new Date(),
                 prRangeFetched: `Auto fetch (${pullRequests.length} PRs processed)`,
-                prsAdded: prsAdded,
-                reviewsAdded: reviewsAdded
+                prsAdded,
+                reviewsAdded
             });
 
             // Keep only last 20 fetch history records
-            if (metadata.fetchHistory.length > 20) {
-                metadata.fetchHistory = metadata.fetchHistory.slice(-20);
-            }
+            const limitedHistory = fetchHistory.slice(-20);
 
-            await metadata.save();
+            await prisma.pRMetadata.upsert({
+                where: {
+                    repoOwner_repoName: {
+                        repoOwner,
+                        repoName
+                    }
+                },
+                update: {
+                    lastFetchDate: new Date(),
+                    fetchHistory: limitedHistory
+                },
+                create: {
+                    repoOwner,
+                    repoName,
+                    lastFetchDate: new Date(),
+                    fetchHistory: limitedHistory
+                }
+            });
 
             console.log(`Updated metadata: ${prsAdded} PRs, ${reviewsAdded} reviews added`);
         } catch (metadataError) {
@@ -416,7 +483,7 @@ export const awardBadges = async (pullRequestNumber = null) => {
             const data = await dbClient.scan(params).promise();
             contributors = data.Items;
         } else {
-            contributors = await Contributor.find();
+            contributors = await prisma.contributor.findMany();
         }
 
         for (const contributor of contributors) {
@@ -515,9 +582,26 @@ export const awardBadges = async (pullRequestNumber = null) => {
                     };
                     await dbClient.update(updateParams).promise(); // Update the contributor in the database
                 } else {
-                    contributor.badges = contributor.badges || [];
-                    contributor.badges.push({ badge: badgeAwarded, date: new Date().toISOString() });
-                    await contributor.save(); // Save the contributor to the database
+                    const badges = contributor.badges || [];
+                    badges.push({ badge: badgeAwarded, date: new Date().toISOString() });
+                    await prisma.contributor.update({
+                        where: { username: contributor.username },
+                        data: {
+                            badges,
+                            firstPrAwarded: contributor.firstPrAwarded,
+                            firstReviewAwarded: contributor.firstReviewAwarded,
+                            first10PrsAwarded: contributor.first10PrsAwarded,
+                            first10ReviewsAwarded: contributor.first10ReviewsAwarded,
+                            first50PrsAwarded: contributor.first50PrsAwarded,
+                            first50ReviewsAwarded: contributor.first50ReviewsAwarded,
+                            first100PrsAwarded: contributor.first100PrsAwarded,
+                            first100ReviewsAwarded: contributor.first100ReviewsAwarded,
+                            first500PrsAwarded: contributor.first500PrsAwarded,
+                            first500ReviewsAwarded: contributor.first500ReviewsAwarded,
+                            first1000PrsAwarded: contributor.first1000PrsAwarded,
+                            first1000ReviewsAwarded: contributor.first1000ReviewsAwarded
+                        }
+                    });
                 }
             }
         }
@@ -529,15 +613,6 @@ export const awardBadges = async (pullRequestNumber = null) => {
 
 export const getTopContributorsDateRange = async (startDate, endDate, page, limit) => {
     let contributors;
-    const query = {
-        contributions: {
-            $elemMatch: {
-                date: { $gte: startDate, $lte: endDate },
-                merged: true // Filter for merged contributions
-            }
-        },
-        username: { $not: /\[bot\]$/ }
-    };
 
     if (process.env.NODE_ENV === 'production') {
         const params = {
@@ -557,19 +632,40 @@ export const getTopContributorsDateRange = async (startDate, endDate, page, limi
         const data = await dbClient.query(params).promise();
         contributors = data.Items;
     } else {
-        contributors = await Contributor.find(query)
-            .sort({ 'contributions.count': -1 })
-            .skip((page - 1) * limit)
-            .limit(limit)
-            .select('username contributions avatarUrl badges totalBillsAwarded');
+        contributors = await prisma.contributor.findMany({
+            where: {
+                username: {
+                    not: {
+                        endsWith: '[bot]'
+                    }
+                }
+            },
+            skip: (page - 1) * limit,
+            take: limit,
+            select: {
+                username: true,
+                contributions: true,
+                avatarUrl: true,
+                badges: true,
+                totalBillsAwarded: true
+            }
+        });
     }
 
     // Calculate total pull requests for each contributor in the given date range
     contributors = contributors.map(contributor => {
-        const totalPrCount = contributor.contributions
-            .filter(contribution => contribution.date >= startDate && contribution.date <= endDate)
+        const totalPrCount = (contributor.contributions || [])
+            .filter(contribution => {
+                const contribDate = new Date(contribution.date);
+                return contribDate >= startDate && contribDate <= endDate && contribution.merged === true;
+            })
             .reduce((total, contribution) => total + contribution.count, 0);
-        return { ...contributor.toObject(), totalPrCount };
+        
+        return { 
+            ...contributor, 
+            totalPrCount,
+            totalBillsAwarded: Number(contributor.totalBillsAwarded || 0)
+        };
     });
 
     // Sort contributors by totalPrCount
@@ -585,14 +681,6 @@ export const getTopContributorsDateRange = async (startDate, endDate, page, limi
 
 export const getTopReviewersDateRange = async (startDate, endDate, page, limit) => {
     let reviewers;
-    const query = {
-        reviews: {
-            $elemMatch: {
-                date: { $gte: startDate, $lte: endDate }
-            }
-        },
-        username: { $not: /\[bot\]$/ }
-    };
 
     if (process.env.NODE_ENV === 'production') {
         const params = {
@@ -611,19 +699,39 @@ export const getTopReviewersDateRange = async (startDate, endDate, page, limit) 
         const data = await dbClient.query(params).promise();
         reviewers = data.Items;
     } else {
-        reviewers = await Contributor.find(query)
-            .sort({ 'reviews.count': -1 })
-            .skip((page - 1) * limit)
-            .limit(limit)
-            .select('username reviews avatarUrl badges totalBillsAwarded');
+        reviewers = await prisma.contributor.findMany({
+            where: {
+                username: {
+                    not: {
+                        endsWith: '[bot]'
+                    }
+                }
+            },
+            skip: (page - 1) * limit,
+            take: limit,
+            select: {
+                username: true,
+                reviews: true,
+                avatarUrl: true,
+                badges: true,
+                totalBillsAwarded: true
+            }
+        });
     }
 
     // Calculate total reviews for each reviewer in the given date range
     reviewers = reviewers.map(reviewer => {
-        const totalReviewCount = reviewer.reviews
-            .filter(review => review.date >= startDate && review.date <= endDate)
+        const totalReviewCount = (reviewer.reviews || [])
+            .filter(review => {
+                const reviewDate = new Date(review.date);
+                return reviewDate >= startDate && reviewDate <= endDate;
+            })
             .reduce((total, review) => total + review.count, 0);
-        return { ...reviewer.toObject(), totalReviewCount };
+        return { 
+            ...reviewer, 
+            totalReviewCount,
+            totalBillsAwarded: Number(reviewer.totalBillsAwarded || 0)
+        };
     });
 
     // Sort reviewers by totalReviewCount
@@ -651,11 +759,44 @@ export const getTopContributors = async () => {
         const data = await dbClient.scan(params).promise();
         contributors = data.Items.sort((a, b) => b.prCount - a.prCount); // Sort contributors by PR count
     } else {
-        contributors = await Contributor.find({ username: { $not: /\[bot\]$/ } })
-            .sort({ prCount: -1 })
-            .limit(50)
-            .select('username prCount reviewCount avatarUrl badges totalBillsAwarded totalPoints currentStreak longestStreak streakBadges')
-            .lean();
+        contributors = await prisma.contributor.findMany({
+            where: {
+                username: {
+                    not: {
+                        endsWith: '[bot]'
+                    }
+                }
+            },
+            orderBy: {
+                prCount: 'desc'
+            },
+            take: 50,
+            select: {
+                username: true,
+                prCount: true,
+                reviewCount: true,
+                avatarUrl: true,
+                badges: true,
+                totalBillsAwarded: true,
+                totalPoints: true,
+                currentStreak: true,
+                longestStreak: true,
+                sevenDayBadge: true,
+                thirtyDayBadge: true,
+                ninetyDayBadge: true,
+                yearLongBadge: true
+            }
+        });
+        
+        contributors = contributors.map(c => ({
+            ...c,
+            prCount: Number(c.prCount),
+            reviewCount: Number(c.reviewCount),
+            totalBillsAwarded: Number(c.totalBillsAwarded),
+            totalPoints: Number(c.totalPoints),
+            currentStreak: Number(c.currentStreak),
+            longestStreak: Number(c.longestStreak)
+        }));
     }
     return contributors;
 };
@@ -674,11 +815,44 @@ export const getTopReviewers = async () => {
         const data = await dbClient.scan(params).promise();
         reviewers = data.Items.sort((a, b) => b.reviewCount - a.reviewCount); // Sort reviewers by review count
     } else {
-        reviewers = await Contributor.find({ username: { $not: /\[bot\]$/ } })
-            .sort({ reviewCount: -1 })
-            .limit(50)
-            .select('username prCount reviewCount avatarUrl badges totalBillsAwarded totalPoints currentStreak longestStreak streakBadges')
-            .lean();
+        reviewers = await prisma.contributor.findMany({
+            where: {
+                username: {
+                    not: {
+                        endsWith: '[bot]'
+                    }
+                }
+            },
+            orderBy: {
+                reviewCount: 'desc'
+            },
+            take: 50,
+            select: {
+                username: true,
+                prCount: true,
+                reviewCount: true,
+                avatarUrl: true,
+                badges: true,
+                totalBillsAwarded: true,
+                totalPoints: true,
+                currentStreak: true,
+                longestStreak: true,
+                sevenDayBadge: true,
+                thirtyDayBadge: true,
+                ninetyDayBadge: true,
+                yearLongBadge: true
+            }
+        });
+        
+        reviewers = reviewers.map(r => ({
+            ...r,
+            prCount: Number(r.prCount),
+            reviewCount: Number(r.reviewCount),
+            totalBillsAwarded: Number(r.totalBillsAwarded),
+            totalPoints: Number(r.totalPoints),
+            currentStreak: Number(r.currentStreak),
+            longestStreak: Number(r.longestStreak)
+        }));
     }
     return reviewers;
 };
@@ -693,7 +867,21 @@ export const getContributorByUsername = async (username) => {
         const data = await dbClient.get(params).promise();
         return data.Item || null;
     } else {
-        return await Contributor.findOne({ username }).lean();
+        const contributor = await prisma.contributor.findUnique({
+            where: { username }
+        });
+        
+        if (!contributor) return null;
+        
+        return {
+            ...contributor,
+            prCount: Number(contributor.prCount),
+            reviewCount: Number(contributor.reviewCount),
+            totalPoints: Number(contributor.totalPoints),
+            currentStreak: Number(contributor.currentStreak),
+            longestStreak: Number(contributor.longestStreak),
+            totalBillsAwarded: Number(contributor.totalBillsAwarded)
+        };
     }
 };
 
@@ -707,7 +895,7 @@ export const awardBillsAndVonettes = async (pullRequestNumber = null, test = fal
             const data = await dbClient.scan(params).promise();
             contributors = data.Items;
         } else {
-            contributors = await Contributor.find();
+            contributors = await prisma.contributor.findMany();
         }
 
         for (const contributor of contributors) {
@@ -715,38 +903,43 @@ export const awardBillsAndVonettes = async (pullRequestNumber = null, test = fal
                 continue; // Skip bot users
             }
 
+            // Convert BigInt to Number for comparisons
+            const prCount = Number(contributor.prCount);
+            const reviewCount = Number(contributor.reviewCount);
+            const totalBillsAwarded = Number(contributor.totalBillsAwarded || 0);
+
             let billsAwarded = null;
             let billsImage = null;
             let billsValue = 0;
             let hasMilestone = false;
 
             // Check for Vonette first (highest priority)
-            if ((contributor.prCount >= 500 && !contributor.first500PrsAwarded) || (contributor.reviewCount >= 500 && !contributor.first500ReviewsAwarded)) {
+            if ((prCount >= 500 && !contributor.first500PrsAwarded) || (reviewCount >= 500 && !contributor.first500ReviewsAwarded)) {
                 billsAwarded = 'Vonette';
                 billsImage = '5_vonett_57_25.png';
                 billsValue = 5;
                 hasMilestone = true;
-                if (contributor.prCount >= 500) contributor.first500PrsAwarded = true;
-                if (contributor.reviewCount >= 500) contributor.first500ReviewsAwarded = true;
+                if (prCount >= 500) contributor.first500PrsAwarded = true;
+                if (reviewCount >= 500) contributor.first500ReviewsAwarded = true;
             }
             // Check for initial Bill milestones (10 PRs or 10 reviews) - only award once
-            else if ((contributor.prCount >= 10 && !contributor.first10PrsAwarded) || (contributor.reviewCount >= 10 && !contributor.first10ReviewsAwarded)) {
+            else if ((prCount >= 10 && !contributor.first10PrsAwarded) || (reviewCount >= 10 && !contributor.first10ReviewsAwarded)) {
                 // Only award if they haven't received ANY initial milestone bill yet
-                if ((contributor.totalBillsAwarded || 0) === 0) {
+                if (totalBillsAwarded === 0) {
                     billsAwarded = 'Bill';
                     billsImage = '1_bill_57X27.png';
                     billsValue = 1;
                     hasMilestone = true;
-                    if (contributor.prCount >= 10) contributor.first10PrsAwarded = true;
-                    if (contributor.reviewCount >= 10) contributor.first10ReviewsAwarded = true;
+                    if (prCount >= 10) contributor.first10PrsAwarded = true;
+                    if (reviewCount >= 10) contributor.first10ReviewsAwarded = true;
                 }
             }
 
             // Check for incremental bills (every 100 total contributions)
             // Only award incremental if NO milestone was awarded
             if (!hasMilestone) {
-                const totalContributions = contributor.prCount + contributor.reviewCount;
-                const newBills = Math.floor(totalContributions / 100) - (contributor.totalBillsAwarded || 0);
+                const totalContributions = prCount + reviewCount;
+                const newBills = Math.floor(totalContributions / 100) - totalBillsAwarded;
 
                 if (newBills > 0) {
                     billsAwarded = 'Bill';
@@ -773,8 +966,18 @@ export const awardBillsAndVonettes = async (pullRequestNumber = null, test = fal
                     };
                     await dbClient.update(updateParams).promise(); // Update the contributor in the database
                 } else {
-                    contributor.totalBillsAwarded = (contributor.totalBillsAwarded || 0) + billsValue;
-                    await contributor.save(); // Save the contributor to the database
+                    await prisma.contributor.update({
+                        where: { username: contributor.username },
+                        data: {
+                            totalBillsAwarded: {
+                                increment: billsValue
+                            },
+                            first10PrsAwarded: contributor.first10PrsAwarded,
+                            first10ReviewsAwarded: contributor.first10ReviewsAwarded,
+                            first500PrsAwarded: contributor.first500PrsAwarded,
+                            first500ReviewsAwarded: contributor.first500ReviewsAwarded
+                        }
+                    });
                 }
             }
         }
@@ -980,7 +1183,12 @@ export async function getPRRangeInfo() {
  */
 export async function checkForDuplicates() {
     try {
-        const contributors = await Contributor.find({}).lean();
+        const contributors = await prisma.contributor.findMany({
+            include: {
+                processedPRs: true,
+                processedReviews: true
+            }
+        });
 
         const duplicates = {
             hasDuplicates: false,
@@ -1067,28 +1275,28 @@ export async function checkForDuplicates() {
 
             // Check if prCount matches processedPRs length
             const processedCount = contributor.processedPRs ? contributor.processedPRs.length : 0;
-            if (contributor.prCount !== processedCount) {
+            if (Number(contributor.prCount) !== processedCount) {
                 duplicates.hasDuplicates = true;
                 duplicates.details.push({
                     type: 'Mismatch',
                     contributor: contributor.username,
-                    totalPRs: contributor.prCount,
+                    totalPRs: Number(contributor.prCount),
                     processedPRs: processedCount,
-                    difference: Math.abs(contributor.prCount - processedCount),
+                    difference: Math.abs(Number(contributor.prCount) - processedCount),
                     issue: `prCount (${contributor.prCount}) doesn't match processedPRs length (${processedCount})`
                 });
             }
 
             // Check if reviewCount matches processedReviews length
             const processedReviewCount = contributor.processedReviews ? contributor.processedReviews.length : 0;
-            if (contributor.reviewCount !== processedReviewCount) {
+            if (Number(contributor.reviewCount) !== processedReviewCount) {
                 duplicates.hasDuplicates = true;
                 duplicates.details.push({
                     type: 'Mismatch',
                     contributor: contributor.username,
-                    totalReviews: contributor.reviewCount,
+                    totalReviews: Number(contributor.reviewCount),
                     processedReviews: processedReviewCount,
-                    difference: Math.abs(contributor.reviewCount - processedReviewCount),
+                    difference: Math.abs(Number(contributor.reviewCount) - processedReviewCount),
                     issue: `reviewCount (${contributor.reviewCount}) doesn't match processedReviews length (${processedReviewCount})`
                 });
             }
@@ -1113,7 +1321,12 @@ export async function checkForDuplicates() {
  */
 export async function fixDuplicates() {
     try {
-        const contributors = await Contributor.find({});
+        const contributors = await prisma.contributor.findMany({
+            include: {
+                processedPRs: true,
+                processedReviews: true
+            }
+        });
 
         const stats = {
             contributorsFixed: 0,
@@ -1124,73 +1337,87 @@ export async function fixDuplicates() {
         };
 
         for (const contributor of contributors) {
-            let modified = false;
+            let updateData = {};
+            let needsUpdate = false;
             const processedPRCount = contributor.processedPRs?.length || 0;
             const processedReviewCount = contributor.processedReviews?.length || 0;
 
             // FIX 1: Correct PR count mismatch
-            if (contributor.prCount !== processedPRCount) {
-                const diff = Math.abs(contributor.prCount - processedPRCount);
-                contributor.prCount = processedPRCount;
+            if (Number(contributor.prCount) !== processedPRCount) {
+                const diff = Math.abs(Number(contributor.prCount) - processedPRCount);
+                updateData.prCount = processedPRCount;
                 stats.prCountAdjustments += diff;
-                modified = true;
+                needsUpdate = true;
             }
 
             // FIX 2: Correct review count mismatch
-            if (contributor.reviewCount !== processedReviewCount) {
-                const diff = Math.abs(contributor.reviewCount - processedReviewCount);
-                contributor.reviewCount = processedReviewCount;
+            if (Number(contributor.reviewCount) !== processedReviewCount) {
+                const diff = Math.abs(Number(contributor.reviewCount) - processedReviewCount);
+                updateData.reviewCount = processedReviewCount;
                 stats.reviewCountAdjustments += diff;
-                modified = true;
+                needsUpdate = true;
             }
 
             // FIX 3: Remove duplicate PRs from processedPRs array
+            const prsToDelete = [];
             if (contributor.processedPRs && contributor.processedPRs.length > 0) {
                 const seen = new Set();
-                const uniquePRs = [];
 
                 for (const pr of contributor.processedPRs) {
                     const key = `${pr.prNumber}_${pr.action}`;
                     if (!seen.has(key)) {
                         seen.add(key);
-                        uniquePRs.push(pr);
                     } else {
+                        prsToDelete.push(pr.id);
                         stats.duplicatePRsRemoved++;
-                        modified = true;
+                        needsUpdate = true;
                     }
-                }
-
-                if (uniquePRs.length !== contributor.processedPRs.length) {
-                    contributor.processedPRs = uniquePRs;
-                    contributor.prCount = uniquePRs.length; // Update count to match
                 }
             }
 
             // FIX 4: Remove duplicate reviews from processedReviews array
+            const reviewsToDelete = [];
             if (contributor.processedReviews && contributor.processedReviews.length > 0) {
                 const seen = new Set();
-                const uniqueReviews = [];
 
                 for (const review of contributor.processedReviews) {
                     const key = `${review.prNumber}_${review.reviewId}`;
                     if (!seen.has(key)) {
                         seen.add(key);
-                        uniqueReviews.push(review);
                     } else {
+                        reviewsToDelete.push(review.id);
                         stats.duplicateReviewsRemoved++;
-                        modified = true;
+                        needsUpdate = true;
                     }
-                }
-
-                if (uniqueReviews.length !== contributor.processedReviews.length) {
-                    contributor.processedReviews = uniqueReviews;
-                    contributor.reviewCount = uniqueReviews.length; // Update count to match
                 }
             }
 
-            // Save changes if modified
-            if (modified) {
-                await contributor.save();
+            // Apply updates
+            if (needsUpdate) {
+                // Delete duplicate PRs and reviews
+                if (prsToDelete.length > 0) {
+                    await prisma.processedPR.deleteMany({
+                        where: {
+                            id: { in: prsToDelete }
+                        }
+                    });
+                }
+                if (reviewsToDelete.length > 0) {
+                    await prisma.processedReview.deleteMany({
+                        where: {
+                            id: { in: reviewsToDelete }
+                        }
+                    });
+                }
+                
+                // Update contributor counts if needed
+                if (Object.keys(updateData).length > 0) {
+                    await prisma.contributor.update({
+                        where: { username: contributor.username },
+                        data: updateData
+                    });
+                }
+                
                 stats.contributorsFixed++;
             }
         }

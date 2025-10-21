@@ -1,4 +1,4 @@
-import Contributor from '../models/contributor.js';
+import { prisma } from '../lib/prisma.js';
 import { emitStreakUpdate } from '../utils/socketEmitter.js';
 import logger from '../utils/logger.js';
 
@@ -24,49 +24,55 @@ export const updateStreak = async (contributor, contributionDate) => {
             if (daysDiff === 0) {
                 // Same day contribution - no streak change
                 return {
-                    currentStreak: contributor.currentStreak,
+                    currentStreak: Number(contributor.currentStreak),
                     streakContinued: false,
                     streakBroken: false
                 };
             } else if (daysDiff === 1) {
                 // Consecutive day - increment streak
-                contributor.currentStreak += 1;
-                contributor.lastContributionDate = today;
+                const newCurrentStreak = Number(contributor.currentStreak) + 1;
+                const newLongestStreak = Math.max(newCurrentStreak, Number(contributor.longestStreak));
 
-                // Update longest streak if needed
-                if (contributor.currentStreak > contributor.longestStreak) {
-                    contributor.longestStreak = contributor.currentStreak;
-                }
-
-                await contributor.save();
+                const updated = await prisma.contributor.update({
+                    where: { username: contributor.username },
+                    data: {
+                        currentStreak: newCurrentStreak,
+                        longestStreak: newLongestStreak,
+                        lastContributionDate: today
+                    }
+                });
 
                 // Emit WebSocket event
                 emitStreakUpdate({
-                    username: contributor.username,
-                    currentStreak: contributor.currentStreak,
-                    longestStreak: contributor.longestStreak
+                    username: updated.username,
+                    currentStreak: Number(updated.currentStreak),
+                    longestStreak: Number(updated.longestStreak)
                 });
 
                 logger.info('Streak continued', {
-                    username: contributor.username,
-                    currentStreak: contributor.currentStreak
+                    username: updated.username,
+                    currentStreak: Number(updated.currentStreak)
                 });
 
                 return {
-                    currentStreak: contributor.currentStreak,
+                    currentStreak: Number(updated.currentStreak),
                     streakContinued: true,
                     streakBroken: false
                 };
             } else {
                 // Streak broken - reset to 1
-                const oldStreak = contributor.currentStreak;
-                contributor.currentStreak = 1;
-                contributor.lastContributionDate = today;
+                const oldStreak = Number(contributor.currentStreak);
 
-                await contributor.save();
+                const updated = await prisma.contributor.update({
+                    where: { username: contributor.username },
+                    data: {
+                        currentStreak: 1,
+                        lastContributionDate: today
+                    }
+                });
 
                 logger.info('Streak broken', {
-                    username: contributor.username,
+                    username: updated.username,
                     oldStreak,
                     newStreak: 1
                 });
@@ -80,14 +86,17 @@ export const updateStreak = async (contributor, contributionDate) => {
             }
         } else {
             // First contribution - start streak
-            contributor.currentStreak = 1;
-            contributor.longestStreak = 1;
-            contributor.lastContributionDate = today;
-
-            await contributor.save();
+            const updated = await prisma.contributor.update({
+                where: { username: contributor.username },
+                data: {
+                    currentStreak: 1,
+                    longestStreak: 1,
+                    lastContributionDate: today
+                }
+            });
 
             logger.info('Streak started', {
-                username: contributor.username
+                username: updated.username
             });
 
             return {
@@ -114,12 +123,15 @@ export const updateStreak = async (contributor, contributionDate) => {
 export const checkStreakBadges = async (contributor) => {
     try {
         const newBadges = [];
-        const streak = contributor.currentStreak;
+        const streak = Number(contributor.currentStreak);
+        const updateData = {};
+        let needsUpdate = false;
 
         // Check 7-day streak
-        if (streak >= 7 && !contributor.streakBadges.sevenDay) {
-            contributor.streakBadges.sevenDay = true;
+        if (streak >= 7 && !contributor.sevenDayBadge) {
+            updateData.sevenDayBadge = true;
             newBadges.push({ name: 'Week Warrior', days: 7 });
+            needsUpdate = true;
             logger.info('Streak badge awarded', {
                 username: contributor.username,
                 badge: '7-day streak'
@@ -127,9 +139,10 @@ export const checkStreakBadges = async (contributor) => {
         }
 
         // Check 30-day streak
-        if (streak >= 30 && !contributor.streakBadges.thirtyDay) {
-            contributor.streakBadges.thirtyDay = true;
+        if (streak >= 30 && !contributor.thirtyDayBadge) {
+            updateData.thirtyDayBadge = true;
             newBadges.push({ name: 'Monthly Master', days: 30 });
+            needsUpdate = true;
             logger.info('Streak badge awarded', {
                 username: contributor.username,
                 badge: '30-day streak'
@@ -137,9 +150,10 @@ export const checkStreakBadges = async (contributor) => {
         }
 
         // Check 90-day streak
-        if (streak >= 90 && !contributor.streakBadges.ninetyDay) {
-            contributor.streakBadges.ninetyDay = true;
+        if (streak >= 90 && !contributor.ninetyDayBadge) {
+            updateData.ninetyDayBadge = true;
             newBadges.push({ name: 'Quarter Champion', days: 90 });
+            needsUpdate = true;
             logger.info('Streak badge awarded', {
                 username: contributor.username,
                 badge: '90-day streak'
@@ -147,17 +161,21 @@ export const checkStreakBadges = async (contributor) => {
         }
 
         // Check 365-day streak
-        if (streak >= 365 && !contributor.streakBadges.yearLong) {
-            contributor.streakBadges.yearLong = true;
+        if (streak >= 365 && !contributor.yearLongBadge) {
+            updateData.yearLongBadge = true;
             newBadges.push({ name: 'Year-Long Hero', days: 365 });
+            needsUpdate = true;
             logger.info('Streak badge awarded', {
                 username: contributor.username,
                 badge: '365-day streak'
             });
         }
 
-        if (newBadges.length > 0) {
-            await contributor.save();
+        if (needsUpdate) {
+            await prisma.contributor.update({
+                where: { username: contributor.username },
+                data: updateData
+            });
         }
 
         return newBadges;
@@ -176,9 +194,13 @@ export const checkStreakBadges = async (contributor) => {
  */
 export const resetStreak = async (contributor) => {
     try {
-        contributor.currentStreak = 0;
-        contributor.lastContributionDate = null;
-        await contributor.save();
+        await prisma.contributor.update({
+            where: { username: contributor.username },
+            data: {
+                currentStreak: 0,
+                lastContributionDate: null
+            }
+        });
 
         logger.info('Streak reset', {
             username: contributor.username
@@ -201,7 +223,19 @@ export const resetStreak = async (contributor) => {
  */
 export const getStreakStats = async (username) => {
     try {
-        const contributor = await Contributor.findOne({ username });
+        const contributor = await prisma.contributor.findUnique({
+            where: { username },
+            select: {
+                username: true,
+                currentStreak: true,
+                longestStreak: true,
+                lastContributionDate: true,
+                sevenDayBadge: true,
+                thirtyDayBadge: true,
+                ninetyDayBadge: true,
+                yearLongBadge: true
+            }
+        });
 
         if (!contributor) {
             // Return default streak data for non-existent users
@@ -221,10 +255,15 @@ export const getStreakStats = async (username) => {
 
         return {
             username: contributor.username,
-            currentStreak: contributor.currentStreak,
-            longestStreak: contributor.longestStreak,
+            currentStreak: Number(contributor.currentStreak),
+            longestStreak: Number(contributor.longestStreak),
             lastContributionDate: contributor.lastContributionDate,
-            streakBadges: contributor.streakBadges
+            streakBadges: {
+                sevenDay: contributor.sevenDayBadge,
+                thirtyDay: contributor.thirtyDayBadge,
+                ninetyDay: contributor.ninetyDayBadge,
+                yearLong: contributor.yearLongBadge
+            }
         };
     } catch (error) {
         logger.error('Error getting streak stats', {
@@ -242,12 +281,36 @@ export const getStreakStats = async (username) => {
  */
 export const getStreakLeaderboard = async (limit = 10) => {
     try {
-        const contributors = await Contributor.find()
-            .sort({ currentStreak: -1, longestStreak: -1 })
-            .limit(limit)
-            .select('username avatarUrl currentStreak longestStreak streakBadges');
+        const contributors = await prisma.contributor.findMany({
+            orderBy: [
+                { currentStreak: 'desc' },
+                { longestStreak: 'desc' }
+            ],
+            take: limit,
+            select: {
+                username: true,
+                avatarUrl: true,
+                currentStreak: true,
+                longestStreak: true,
+                sevenDayBadge: true,
+                thirtyDayBadge: true,
+                ninetyDayBadge: true,
+                yearLongBadge: true
+            }
+        });
 
-        return contributors;
+        return contributors.map(c => ({
+            username: c.username,
+            avatarUrl: c.avatarUrl,
+            currentStreak: Number(c.currentStreak),
+            longestStreak: Number(c.longestStreak),
+            streakBadges: {
+                sevenDay: c.sevenDayBadge,
+                thirtyDay: c.thirtyDayBadge,
+                ninetyDay: c.ninetyDayBadge,
+                yearLong: c.yearLongBadge
+            }
+        }));
     } catch (error) {
         logger.error('Error getting streak leaderboard', {
             error: error.message

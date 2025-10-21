@@ -12,17 +12,15 @@ import {
     checkExpiredChallenges,
     getChallengeLeaderboard
 } from '../../services/challengeService.js';
-import Challenge from '../../models/challenge.js';
-import Contributor from '../../models/contributor.js';
-import { createTestContributor } from '../setup.js';
+import { prisma, createTestContributor } from '../setup.js';
 
 // Note: Socket emitter and logger are not mocked in this test file
 // These services will use their real implementations during tests
 
-describe.skip('ChallengeService', () => {
+describe('ChallengeService', () => {
     beforeEach(async () => {
-        await Challenge.deleteMany({});
-        await Contributor.deleteMany({});
+        await prisma.challenge.deleteMany({});
+        await prisma.contributor.deleteMany({});
     });
 
     describe.skip('createChallenge', () => {

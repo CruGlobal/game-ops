@@ -192,8 +192,8 @@ volumes:
     driver: local
     name: github-scoreboard-pgadmin
   mongo_data:
-    driver: local
-    name: github-scoreboard-mongo
+    external: true
+    name: github-pr-scoreboard_mongo_data
   redis_data:
     driver: local
     name: github-scoreboard-redis

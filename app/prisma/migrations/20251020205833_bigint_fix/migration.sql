@@ -1,0 +1,7 @@
+-- AlterTable
+ALTER TABLE "contributors" ALTER COLUMN "pr_count" SET DATA TYPE BIGINT,
+ALTER COLUMN "review_count" SET DATA TYPE BIGINT,
+ALTER COLUMN "total_bills_awarded" SET DATA TYPE BIGINT,
+ALTER COLUMN "current_streak" SET DATA TYPE BIGINT,
+ALTER COLUMN "longest_streak" SET DATA TYPE BIGINT,
+ALTER COLUMN "total_points" SET DATA TYPE BIGINT;

@@ -18,8 +18,8 @@ model Contributor {
   username String   @unique
   
   // Counts
-  prCount     Int      @default(0) @map("pr_count")
-  reviewCount Int      @default(0) @map("review_count")
+  prCount     BigInt   @default(0) @map("pr_count")
+  reviewCount BigInt   @default(0) @map("review_count")
   avatarUrl   String?  @map("avatar_url")
   lastUpdated DateTime @default(now()) @updatedAt @map("last_updated")
   
@@ -40,15 +40,15 @@ model Contributor {
   // Badges (flexible JSONB)
   badges Json @default("[]") // Array of badge objects
   
-  totalBillsAwarded Int @default(0) @map("total_bills_awarded")
+  totalBillsAwarded BigInt @default(0) @map("total_bills_awarded")
   
   // Streak tracking
-  currentStreak        Int       @default(0) @map("current_streak")
+  currentStreak        BigInt    @default(0) @map("current_streak")
   lastContributionDate DateTime? @map("last_contribution_date")
-  longestStreak        Int       @default(0) @map("longest_streak")
+  longestStreak        BigInt    @default(0) @map("longest_streak")
   
   // Points system
-  totalPoints Int @default(0) @map("total_points")
+  totalPoints BigInt @default(0) @map("total_points")
   
   // Quarterly stats (embedded JSON)
   quarterlyStats Json? @map("quarterly_stats") // { currentQuarter, quarterStartDate, ... }
@@ -114,9 +114,9 @@ model PointHistory {
   contributorId String      @map("contributor_id")
   contributor   Contributor @relation(fields: [contributorId], references: [id], onDelete: Cascade)
   
-  points    Int
+  points    BigInt
   reason    String
-  prNumber  Int?     @map("pr_number")
+  prNumber  BigInt?  @map("pr_number")
   timestamp DateTime @default(now())
   
   @@index([contributorId, timestamp(sort: Desc)])
@@ -146,7 +146,7 @@ model ProcessedPR {
   contributorId String      @map("contributor_id")
   contributor   Contributor @relation(fields: [contributorId], references: [id], onDelete: Cascade)
   
-  prNumber      Int      @map("pr_number")
+  prNumber      BigInt   @map("pr_number")
   prTitle       String?  @map("pr_title")
   processedDate DateTime @default(now()) @map("processed_date")
   action        String // 'authored' or 'reviewed'
@@ -161,8 +161,8 @@ model ProcessedReview {
   contributorId String      @map("contributor_id")
   contributor   Contributor @relation(fields: [contributorId], references: [id], onDelete: Cascade)
   
-  prNumber      Int      @map("pr_number")
-  reviewId      Int?     @map("review_id")
+  prNumber      BigInt   @map("pr_number")
+  reviewId      BigInt?  @map("review_id")
   processedDate DateTime @default(now()) @map("processed_date")
   
   @@unique([contributorId, prNumber, reviewId])

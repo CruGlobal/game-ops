@@ -1,22 +1,23 @@
-import Contributor from '../models/contributor.js';
-import QuarterSettings from '../models/quarterSettings.js';
-import QuarterlyWinner from '../models/quarterlyWinner.js';
+import { prisma } from '../lib/prisma.js';
 
 /**
  * Get quarter configuration from database
  * @returns {Object} Quarter settings
  */
 export async function getQuarterConfig() {
-    let config = await QuarterSettings.findById('quarter-config');
+    let config = await prisma.quarterSettings.findUnique({
+        where: { id: 'quarter-config' }
+    });
 
     if (!config) {
         // Create default config (calendar quarters)
-        config = new QuarterSettings({
-            _id: 'quarter-config',
-            systemType: 'calendar',
-            q1StartMonth: 1
+        config = await prisma.quarterSettings.create({
+            data: {
+                id: 'quarter-config',
+                systemType: 'calendar',
+                q1StartMonth: 1
+            }
         });
-        await config.save();
         console.log('Created default quarter configuration (calendar)');
     }
 
@@ -34,7 +35,7 @@ export async function getCurrentQuarter() {
     const currentMonth = now.getMonth() + 1; // 1-12
 
     // Get Q1 start month from config
-    const q1Start = config.getQuarterMonths();
+    const q1Start = config.q1StartMonth;
 
     // Calculate which quarter we're in
     // If current month is before Q1 start, we're in Q4 of previous year
@@ -65,7 +66,7 @@ export async function getQuarterDateRange(quarterString) {
     const year = parseInt(yearStr);
     const quarterNum = parseInt(quarterStr.replace('Q', ''));
 
-    const q1Start = config.getQuarterMonths();
+    const q1Start = config.q1StartMonth;
 
     // Calculate start month for this quarter
     const startMonth = ((q1Start + (quarterNum - 1) * 3 - 1) % 12) + 1;
@@ -120,16 +121,22 @@ export async function updateQuarterConfig(systemType, q1StartMonth, modifiedBy) 
     const actualStartMonth = systemMonths[systemType] || q1StartMonth;
 
     // Update config
-    const config = await QuarterSettings.findByIdAndUpdate(
-        'quarter-config',
-        {
+    const config = await prisma.quarterSettings.upsert({
+        where: { id: 'quarter-config' },
+        update: {
             systemType,
             q1StartMonth: actualStartMonth,
             lastModified: new Date(),
             modifiedBy
         },
-        { upsert: true, new: true }
-    );
+        create: {
+            id: 'quarter-config',
+            systemType,
+            q1StartMonth: actualStartMonth,
+            lastModified: new Date(),
+            modifiedBy
+        }
+    });
 
     // Check if quarter changed
     const newQuarter = await getCurrentQuarter();
@@ -162,14 +169,23 @@ export async function archiveQuarterWinners(quarterString = null) {
         console.log(`Archiving winners for ${quarter}`);
 
         // Get top 3 contributors by points this quarter
-        const topContributors = await Contributor.find({
-            'quarterlyStats.currentQuarter': quarter,
-            'quarterlyStats.pointsThisQuarter': { $gt: 0 }
-        })
-            .sort({ 'quarterlyStats.pointsThisQuarter': -1 })
-            .limit(3)
-            .select('username avatarUrl quarterlyStats')
-            .lean();
+        // Note: Prisma doesn't support ordering by JSON field directly, so we fetch all and sort in memory
+        const allContributors = await prisma.contributor.findMany({
+            select: {
+                username: true,
+                avatarUrl: true,
+                quarterlyStats: true
+            }
+        });
+
+        // Filter and sort in memory
+        const topContributors = allContributors
+            .filter(c => 
+                c.quarterlyStats?.currentQuarter === quarter &&
+                c.quarterlyStats?.pointsThisQuarter > 0
+            )
+            .sort((a, b) => b.quarterlyStats.pointsThisQuarter - a.quarterlyStats.pointsThisQuarter)
+            .slice(0, 3);
 
         if (topContributors.length === 0) {
             console.log(`No contributors with points in ${quarter}, skipping archive`);
@@ -187,21 +203,17 @@ export async function archiveQuarterWinners(quarterString = null) {
         }));
 
         // Count total participants (contributors with any activity)
-        const totalParticipants = await Contributor.countDocuments({
-            'quarterlyStats.currentQuarter': quarter,
-            $or: [
-                { 'quarterlyStats.prsThisQuarter': { $gt: 0 } },
-                { 'quarterlyStats.reviewsThisQuarter': { $gt: 0 } }
-            ]
-        });
+        const totalParticipants = allContributors.filter(c =>
+            c.quarterlyStats?.currentQuarter === quarter &&
+            (c.quarterlyStats?.prsThisQuarter > 0 || c.quarterlyStats?.reviewsThisQuarter > 0)
+        ).length;
 
         const [year, quarterNum] = quarter.split('-Q');
 
         // Create or update quarterly winner record
-        const quarterlyWinner = await QuarterlyWinner.findOneAndUpdate(
-            { quarter },
-            {
-                quarter,
+        const quarterlyWinner = await prisma.quarterlyWinner.upsert({
+            where: { quarter },
+            update: {
                 year: parseInt(year),
                 quarterNumber: parseInt(quarterNum),
                 quarterStart: quarterDates.start,
@@ -217,8 +229,24 @@ export async function archiveQuarterWinners(quarterString = null) {
                 totalParticipants,
                 archivedDate: new Date()
             },
-            { upsert: true, new: true }
-        );
+            create: {
+                quarter,
+                year: parseInt(year),
+                quarterNumber: parseInt(quarterNum),
+                quarterStart: quarterDates.start,
+                quarterEnd: quarterDates.end,
+                winner: {
+                    username: winner.username,
+                    avatarUrl: winner.avatarUrl,
+                    prsThisQuarter: winner.quarterlyStats.prsThisQuarter,
+                    reviewsThisQuarter: winner.quarterlyStats.reviewsThisQuarter,
+                    pointsThisQuarter: winner.quarterlyStats.pointsThisQuarter
+                },
+                top3,
+                totalParticipants,
+                archivedDate: new Date()
+            }
+        });
 
         console.log(`Archived ${quarter} winner: ${winner.username} with ${winner.quarterlyStats.pointsThisQuarter} points`);
 
@@ -241,26 +269,25 @@ export async function resetQuarterlyStats(newQuarter = null) {
         console.log(`Resetting quarterly stats for ${quarter}`);
 
         // Reset all contributors' quarterly stats
-        const result = await Contributor.updateMany(
-            {},
-            {
-                $set: {
-                    'quarterlyStats.currentQuarter': quarter,
-                    'quarterlyStats.quarterStartDate': quarterDates.start,
-                    'quarterlyStats.quarterEndDate': quarterDates.end,
-                    'quarterlyStats.prsThisQuarter': 0,
-                    'quarterlyStats.reviewsThisQuarter': 0,
-                    'quarterlyStats.pointsThisQuarter': 0,
-                    'quarterlyStats.lastUpdated': new Date()
+        const result = await prisma.contributor.updateMany({
+            data: {
+                quarterlyStats: {
+                    currentQuarter: quarter,
+                    quarterStartDate: quarterDates.start,
+                    quarterEndDate: quarterDates.end,
+                    prsThisQuarter: 0,
+                    reviewsThisQuarter: 0,
+                    pointsThisQuarter: 0,
+                    lastUpdated: new Date()
                 }
             }
-        );
+        });
 
-        console.log(`Reset quarterly stats for ${result.modifiedCount} contributors`);
+        console.log(`Reset quarterly stats for ${result.count} contributors`);
 
         return {
             quarter,
-            contributorsReset: result.modifiedCount,
+            contributorsReset: result.count,
             quarterStart: quarterDates.start,
             quarterEnd: quarterDates.end
         };
@@ -278,18 +305,22 @@ export async function resetQuarterlyStats(newQuarter = null) {
 export async function updateQuarterlyStats(username, updates) {
     try {
         const currentQuarter = await getCurrentQuarter();
-        const contributor = await Contributor.findOne({ username });
+        const contributor = await prisma.contributor.findUnique({
+            where: { username },
+            select: { quarterlyStats: true }
+        });
 
         if (!contributor) {
             console.warn(`Contributor ${username} not found for quarterly update`);
             return null;
         }
 
+        let quarterlyStats = contributor.quarterlyStats || {};
+
         // Initialize quarterly stats if not set or if quarter changed
-        if (!contributor.quarterlyStats.currentQuarter ||
-            contributor.quarterlyStats.currentQuarter !== currentQuarter) {
+        if (!quarterlyStats.currentQuarter || quarterlyStats.currentQuarter !== currentQuarter) {
             const quarterDates = await getQuarterDateRange(currentQuarter);
-            contributor.quarterlyStats = {
+            quarterlyStats = {
                 currentQuarter,
                 quarterStartDate: quarterDates.start,
                 quarterEndDate: quarterDates.end,
@@ -302,20 +333,24 @@ export async function updateQuarterlyStats(username, updates) {
 
         // Update stats
         if (updates.prs) {
-            contributor.quarterlyStats.prsThisQuarter += updates.prs;
+            quarterlyStats.prsThisQuarter = (quarterlyStats.prsThisQuarter || 0) + updates.prs;
         }
         if (updates.reviews) {
-            contributor.quarterlyStats.reviewsThisQuarter += updates.reviews;
+            quarterlyStats.reviewsThisQuarter = (quarterlyStats.reviewsThisQuarter || 0) + updates.reviews;
         }
         if (updates.points) {
-            contributor.quarterlyStats.pointsThisQuarter += updates.points;
+            quarterlyStats.pointsThisQuarter = (quarterlyStats.pointsThisQuarter || 0) + updates.points;
         }
 
-        contributor.quarterlyStats.lastUpdated = new Date();
+        quarterlyStats.lastUpdated = new Date();
 
-        await contributor.save();
+        const updated = await prisma.contributor.update({
+            where: { username },
+            data: { quarterlyStats },
+            select: { quarterlyStats: true }
+        });
 
-        return contributor.quarterlyStats;
+        return updated.quarterlyStats;
     } catch (error) {
         console.error(`Error updating quarterly stats for ${username}:`, error);
         throw error;
@@ -332,16 +367,48 @@ export async function getQuarterlyLeaderboard(quarterString = null, limit = 50) 
     try {
         const quarter = quarterString || await getCurrentQuarter();
 
-        const contributors = await Contributor.find({
-            'quarterlyStats.currentQuarter': quarter,
-            username: { $not: /\[bot\]$/ }
-        })
-            .sort({ 'quarterlyStats.pointsThisQuarter': -1 })
-            .limit(limit)
-            .select('username avatarUrl quarterlyStats prCount reviewCount totalPoints currentStreak longestStreak totalBillsAwarded badges streakBadges')
-            .lean();
+        const contributors = await prisma.contributor.findMany({
+            where: {
+                username: {
+                    not: {
+                        endsWith: '[bot]'
+                    }
+                }
+            },
+            select: {
+                username: true,
+                avatarUrl: true,
+                quarterlyStats: true,
+                prCount: true,
+                reviewCount: true,
+                totalPoints: true,
+                currentStreak: true,
+                longestStreak: true,
+                totalBillsAwarded: true,
+                badges: true,
+                sevenDayBadge: true,
+                thirtyDayBadge: true,
+                ninetyDayBadge: true,
+                yearLongBadge: true
+            }
+        });
 
-        return contributors;
+        // Filter by quarter and sort in memory
+        const filtered = contributors
+            .filter(c => c.quarterlyStats?.currentQuarter === quarter)
+            .sort((a, b) => (b.quarterlyStats?.pointsThisQuarter || 0) - (a.quarterlyStats?.pointsThisQuarter || 0))
+            .slice(0, limit)
+            .map(c => ({
+                ...c,
+                prCount: Number(c.prCount),
+                reviewCount: Number(c.reviewCount),
+                totalPoints: Number(c.totalPoints),
+                currentStreak: Number(c.currentStreak),
+                longestStreak: Number(c.longestStreak),
+                totalBillsAwarded: Number(c.totalBillsAwarded)
+            }));
+
+        return filtered;
     } catch (error) {
         console.error('Error getting quarterly leaderboard:', error);
         throw error;
@@ -355,15 +422,45 @@ export async function getQuarterlyLeaderboard(quarterString = null, limit = 50) 
  */
 export async function getAllTimeLeaderboard(limit = 50) {
     try {
-        const contributors = await Contributor.find({
-            username: { $not: /\[bot\]$/ }
-        })
-            .sort({ totalPoints: -1 })
-            .limit(limit)
-            .select('username avatarUrl prCount reviewCount totalPoints quarterlyStats currentStreak longestStreak totalBillsAwarded badges streakBadges')
-            .lean();
+        const contributors = await prisma.contributor.findMany({
+            where: {
+                username: {
+                    not: {
+                        endsWith: '[bot]'
+                    }
+                }
+            },
+            orderBy: {
+                totalPoints: 'desc'
+            },
+            take: limit,
+            select: {
+                username: true,
+                avatarUrl: true,
+                prCount: true,
+                reviewCount: true,
+                totalPoints: true,
+                quarterlyStats: true,
+                currentStreak: true,
+                longestStreak: true,
+                totalBillsAwarded: true,
+                badges: true,
+                sevenDayBadge: true,
+                thirtyDayBadge: true,
+                ninetyDayBadge: true,
+                yearLongBadge: true
+            }
+        });
 
-        return contributors;
+        return contributors.map(c => ({
+            ...c,
+            prCount: Number(c.prCount),
+            reviewCount: Number(c.reviewCount),
+            totalPoints: Number(c.totalPoints),
+            currentStreak: Number(c.currentStreak),
+            longestStreak: Number(c.longestStreak),
+            totalBillsAwarded: Number(c.totalBillsAwarded)
+        }));
     } catch (error) {
         console.error('Error getting all-time leaderboard:', error);
         throw error;
@@ -377,10 +474,13 @@ export async function getAllTimeLeaderboard(limit = 50) {
  */
 export async function getHallOfFame(limit = 20) {
     try {
-        const winners = await QuarterlyWinner.find({})
-            .sort({ year: -1, quarterNumber: -1 })
-            .limit(limit)
-            .lean();
+        const winners = await prisma.quarterlyWinner.findMany({
+            orderBy: [
+                { year: 'desc' },
+                { quarterNumber: 'desc' }
+            ],
+            take: limit
+        });
 
         return winners;
     } catch (error) {
@@ -398,11 +498,18 @@ export async function checkAndResetIfNewQuarter() {
         const currentQuarter = await getCurrentQuarter();
 
         // Get a sample contributor to check their current quarter
-        const sampleContributor = await Contributor.findOne({
-            'quarterlyStats.currentQuarter': { $exists: true, $ne: null }
-        }).select('quarterlyStats.currentQuarter');
+        const sampleContributor = await prisma.contributor.findFirst({
+            where: {
+                quarterlyStats: {
+                    not: null
+                }
+            },
+            select: {
+                quarterlyStats: true
+            }
+        });
 
-        if (!sampleContributor || !sampleContributor.quarterlyStats.currentQuarter) {
+        if (!sampleContributor || !sampleContributor.quarterlyStats?.currentQuarter) {
             // No contributors have quarterly stats yet, initialize for current quarter
             console.log(`Initializing quarterly system for ${currentQuarter}`);
             await resetQuarterlyStats(currentQuarter);
