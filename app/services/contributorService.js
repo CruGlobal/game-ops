@@ -305,10 +305,10 @@ export const fetchPullRequests = async () => {
                     });
 
                     if (contributor) {
-                        // Add to processedPRs array
+                        // Add to processedPRs with contributorId (not username)
                         await prisma.processedPR.create({
                             data: {
-                                contributorUsername: username,
+                                contributorId: contributor.id,
                                 prNumber: BigInt(pr.number),
                                 prTitle: pr.title,
                                 action: 'authored',
@@ -403,10 +403,10 @@ export const fetchPullRequests = async () => {
                         const alreadyProcessedReview = reviewer.processedReviews && reviewer.processedReviews.length > 0;
 
                         if (!alreadyProcessedReview) {
-                            // Add to processedReviews array
+                            // Add to processedReviews with contributorId (not username)
                             await prisma.processedReview.create({
                                 data: {
-                                    contributorUsername: reviewUsername,
+                                    contributorId: reviewer.id,
                                     prNumber: BigInt(pr.number),
                                     reviewId: BigInt(review.id),
                                     processedDate: new Date()
