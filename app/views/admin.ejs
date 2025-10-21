@@ -637,8 +637,8 @@ async function saveQuarterConfig() {
         if (result.success) {
             if (typeof showToast === 'function') {
                 let message = 'Quarter configuration saved successfully';
-                if (result.data.quarterChanged) {
-                    message += `. Quarter changed to ${result.data.newQuarter}`;
+                if (result.quarterChanged) {
+                    message += `. Quarter changed to ${result.newQuarter}`;
                 }
                 showToast(message, 'success');
             }
