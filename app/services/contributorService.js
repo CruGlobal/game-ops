@@ -973,21 +973,22 @@ function updateChange(blocked, userRaised, user, changeType) {
 export async function getPRRangeInfo() {
     try {
         // Get or create metadata record
-        let metadata = await PRMetadata.findOne({
-            repoOwner: repoOwner,
-            repoName: repoName
+        let metadata = await prisma.pRMetadata.findUnique({
+            where: {
+                repoOwner_repoName: {
+                    repoOwner: repoOwner,
+                    repoName: repoName
+                }
+            }
         });
 
-        // If no metadata exists, calculate from existing data
-        if (!metadata) {
-            metadata = new PRMetadata({
-                repoOwner: repoOwner,
-                repoName: repoName
-            });
-        }
-
         // Calculate statistics from contributor data
-        const contributors = await Contributor.find({});
+        const contributors = await prisma.contributor.findMany({
+            include: {
+                processedPRs: true,
+                contributions: true
+            }
+        });
 
         let totalPRs = 0;
         let totalReviews = 0;
@@ -996,8 +997,9 @@ export async function getPRRangeInfo() {
         let allPRNumbers = new Set();
 
         contributors.forEach(contributor => {
-            totalPRs += contributor.prCount || 0;
-            totalReviews += contributor.reviewCount || 0;
+            // Convert BigInt to Number for addition
+            totalPRs += Number(contributor.prCount || 0n);
+            totalReviews += Number(contributor.reviewCount || 0n);
 
             // Collect PR numbers from processed PRs
             if (contributor.processedPRs) {
@@ -1020,19 +1022,36 @@ export async function getPRRangeInfo() {
             }
         });
 
-        // Calculate PR range from collected numbers
-        const prNumbers = Array.from(allPRNumbers).sort((a, b) => a - b);
+        // Calculate PR range from collected numbers (convert BigInt to Number for sorting)
+        const prNumbers = Array.from(allPRNumbers).map(n => Number(n)).sort((a, b) => a - b);
         const firstPR = prNumbers.length > 0 ? prNumbers[0] : null;
         const latestPR = prNumbers.length > 0 ? prNumbers[prNumbers.length - 1] : null;
 
-        // Update metadata
-        metadata.firstPRFetched = metadata.firstPRFetched || firstPR;
-        metadata.latestPRFetched = latestPR;
-        metadata.totalPRsInDB = prNumbers.length; // Unique PR numbers tracked
-        metadata.dateRangeStart = metadata.dateRangeStart || oldestDate;
-        metadata.dateRangeEnd = newestDate;
-
-        await metadata.save();
+        // Update or create metadata using Prisma
+        metadata = await prisma.pRMetadata.upsert({
+            where: {
+                repoOwner_repoName: {
+                    repoOwner: repoOwner,
+                    repoName: repoName
+                }
+            },
+            update: {
+                latestPRFetched: latestPR,
+                totalPRsInDB: prNumbers.length,
+                dateRangeEnd: newestDate,
+                lastFetchDate: new Date()
+            },
+            create: {
+                repoOwner: repoOwner,
+                repoName: repoName,
+                firstPRFetched: firstPR,
+                latestPRFetched: latestPR,
+                totalPRsInDB: prNumbers.length,
+                dateRangeStart: oldestDate,
+                dateRangeEnd: newestDate,
+                lastFetchDate: new Date()
+            }
+        });
 
         return {
             firstPR: metadata.firstPRFetched,
@@ -1045,7 +1064,7 @@ export async function getPRRangeInfo() {
                 end: metadata.dateRangeEnd
             },
             lastFetch: metadata.lastFetchDate,
-            fetchHistory: metadata.fetchHistory.slice(-5) // Last 5 fetches
+            fetchHistory: [] // Fetch history not tracked in new schema
         };
     } catch (error) {
         console.error('Error getting PR range info:', error);

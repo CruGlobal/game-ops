@@ -17,8 +17,19 @@ import {
 export const getContributors = async (req, res) => {
     try {
         const contributors = await prisma.contributor.findMany();
-        res.status(200).json(contributors);
+        // Convert BigInt values to strings for JSON serialization
+        const serializedContributors = contributors.map(c => ({
+            ...c,
+            prCount: c.prCount.toString(),
+            reviewCount: c.reviewCount.toString(),
+            totalPoints: c.totalPoints.toString(),
+            currentStreak: c.currentStreak.toString(),
+            longestStreak: c.longestStreak.toString(),
+            totalBillsAwarded: c.totalBillsAwarded.toString()
+        }));
+        res.status(200).json(serializedContributors);
     } catch (err) {
+        console.error('Error in getContributors:', err);
         res.status(500).send('Error fetching contributors');
     }
 };
@@ -191,10 +202,14 @@ export async function getQuarterConfigController(req, res) {
 
         res.json({
             success: true,
-            config,
-            currentQuarter,
-            quarterStart: start,
-            quarterEnd: end
+            data: {
+                config,
+                currentQuarter,
+                quarterDates: {
+                    start,
+                    end
+                }
+            }
         });
     } catch (error) {
         console.error('Error in getQuarterConfigController:', error);

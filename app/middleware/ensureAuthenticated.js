@@ -34,7 +34,15 @@ export const ensureAuthenticated = async (req, res, next) => {
             res.status(500).send('Internal Server Error');
         }
     } else {
-        // For API routes, respond with 401 instead of redirect to avoid HTML responses
-        res.status(401).json({ success: false, message: 'Unauthorized' });
+        // Check if this is an API request or page request
+        const isApiRequest = req.path.startsWith('/api/');
+        
+        if (isApiRequest) {
+            // For API routes, respond with 401 JSON
+            res.status(401).json({ success: false, message: 'Unauthorized' });
+        } else {
+            // For page routes, redirect to GitHub OAuth
+            res.redirect('/auth/github');
+        }
     }
 };

@@ -137,39 +137,69 @@ async function processPR(pr) {
                     username,
                     avatarUrl: pr.user.avatar_url,
                     prCount: 0,
-                    reviewCount: 0,
-                    contributions: [],
-                    reviews: []
+                    reviewCount: 0
                 }
             });
         }
 
         // Check if PR already processed (duplicate prevention for PR)
-        const prAlreadyProcessed = contributor.processedPRs && contributor.processedPRs.length > 0;
+        const existingPR = await prisma.processedPR.findUnique({
+            where: {
+                contributorId_prNumber_action: {
+                    contributorId: contributor.id,
+                    prNumber: BigInt(pr.number),
+                    action: 'authored'
+                }
+            }
+        });
 
-        if (!prAlreadyProcessed) {
+        if (!existingPR) {
+            // Extract date for contribution tracking
+            const mergedDate = new Date(pr.merged_at);
+            const dateOnly = new Date(mergedDate.getFullYear(), mergedDate.getMonth(), mergedDate.getDate());
+
             // Update contributor with new PR
-            const contributions = contributor.contributions || [];
-            contributions.push({
-                date: pr.merged_at,
-                merged: true
-            });
-
             await prisma.contributor.update({
                 where: { username },
                 data: {
                     prCount: { increment: 1 },
-                    contributions,
                     processedPRs: {
                         create: {
                             prNumber: BigInt(pr.number),
                             prTitle: pr.title,
-                            processedDate: new Date(pr.merged_at),
+                            processedDate: mergedDate,
                             action: 'authored'
                         }
                     }
                 }
             });
+
+            // Find or create contribution record for this date
+            const existingContribution = await prisma.contribution.findFirst({
+                where: {
+                    contributorId: contributor.id,
+                    date: dateOnly
+                }
+            });
+
+            if (existingContribution) {
+                await prisma.contribution.update({
+                    where: { id: existingContribution.id },
+                    data: {
+                        count: { increment: 1 },
+                        merged: true
+                    }
+                });
+            } else {
+                await prisma.contribution.create({
+                    data: {
+                        contributorId: contributor.id,
+                        date: dateOnly,
+                        count: 1,
+                        merged: true
+                    }
+                });
+            }
 
             prAdded = 1;
             logger.debug(`Added PR #${pr.number} for ${username}`);
@@ -190,50 +220,83 @@ async function processPR(pr) {
                 if (review.state === 'APPROVED' || review.state === 'COMMENTED') {
                     const reviewerUsername = review.user.login;
 
-                    // Check if review already processed
+                    // Check if review already processed using the composite unique key
+                    const reviewer = await prisma.contributor.findUnique({
+                        where: { username: reviewerUsername }
+                    });
+
+                    if (!reviewer) {
+                        // Create new reviewer if doesn't exist
+                        await prisma.contributor.create({
+                            data: {
+                                username: reviewerUsername,
+                                avatarUrl: review.user.avatar_url,
+                                prCount: 0,
+                                reviewCount: 0
+                            }
+                        });
+                    }
+
+                    // Now get the reviewer with ID
+                    const reviewerRecord = await prisma.contributor.findUnique({
+                        where: { username: reviewerUsername }
+                    });
+
+                    // Check if this specific review was already processed
                     const existingReview = await prisma.processedReview.findUnique({
-                        where: { reviewId: BigInt(review.id) }
+                        where: {
+                            contributorId_prNumber_reviewId: {
+                                contributorId: reviewerRecord.id,
+                                prNumber: BigInt(pr.number),
+                                reviewId: BigInt(review.id)
+                            }
+                        }
                     });
 
                     if (!existingReview) {
-                        // Find or create reviewer
-                        let reviewer = await prisma.contributor.findUnique({
-                            where: { username: reviewerUsername }
-                        });
-
-                        if (!reviewer) {
-                            reviewer = await prisma.contributor.create({
-                                data: {
-                                    username: reviewerUsername,
-                                    avatarUrl: review.user.avatar_url,
-                                    prCount: 0,
-                                    reviewCount: 0,
-                                    reviews: []
-                                }
-                            });
-                        }
+                        // Extract date for review tracking
+                        const submittedDate = new Date(review.submitted_at);
+                        const dateOnly = new Date(submittedDate.getFullYear(), submittedDate.getMonth(), submittedDate.getDate());
 
                         // Add review
-                        const reviews = reviewer.reviews || [];
-                        reviews.push({
-                            date: review.submitted_at,
-                            count: 1
-                        });
-
                         await prisma.contributor.update({
                             where: { username: reviewerUsername },
                             data: {
                                 reviewCount: { increment: 1 },
-                                reviews,
                                 processedReviews: {
                                     create: {
                                         reviewId: BigInt(review.id),
                                         prNumber: BigInt(pr.number),
-                                        processedDate: new Date(review.submitted_at)
+                                        processedDate: submittedDate
                                     }
                                 }
                             }
                         });
+
+                        // Find or create review record for this date
+                        const existingReviewDay = await prisma.review.findFirst({
+                            where: {
+                                contributorId: reviewerRecord.id,
+                                date: dateOnly
+                            }
+                        });
+
+                        if (existingReviewDay) {
+                            await prisma.review.update({
+                                where: { id: existingReviewDay.id },
+                                data: {
+                                    count: { increment: 1 }
+                                }
+                            });
+                        } else {
+                            await prisma.review.create({
+                                data: {
+                                    contributorId: reviewerRecord.id,
+                                    date: dateOnly,
+                                    count: 1
+                                }
+                            });
+                        }
 
                         reviewsAdded++;
                         logger.debug(`Added review by ${reviewerUsername} on PR #${pr.number}`);

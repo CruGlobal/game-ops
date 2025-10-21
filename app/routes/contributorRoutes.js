@@ -72,13 +72,13 @@ router.get('/award-bills-vonettes', authenticate, awardBillsAndVonettesControlle
 router.post('/admin/login', login);
 
 // Route to get all contributors
-router.get('/admin/contributors', authenticate, getContributors);
+router.get('/admin/contributors', ensureAuthenticated, getContributors);
 
 // Route to reset a specific contributor
-router.post('/admin/reset-contributor', authenticate, resetContributor);
+router.post('/admin/reset-contributor', ensureAuthenticated, resetContributor);
 
 // Route to reset all contributors
-router.post('/admin/reset-all', authenticate, resetAllContributors);
+router.post('/admin/reset-all', ensureAuthenticated, resetAllContributors);
 
 // PR Range Info and Data Statistics
 router.get('/admin/pr-range-info', ensureAuthenticated, getPRRangeInfoController);

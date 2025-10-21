@@ -10,15 +10,26 @@ export async function getQuarterConfig() {
     });
 
     if (!config) {
-        // Create default config (calendar quarters)
-        config = await prisma.quarterSettings.create({
-            data: {
-                id: 'quarter-config',
-                systemType: 'calendar',
-                q1StartMonth: 1
+        try {
+            // Create default config (calendar quarters)
+            config = await prisma.quarterSettings.create({
+                data: {
+                    id: 'quarter-config',
+                    systemType: 'calendar',
+                    q1StartMonth: 1
+                }
+            });
+            console.log('Created default quarter configuration (calendar)');
+        } catch (error) {
+            // Handle race condition where config was created by another process
+            if (error.code === 'P2002') {
+                config = await prisma.quarterSettings.findUnique({
+                    where: { id: 'quarter-config' }
+                });
+            } else {
+                throw error;
             }
-        });
-        console.log('Created default quarter configuration (calendar)');
+        }
     }
 
     return config;
