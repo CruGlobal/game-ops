@@ -355,42 +355,83 @@ A streak counts consecutive days you contribute to the repository (either by mer
 
 ### How Points Are Earned
 
-**Base Points:**
-- **Merge PR:** 10 points
-- **Complete Review:** 5 points
+**Pull Request Points (by label):**
+- **Default PR** (no label): 40 points
+- **Bug fix** (`bug` or `fix`): 50 points  
+- **Feature** (`feature`): 100 points
+- **Enhancement** (`enhancement` or `improve`): 75 points
+- **Refactor** (`refactor`): 60 points
+- **Hotfix** (`hotfix`): 80 points
+- **Documentation** (`doc` or `documentation`): 30 points
 
-**Label Bonuses:**
-Add labels to your PRs for bonus points:
+**Review Points:**
+- **Complete Code Review:** 15 points
 
-| Label | Bonus | Total Points |
-|-------|-------|-------------|
-| `bug` or `fix` | +5 | 15 points |
-| `feature` or `enhancement` | +10 | 20 points |
-| `documentation` | +0 | 10 points |
+**Streak Multipliers:**
+
+Active streaks multiply your PR points! 🔥
+
+| Streak Length | Multiplier | Bonus |
+|---------------|-----------|--------|
+| 7-29 days | 1.1x | +10% |
+| 30-89 days | 1.25x | +25% |
+| 90-364 days | 1.5x | +50% |
+| 365+ days | 2.0x | +100% (Double!) |
+
+**Note:** Streak multipliers only apply to PR points, not review points.
+
+### Label Priority
+
+If multiple labels are present, points are awarded based on this priority:
+1. Hotfix (highest priority - 80 pts)
+2. Bug/Fix (50 pts)
+3. Feature (100 pts)
+4. Enhancement (75 pts)
+5. Refactor (60 pts)
+6. Documentation (30 pts)
+7. Default (no matching label - 40 pts)
 
 ### Example Scenarios
 
-**Scenario 1: Bug Fix PR**
+**Scenario 1: Regular PR (no label)**
 ```
-Base PR points: 10
-Bug fix bonus: +5
-Total: 15 points
-```
-
-**Scenario 2: New Feature PR**
-```
-Base PR points: 10
-Feature bonus: +10
-Total: 20 points
+Base PR points: 40
+Total: 40 points
 ```
 
-**Scenario 3: Code Review**
+**Scenario 2: Bug Fix PR**
 ```
-Review points: 5
-Total: 5 points
+Bug fix points: 50
+Total: 50 points
 ```
 
-**Scenario 4: Complete a Challenge**
+**Scenario 3: New Feature PR**
+```
+Feature points: 100
+Total: 100 points
+```
+
+**Scenario 4: Bug Fix with 30-Day Streak**
+```
+Bug fix points: 50
+Streak multiplier: 1.25x
+Total: 63 points (50 × 1.25, rounded)
+```
+
+**Scenario 5: Feature with 90-Day Streak**
+```
+Feature points: 100
+Streak multiplier: 1.5x
+Total: 150 points (100 × 1.5)
+```
+
+**Scenario 6: Code Review**
+```
+Review points: 15
+Total: 15 points (no streak multiplier)
+```
+
+**Scenario 7: Complete a Challenge**
 ```
 Challenge reward: 250
 Total: 250 points (added to overall total)
@@ -658,14 +699,29 @@ A: Yes! Streaks require daily contributions, including weekends.
 
 **Q: How do I get bonus points?**
 A: Add appropriate labels to your PRs:
-- `bug` or `fix` for bug fixes (+5 pts)
-- `feature` or `enhancement` for new features (+10 pts)
+- `bug` or `fix` for bug fixes (50 pts)
+- `feature` for new features (100 pts)
+- `enhancement` or `improve` for improvements (75 pts)
+- `refactor` for code refactoring (60 pts)
+- `hotfix` for critical fixes (80 pts)
+- `documentation` for docs (30 pts)
+
+Maintain a streak for multiplier bonuses (up to 2x at 365+ days)!
 
 **Q: Do points expire?**
 A: No, points are permanent and cumulative.
 
 **Q: Can I see why I got certain points?**
 A: Yes, your profile shows complete points history with reasons and timestamps.
+
+**Q: How do streak multipliers work?**
+A: Your current streak multiplies PR points:
+- 7+ days: 1.1x (10% bonus)
+- 30+ days: 1.25x (25% bonus)
+- 90+ days: 1.5x (50% bonus)
+- 365+ days: 2.0x (100% bonus - double points!)
+
+Streak bonuses do NOT apply to review points or challenge rewards.
 
 ---
 
@@ -743,20 +799,26 @@ A: Try:
 ### 🎯 Maximizing Your Points
 
 1. **Use Labels Strategically**
-   - Always label bug fixes and features
-   - Adds up quickly over time
+   - Always label PRs appropriately
+   - Feature labels give most points (100 pts)
+   - Hotfix for urgent fixes (80 pts)
+   - Bug fixes are solid (50 pts)
 
-2. **Complete Challenges**
+2. **Build and Maintain Streaks**
+   - 365+ day streak = double points on PRs!
+   - 90+ day streak = 50% bonus
+   - Streak multipliers stack with label points
+   - Example: Feature (100) × 2.0 = 200 pts!
+
+3. **Complete Challenges**
    - Join multiple challenges each week
-   - Big point bonuses
+   - Big point bonuses (150-500 pts)
+   - Stack with regular PR/review points
 
-3. **Maintain Streaks**
-   - Consistency beats intensity
-   - Daily small contributions
-
-4. **Review Code**
-   - Easy way to contribute daily
+4. **Review Code Regularly**
+   - Easy 15 points per review
    - Helps maintain streaks
+   - Consistent contribution
 
 ### 🔥 Maintaining Streaks
 
