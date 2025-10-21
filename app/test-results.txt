@@ -1,6 +1,6 @@
 
 > scoreboard@1.0.0 test
-> NODE_ENV=test node --experimental-vm-modules node_modules/.bin/jest __tests__/integration/api.test.js
+> NODE_ENV=test node --experimental-vm-modules node_modules/.bin/jest
 
   console.error
     Error initializing database RequestError [HttpError]: Bad credentials - https://docs.github.com/rest
@@ -18,7 +18,7 @@
           connection: 'close',
           'content-security-policy': "default-src 'none'",
           'content-type': 'application/json; charset=utf-8',
-          date: 'Tue, 21 Oct 2025 15:23:20 GMT',
+          date: 'Tue, 21 Oct 2025 15:37:32 GMT',
           'referrer-policy': 'origin-when-cross-origin, strict-origin-when-cross-origin',
           server: 'github.com',
           'strict-transport-security': 'max-age=31536000; includeSubdomains; preload',
@@ -26,7 +26,7 @@
           'x-content-type-options': 'nosniff',
           'x-frame-options': 'deny',
           'x-github-media-type': 'github.v3; format=json',
-          'x-github-request-id': 'D517:7766E:77AEB0:1FAF801:68F7A568',
+          'x-github-request-id': 'D84B:3A60FE:8A474F:24BC27A:68F7A8BC',
           'x-xss-protection': '0'
         },
         data: {
@@ -179,4 +179,461 @@
     ![Bill](https://test.example.com/images/1_bill_57X27.png)
 
       at awardBillsAndVonettes (services/contributorService.js:953:25)
+
+  console.error
+    Error initializing database RequestError [HttpError]: Bad credentials - https://docs.github.com/rest
+        at /Users/luisrodriguez/Documents/projects/scoreboard projects/github-pr-scoreboard/app/node_modules/@octokit/request/dist-node/index.js:125:21
+        at processTicksAndRejections (node:internal/process/task_queues:105:5)
+        at initializeDatabase (/Users/luisrodriguez/Documents/projects/scoreboard projects/github-pr-scoreboard/app/services/contributorService.js:40:31)
+        at Object.<anonymous> (/Users/luisrodriguez/Documents/projects/scoreboard projects/github-pr-scoreboard/app/__tests__/unit/contributorService.test.js:27:22) {
+      status: 401,
+      response: {
+        url: 'https://api.github.com/rate_limit',
+        status: 401,
+        headers: {
+          'access-control-allow-origin': '*',
+          'access-control-expose-headers': 'ETag, Link, Location, Retry-After, X-GitHub-OTP, X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Used, X-RateLimit-Resource, X-RateLimit-Reset, X-OAuth-Scopes, X-Accepted-OAuth-Scopes, X-Poll-Interval, X-GitHub-Media-Type, X-GitHub-SSO, X-GitHub-Request-Id, Deprecation, Sunset',
+          connection: 'close',
+          'content-security-policy': "default-src 'none'",
+          'content-type': 'application/json; charset=utf-8',
+          date: 'Tue, 21 Oct 2025 15:37:32 GMT',
+          'referrer-policy': 'origin-when-cross-origin, strict-origin-when-cross-origin',
+          server: 'github.com',
+          'strict-transport-security': 'max-age=31536000; includeSubdomains; preload',
+          vary: 'Accept-Encoding, Accept, X-Requested-With',
+          'x-content-type-options': 'nosniff',
+          'x-frame-options': 'deny',
+          'x-github-media-type': 'github.v3; format=json',
+          'x-github-request-id': 'D864:6CE95:8DF3B5:2558037:68F7A8BC',
+          'x-xss-protection': '0'
+        },
+        data: {
+          message: 'Bad credentials',
+          documentation_url: 'https://docs.github.com/rest',
+          status: '401'
+        }
+      },
+      request: {
+        method: 'GET',
+        url: 'https://api.github.com/rate_limit',
+        headers: {
+          accept: 'application/vnd.github.v3+json',
+          'user-agent': 'octokit-rest.js/20.1.2 octokit-core.js/5.2.2 Node.js/24',
+          authorization: 'token [REDACTED]'
+        },
+        request: {
+          fetch: [AsyncFunction: fetch],
+          hook: [Function: bound bound register]
+        }
+      }
+    }
+
+       95 |         return 'Database initialized successfully.';
+       96 |     } catch (err) {
+    >  97 |         console.error('Error initializing database', err);
+          |                 ^
+       98 |         throw err;
+       99 |     }
+      100 | };
+
+      at initializeDatabase (services/contributorService.js:97:17)
+      at Object.<anonymous> (__tests__/unit/contributorService.test.js:27:22)
+
+  console.warn
+    Deprecation: [@octokit/request-error] `error.code` is deprecated, use `error.status`.
+        at RequestError.get (/Users/luisrodriguez/Documents/projects/scoreboard projects/github-pr-scoreboard/app/node_modules/@octokit/request-error/dist-node/index.js:70:11)
+        at isAssertionError (/Users/luisrodriguez/Documents/projects/scoreboard projects/github-pr-scoreboard/app/node_modules/jest-circus/build/formatNodeAssertErrors.js:179:13)
+        at /Users/luisrodriguez/Documents/projects/scoreboard projects/github-pr-scoreboard/app/node_modules/jest-circus/build/formatNodeAssertErrors.js:58:14
+        at Array.map (<anonymous>)
+        at formatNodeAssertErrors (/Users/luisrodriguez/Documents/projects/scoreboard projects/github-pr-scoreboard/app/node_modules/jest-circus/build/formatNodeAssertErrors.js:39:43)
+        at dispatch (/Users/luisrodriguez/Documents/projects/scoreboard projects/github-pr-scoreboard/app/node_modules/jest-circus/build/state.js:67:11)
+        at _runTest (/Users/luisrodriguez/Documents/projects/scoreboard projects/github-pr-scoreboard/app/node_modules/jest-circus/build/run.js:264:3)
+        at _runTestsForDescribeBlock (/Users/luisrodriguez/Documents/projects/scoreboard projects/github-pr-scoreboard/app/node_modules/jest-circus/build/run.js:126:9)
+        at _runTestsForDescribeBlock (/Users/luisrodriguez/Documents/projects/scoreboard projects/github-pr-scoreboard/app/node_modules/jest-circus/build/run.js:121:9)
+        at _runTestsForDescribeBlock (/Users/luisrodriguez/Documents/projects/scoreboard projects/github-pr-scoreboard/app/node_modules/jest-circus/build/run.js:121:9)
+        at run (/Users/luisrodriguez/Documents/projects/scoreboard projects/github-pr-scoreboard/app/node_modules/jest-circus/build/run.js:71:3)
+        at runAndTransformResultsToJestFormat (/Users/luisrodriguez/Documents/projects/scoreboard projects/github-pr-scoreboard/app/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)
+        at jestAdapter (/Users/luisrodriguez/Documents/projects/scoreboard projects/github-pr-scoreboard/app/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
+        at runTestInternal (/Users/luisrodriguez/Documents/projects/scoreboard projects/github-pr-scoreboard/app/node_modules/jest-runner/build/runTest.js:367:16)
+        at runTest (/Users/luisrodriguez/Documents/projects/scoreboard projects/github-pr-scoreboard/app/node_modules/jest-runner/build/runTest.js:444:34)
+
+      at node_modules/@octokit/request-error/dist-node/index.js:38:69
+      at f (node_modules/once/once.js:25:25)
+      at RequestError.get (node_modules/@octokit/request-error/dist-node/index.js:69:9)
+          at Array.map (<anonymous>)
+
+  console.log
+    🎉 Congratulations @newuser, you've earned the 1st PR badge! 🎉
+    
+    ![Badge](https://test.example.com/images/1st_pr_badge.png)
+
+      at awardBadges (services/contributorService.js:548:25)
+
+  console.log
+    🎉 Congratulations @experienced, you've earned the 10 PR badge! 🎉
+    
+    ![Badge](https://test.example.com/images/10_prs_badge.png)
+
+      at awardBadges (services/contributorService.js:548:25)
+
+  console.log
+    🎉 Congratulations @reviewer, you've earned the 1st Review badge! 🎉
+    
+    ![Badge](https://test.example.com/images/1st_review_badge.png)
+
+      at awardBadges (services/contributorService.js:548:25)
+
+  console.log
+    🎉 Congratulations @existing, you've earned the 1st Review badge! 🎉
+    
+    ![Badge](https://test.example.com/images/1st_review_badge.png)
+
+      at awardBadges (services/contributorService.js:548:25)
+
+  console.log
+    🎉 Congratulations @productive, you've earned 1 Bill(s)! 🎉
+    
+    ![Bill](https://test.example.com/images/1_bill_57X27.png)
+
+      at awardBillsAndVonettes (services/contributorService.js:953:25)
+
+  console.log
+    🎉 Congratulations @reviewer, you've earned 1 Bill(s)! 🎉
+    
+    ![Bill](https://test.example.com/images/1_bill_57X27.png)
+
+      at awardBillsAndVonettes (services/contributorService.js:953:25)
+
+  console.log
+    🎉 Congratulations @superstar, you've earned 5 Vonette(s)! 🎉
+    
+    ![Vonette](https://test.example.com/images/5_vonett_57_25.png)
+
+      at awardBillsAndVonettes (services/contributorService.js:953:25)
+
+  console.log
+    🎉 Congratulations @consistent, you've earned 1 Bill(s)! 🎉
+    
+    ![Bill](https://test.example.com/images/1_bill_57X27.png)
+
+      at awardBillsAndVonettes (services/contributorService.js:953:25)
+
+  console.log
+    🎉 Congratulations @newcomer, you've earned the 1st PR badge! 🎉
+    
+    ![Badge](https://test.example.com/images/1st_pr_badge.png)
+
+      at awardBadges (services/contributorService.js:548:25)
+
+  console.log
+    🎉 Congratulations @user_10, you've earned the 10 PR badge! 🎉
+    
+    ![Badge](https://test.example.com/images/10_prs_badge.png)
+
+      at awardBadges (services/contributorService.js:548:25)
+
+  console.log
+    🎉 Congratulations @user_50, you've earned the 50 PR badge! 🎉
+    
+    ![Badge](https://test.example.com/images/50_prs_badge.png)
+
+      at awardBadges (services/contributorService.js:548:25)
+
+  console.log
+    🎉 Congratulations @user_100, you've earned the 100 PR badge! 🎉
+    
+    ![Badge](https://test.example.com/images/100_prs_badge.png)
+
+      at awardBadges (services/contributorService.js:548:25)
+
+  console.log
+    🎉 Congratulations @user_500, you've earned the 500 PR badge! 🎉
+    
+    ![Badge](https://test.example.com/images/500_prs_badge.png)
+
+      at awardBadges (services/contributorService.js:548:25)
+
+  console.log
+    🎉 Congratulations @user_1000, you've earned the 1000 PR badge! 🎉
+    
+    ![Badge](https://test.example.com/images/1000_prs_badge.png)
+
+      at awardBadges (services/contributorService.js:548:25)
+
+  console.log
+    🎉 Congratulations @jumper, you've earned the 1st PR badge! 🎉
+    
+    ![Badge](https://test.example.com/images/1st_pr_badge.png)
+
+      at awardBadges (services/contributorService.js:548:25)
+
+  console.log
+    🎉 Congratulations @reviewer_1, you've earned the 1st Review badge! 🎉
+    
+    ![Badge](https://test.example.com/images/1st_review_badge.png)
+
+      at awardBadges (services/contributorService.js:548:25)
+
+  console.log
+    🎉 Congratulations @reviewer_10, you've earned the 10 Reviews badge! 🎉
+    
+    ![Badge](https://test.example.com/images/10_reviews_badge.png)
+
+      at awardBadges (services/contributorService.js:548:25)
+
+  console.log
+    🎉 Congratulations @reviewer_50, you've earned the 50 Reviews badge! 🎉
+    
+    ![Badge](https://test.example.com/images/50_reviews_badge.png)
+
+      at awardBadges (services/contributorService.js:548:25)
+
+  console.log
+    🎉 Congratulations @reviewer_100, you've earned the 100 Reviews badge! 🎉
+    
+    ![Badge](https://test.example.com/images/100_reviews_badge.png)
+
+      at awardBadges (services/contributorService.js:548:25)
+
+  console.log
+    🎉 Congratulations @reviewer_500, you've earned the 500 Reviews badge! 🎉
+    
+    ![Badge](https://test.example.com/images/500_reviews_badge.png)
+
+      at awardBadges (services/contributorService.js:548:25)
+
+  console.log
+    🎉 Congratulations @reviewer_1000, you've earned the 1000 Reviews badge! 🎉
+    
+    ![Badge](https://test.example.com/images/1000_reviews_badge.png)
+
+      at awardBadges (services/contributorService.js:548:25)
+
+  console.log
+    🎉 Congratulations @active_contributor, you've earned the 1st PR badge! 🎉
+    
+    ![Badge](https://test.example.com/images/1st_pr_badge.png)
+
+      at awardBadges (services/contributorService.js:548:25)
+
+  console.log
+    🎉 Congratulations @active_contributor, you've earned the 1st Review badge! 🎉
+    
+    ![Badge](https://test.example.com/images/1st_review_badge.png)
+
+      at awardBadges (services/contributorService.js:548:25)
+
+  console.log
+    🎉 Congratulations @persistent_user, you've earned the 1st PR badge! 🎉
+    
+    ![Badge](https://test.example.com/images/1st_pr_badge.png)
+
+      at awardBadges (services/contributorService.js:548:25)
+
+  console.log
+    🎉 Congratulations @persistent_user, you've earned the 10 PR badge! 🎉
+    
+    ![Badge](https://test.example.com/images/10_prs_badge.png)
+
+      at awardBadges (services/contributorService.js:548:25)
+
+  console.log
+    🎉 Congratulations @ten_pr_user, you've earned 1 Bill(s)! 🎉
+    
+    ![Bill](https://test.example.com/images/1_bill_57X27.png)
+
+      at awardBillsAndVonettes (services/contributorService.js:953:25)
+
+  console.log
+    🎉 Congratulations @ten_review_user, you've earned 1 Bill(s)! 🎉
+    
+    ![Bill](https://test.example.com/images/1_bill_57X27.png)
+
+      at awardBillsAndVonettes (services/contributorService.js:953:25)
+
+  console.log
+    🎉 Congratulations @superstar_pr, you've earned 5 Vonette(s)! 🎉
+    
+    ![Vonette](https://test.example.com/images/5_vonett_57_25.png)
+
+      at awardBillsAndVonettes (services/contributorService.js:953:25)
+
+  console.log
+    🎉 Congratulations @superstar_reviewer, you've earned 5 Vonette(s)! 🎉
+    
+    ![Vonette](https://test.example.com/images/5_vonett_57_25.png)
+
+      at awardBillsAndVonettes (services/contributorService.js:953:25)
+
+  console.log
+    🎉 Congratulations @consistent_contributor, you've earned 1 Bill(s)! 🎉
+    
+    ![Bill](https://test.example.com/images/1_bill_57X27.png)
+
+      at awardBillsAndVonettes (services/contributorService.js:953:25)
+
+  console.log
+    🎉 Congratulations @super_contributor, you've earned 1 Bill(s)! 🎉
+    
+    ![Bill](https://test.example.com/images/1_bill_57X27.png)
+
+      at awardBillsAndVonettes (services/contributorService.js:953:25)
+
+  console.log
+    🎉 Congratulations @super_contributor, you've earned 2 Bill(s)! 🎉
+    
+    ![Bill](https://test.example.com/images/1_bill_57X27.png)
+
+      at awardBillsAndVonettes (services/contributorService.js:953:25)
+
+  console.log
+    🎉 Congratulations @complex_case, you've earned 5 Vonette(s)! 🎉
+    
+    ![Vonette](https://test.example.com/images/5_vonett_57_25.png)
+
+      at awardBillsAndVonettes (services/contributorService.js:953:25)
+
+  console.log
+    🎉 Congratulations @vonette_user, you've earned 5 Vonette(s)! 🎉
+    
+    ![Vonette](https://test.example.com/images/5_vonett_57_25.png)
+
+      at awardBillsAndVonettes (services/contributorService.js:953:25)
+
+  console.info
+    [2025-10-21T15:37:33.628Z] INFO: Streak started { username: 'newcomer' }
+
+      at Logger._log (utils/logger.js:56:29)
+
+  console.info
+    [2025-10-21T15:37:33.642Z] INFO: Streak continued { username: 'consistent', currentStreak: 6 }
+
+      at Logger._log (utils/logger.js:56:29)
+
+  console.info
+    [2025-10-21T15:37:33.654Z] INFO: Streak broken { username: 'broken', oldStreak: 10, newStreak: 1 }
+
+      at Logger._log (utils/logger.js:56:29)
+
+  console.info
+    [2025-10-21T15:37:33.660Z] INFO: Streak continued { username: 'recordBreaker', currentStreak: 21 }
+
+      at Logger._log (utils/logger.js:56:29)
+
+  console.info
+    [2025-10-21T15:37:33.666Z] INFO: Streak badge awarded { username: 'weekWarrior', badge: '7-day streak' }
+
+      at Logger._log (utils/logger.js:56:29)
+
+  console.info
+    [2025-10-21T15:37:33.673Z] INFO: Streak badge awarded { username: 'monthlyMaster', badge: '30-day streak' }
+
+      at Logger._log (utils/logger.js:56:29)
+
+  console.info
+    [2025-10-21T15:37:33.678Z] INFO: Streak badge awarded { username: 'quarterChamp', badge: '90-day streak' }
+
+      at Logger._log (utils/logger.js:56:29)
+
+  console.info
+    [2025-10-21T15:37:33.684Z] INFO: Streak badge awarded { username: 'yearHero', badge: '365-day streak' }
+
+      at Logger._log (utils/logger.js:56:29)
+
+  console.info
+    [2025-10-21T15:37:33.690Z] INFO: Streak badge awarded { username: 'multiBadge', badge: '7-day streak' }
+
+      at Logger._log (utils/logger.js:56:29)
+
+  console.info
+    [2025-10-21T15:37:33.690Z] INFO: Streak badge awarded { username: 'multiBadge', badge: '30-day streak' }
+
+      at Logger._log (utils/logger.js:56:29)
+
+  console.info
+    [2025-10-21T15:37:33.690Z] INFO: Streak badge awarded { username: 'multiBadge', badge: '90-day streak' }
+
+      at Logger._log (utils/logger.js:56:29)
+
+  console.info
+    [2025-10-21T15:37:33.706Z] INFO: Streak reset { username: 'resetUser' }
+
+      at Logger._log (utils/logger.js:56:29)
+
+  console.info
+    [2025-10-21T15:37:33.761Z] INFO: Streak continued { username: 'dateEdge', currentStreak: 2 }
+
+      at Logger._log (utils/logger.js:56:29)
+
+  console.log
+    Duplicate fix complete: {
+      contributorsFixed: 0,
+      prCountAdjustments: 0,
+      reviewCountAdjustments: 0,
+      duplicatePRsRemoved: 0,
+      duplicateReviewsRemoved: 0
+    }
+
+      at fixDuplicates (services/contributorService.js:1425:17)
+
+  console.log
+    Duplicate fix complete: {
+      contributorsFixed: 0,
+      prCountAdjustments: 0,
+      reviewCountAdjustments: 0,
+      duplicatePRsRemoved: 0,
+      duplicateReviewsRemoved: 0
+    }
+
+      at fixDuplicates (services/contributorService.js:1425:17)
+
+  console.log
+    Created default quarter configuration (calendar)
+
+      at getQuarterConfig (services/quarterlyService.js:21:17)
+
+  console.log
+    Resetting quarterly stats for 2025-Q4
+
+      at resetQuarterlyStats (services/quarterlyService.js:269:17)
+
+  console.log
+    Reset quarterly stats for 2 contributors
+
+      at resetQuarterlyStats (services/quarterlyService.js:286:17)
+
+  console.log
+    Archiving winners for 2025-Q1
+
+      at archiveQuarterWinners (services/quarterlyService.js:169:17)
+
+  console.log
+    Archived 2025-Q1 winner: champion with 275 points
+
+      at archiveQuarterWinners (services/quarterlyService.js:251:17)
+
+  console.log
+    New quarter detected: 2025-Q1 → 2025-Q4
+
+      at checkAndResetIfNewQuarter (services/quarterlyService.js:526:21)
+
+  console.log
+    Archiving winners for 2025-Q1
+
+      at archiveQuarterWinners (services/quarterlyService.js:169:17)
+
+  console.log
+    Archived 2025-Q1 winner: testuser with 100 points
+
+      at archiveQuarterWinners (services/quarterlyService.js:251:17)
+
+  console.log
+    Resetting quarterly stats for 2025-Q4
+
+      at resetQuarterlyStats (services/quarterlyService.js:269:17)
+
+  console.log
+    Reset quarterly stats for 1 contributors
+
+      at resetQuarterlyStats (services/quarterlyService.js:286:17)
 
