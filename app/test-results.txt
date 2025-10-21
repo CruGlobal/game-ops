@@ -1,0 +1,182 @@
+
+> scoreboard@1.0.0 test
+> NODE_ENV=test node --experimental-vm-modules node_modules/.bin/jest __tests__/integration/api.test.js
+
+  console.error
+    Error initializing database RequestError [HttpError]: Bad credentials - https://docs.github.com/rest
+        at /Users/luisrodriguez/Documents/projects/scoreboard projects/github-pr-scoreboard/app/node_modules/@octokit/request/dist-node/index.js:125:21
+        at processTicksAndRejections (node:internal/process/task_queues:105:5)
+        at initializeDatabase (/Users/luisrodriguez/Documents/projects/scoreboard projects/github-pr-scoreboard/app/services/contributorService.js:40:31)
+        at initializeDatabaseController (/Users/luisrodriguez/Documents/projects/scoreboard projects/github-pr-scoreboard/app/controllers/contributorController.js:11:9) {
+      status: 401,
+      response: {
+        url: 'https://api.github.com/rate_limit',
+        status: 401,
+        headers: {
+          'access-control-allow-origin': '*',
+          'access-control-expose-headers': 'ETag, Link, Location, Retry-After, X-GitHub-OTP, X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Used, X-RateLimit-Resource, X-RateLimit-Reset, X-OAuth-Scopes, X-Accepted-OAuth-Scopes, X-Poll-Interval, X-GitHub-Media-Type, X-GitHub-SSO, X-GitHub-Request-Id, Deprecation, Sunset',
+          connection: 'close',
+          'content-security-policy': "default-src 'none'",
+          'content-type': 'application/json; charset=utf-8',
+          date: 'Tue, 21 Oct 2025 15:23:20 GMT',
+          'referrer-policy': 'origin-when-cross-origin, strict-origin-when-cross-origin',
+          server: 'github.com',
+          'strict-transport-security': 'max-age=31536000; includeSubdomains; preload',
+          vary: 'Accept-Encoding, Accept, X-Requested-With',
+          'x-content-type-options': 'nosniff',
+          'x-frame-options': 'deny',
+          'x-github-media-type': 'github.v3; format=json',
+          'x-github-request-id': 'D517:7766E:77AEB0:1FAF801:68F7A568',
+          'x-xss-protection': '0'
+        },
+        data: {
+          message: 'Bad credentials',
+          documentation_url: 'https://docs.github.com/rest',
+          status: '401'
+        }
+      },
+      request: {
+        method: 'GET',
+        url: 'https://api.github.com/rate_limit',
+        headers: {
+          accept: 'application/vnd.github.v3+json',
+          'user-agent': 'octokit-rest.js/20.1.2 octokit-core.js/5.2.2 Node.js/24',
+          authorization: 'token [REDACTED]'
+        },
+        request: {
+          fetch: [AsyncFunction: fetch],
+          hook: [Function: bound bound register]
+        }
+      }
+    }
+
+       95 |         return 'Database initialized successfully.';
+       96 |     } catch (err) {
+    >  97 |         console.error('Error initializing database', err);
+          |                 ^
+       98 |         throw err;
+       99 |     }
+      100 | };
+
+      at initializeDatabase (services/contributorService.js:97:17)
+      at initializeDatabaseController (controllers/contributorController.js:11:9)
+
+  console.log
+    Created default quarter configuration (calendar)
+
+      at getQuarterConfig (services/quarterlyService.js:21:17)
+
+  console.log
+    Initializing quarterly system for 2025-Q4
+
+      at checkAndResetIfNewQuarter (services/quarterlyService.js:514:21)
+
+  console.log
+    Resetting quarterly stats for 2025-Q4
+
+      at resetQuarterlyStats (services/quarterlyService.js:269:17)
+
+  console.log
+    Reset quarterly stats for 0 contributors
+
+      at resetQuarterlyStats (services/quarterlyService.js:286:17)
+
+  console.error
+    Gamification error for PR: 1 RequestError [HttpError]: request to https://api.github.com/users/testuser failed, reason: Nock: No match for request {
+      "method": "GET",
+      "url": "https://api.github.com/users/testuser",
+      "headers": {
+        "accept": "application/vnd.github.v3+json",
+        "accept-encoding": "gzip, deflate, br",
+        "authorization": "token test_github_token_123",
+        "user-agent": "octokit-rest.js/20.1.2 octokit-core.js/5.2.2 Node.js/24"
+      }
+    }
+        at /Users/luisrodriguez/Documents/projects/scoreboard projects/github-pr-scoreboard/app/node_modules/@octokit/request/dist-node/index.js:157:11
+        at processTicksAndRejections (node:internal/process/task_queues:105:5)
+        at updateContributor (/Users/luisrodriguez/Documents/projects/scoreboard projects/github-pr-scoreboard/app/services/contributorService.js:107:32)
+        at fetchPullRequests (/Users/luisrodriguez/Documents/projects/scoreboard projects/github-pr-scoreboard/app/services/contributorService.js:270:21)
+        at fetchPRs (/Users/luisrodriguez/Documents/projects/scoreboard projects/github-pr-scoreboard/app/controllers/contributorController.js:21:9) {
+      status: 500,
+      request: {
+        method: 'GET',
+        url: 'https://api.github.com/users/testuser',
+        headers: {
+          accept: 'application/vnd.github.v3+json',
+          'user-agent': 'octokit-rest.js/20.1.2 octokit-core.js/5.2.2 Node.js/24',
+          authorization: 'token [REDACTED]'
+        },
+        request: {
+          fetch: [AsyncFunction: fetch],
+          hook: [Function: bound bound register]
+        }
+      }
+    }
+
+      338 |                 }  // End if (merged)
+      339 |             } catch (gamificationError) {
+    > 340 |                 console.error('Gamification error for PR:', pr.number, gamificationError);
+          |                         ^
+      341 |                 // Don't fail the whole process if gamification fails
+      342 |             }
+      343 |
+
+      at fetchPullRequests (services/contributorService.js:340:25)
+      at fetchPRs (controllers/contributorController.js:21:9)
+
+  console.error
+    Error fetching pull requests RequestError [HttpError]: request to https://api.github.com/repos/TestOrg/test-repo/pulls/1/reviews?per_page=100 failed, reason: Nock: No match for request {
+      "method": "GET",
+      "url": "https://api.github.com/repos/TestOrg/test-repo/pulls/1/reviews?per_page=100",
+      "headers": {
+        "accept": "application/vnd.github.v3+json",
+        "accept-encoding": "gzip, deflate, br",
+        "authorization": "token test_github_token_123",
+        "user-agent": "octokit-rest.js/20.1.2 octokit-core.js/5.2.2 Node.js/24"
+      }
+    }
+        at /Users/luisrodriguez/Documents/projects/scoreboard projects/github-pr-scoreboard/app/node_modules/@octokit/request/dist-node/index.js:157:11
+        at processTicksAndRejections (node:internal/process/task_queues:105:5)
+        at fetchPullRequests (/Users/luisrodriguez/Documents/projects/scoreboard projects/github-pr-scoreboard/app/services/contributorService.js:344:39)
+        at fetchPRs (/Users/luisrodriguez/Documents/projects/scoreboard projects/github-pr-scoreboard/app/controllers/contributorController.js:21:9) {
+      status: 500,
+      request: {
+        method: 'GET',
+        url: 'https://api.github.com/repos/TestOrg/test-repo/pulls/1/reviews?per_page=100',
+        headers: {
+          accept: 'application/vnd.github.v3+json',
+          'user-agent': 'octokit-rest.js/20.1.2 octokit-core.js/5.2.2 Node.js/24',
+          authorization: 'token [REDACTED]'
+        },
+        request: {
+          fetch: [AsyncFunction: fetch],
+          hook: [Function: bound bound register]
+        }
+      }
+    }
+
+      470 |         await updateLastFetchDate(new Date()); // Update the last fetch date
+      471 |     } catch (err) {
+    > 472 |         console.error('Error fetching pull requests', err); // Log any errors
+          |                 ^
+      473 |     }
+      474 | };
+      475 |
+
+      at fetchPullRequests (services/contributorService.js:472:17)
+      at fetchPRs (controllers/contributorController.js:21:9)
+
+  console.log
+    🎉 Congratulations @newuser, you've earned the 1st PR badge! 🎉
+    
+    ![Badge](https://test.example.com/images/1st_pr_badge.png)
+
+      at awardBadges (services/contributorService.js:548:25)
+
+  console.log
+    🎉 Congratulations @productive, you've earned 1 Bill(s)! 🎉
+    
+    ![Bill](https://test.example.com/images/1_bill_57X27.png)
+
+      at awardBillsAndVonettes (services/contributorService.js:953:25)
+
