@@ -10,7 +10,9 @@ import {
     updateQuarterConfig,
     getAllTimeLeaderboard,
     getQuarterlyLeaderboard,
-    getHallOfFame
+    getHallOfFame,
+    recomputeCurrentQuarterStats,
+    recomputeHallOfFame
 } from '../services/quarterlyService.js';
 
 // Function to get all contributors
@@ -346,6 +348,38 @@ export async function getHallOfFameController(req, res) {
             message: 'Failed to retrieve Hall of Fame',
             error: error.message
         });
+    }
+}
+
+/**
+ * Recompute This Quarter leaderboard from point history
+ * POST /api/admin/leaderboard/recompute/current-quarter
+ */
+export async function recomputeCurrentQuarterController(req, res) {
+    try {
+        const result = await recomputeCurrentQuarterStats();
+        res.json({ success: true, ...result });
+    } catch (error) {
+        console.error('Error in recomputeCurrentQuarterController:', error);
+        res.status(500).json({ success: false, message: 'Failed to recompute current quarter', error: error.message });
+    }
+}
+
+/**
+ * Recompute Hall of Fame for a given quarter
+ * POST /api/admin/leaderboard/recompute/hall-of-fame { quarter: 'YYYY-QN' }
+ */
+export async function recomputeHallOfFameController(req, res) {
+    try {
+        const { quarter } = req.body;
+        if (quarter && !/^\d{4}-Q[1-4]$/.test(quarter)) {
+            return res.status(400).json({ success: false, message: 'Invalid quarter format' });
+        }
+        const result = await recomputeHallOfFame(quarter);
+        res.json({ success: true, ...result });
+    } catch (error) {
+        console.error('Error in recomputeHallOfFameController:', error);
+        res.status(500).json({ success: false, message: 'Failed to recompute Hall of Fame', error: error.message });
     }
 }
 

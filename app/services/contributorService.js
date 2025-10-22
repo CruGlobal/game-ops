@@ -417,15 +417,12 @@ export const fetchPullRequests = async () => {
                             reviewsAdded++;
                         }
 
-                        await awardReviewPoints(reviewer);
+                        const award = await awardReviewPoints(reviewer);
 
-                        // Update quarterly stats for review
-                        const latestPoints = reviewer.pointsHistory && reviewer.pointsHistory.length > 0
-                            ? Number(reviewer.pointsHistory[0].points)
-                            : 0;
+                        // Update quarterly stats for review using the awarded points
                         await updateQuarterlyStats(reviewUsername, {
                             reviews: 1,
-                            points: latestPoints
+                            points: award?.points || 0
                         });
 
                         // Update challenge progress for reviews

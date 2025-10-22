@@ -1,4 +1,5 @@
 import { prisma } from '../lib/prisma.js';
+import { POINT_REASONS } from '../config/points-config.js';
 
 /**
  * Get quarter configuration from database
@@ -498,6 +499,162 @@ export async function getHallOfFame(limit = 20) {
         console.error('Error getting hall of fame:', error);
         throw error;
     }
+}
+
+/**
+ * Recompute This Quarter leaderboard stats from point history
+ * - Rebuilds prsThisQuarter, reviewsThisQuarter, pointsThisQuarter
+ * - Does NOT alter all-time totals
+ */
+export async function recomputeCurrentQuarterStats() {
+    const quarter = await getCurrentQuarter();
+    const { start, end } = await getQuarterDateRange(quarter);
+
+    // Sum points per contributor within current quarter
+    const totals = await prisma.pointHistory.groupBy({
+        by: ['contributorId'],
+        where: { timestamp: { gte: start, lte: end } },
+        _sum: { points: true }
+    });
+
+    // Count PR merged events
+    const prCounts = await prisma.pointHistory.groupBy({
+        by: ['contributorId'],
+        where: { timestamp: { gte: start, lte: end }, reason: POINT_REASONS.PR_MERGED },
+        _count: { _all: true }
+    });
+
+    // Count review completed events
+    const reviewCounts = await prisma.pointHistory.groupBy({
+        by: ['contributorId'],
+        where: { timestamp: { gte: start, lte: end }, reason: POINT_REASONS.REVIEW_COMPLETED },
+        _count: { _all: true }
+    });
+
+    const sumMap = new Map(totals.map(t => [String(t.contributorId), Number(t._sum.points || 0n)]));
+    const prMap = new Map(prCounts.map(c => [String(c.contributorId), Number(c._count._all || 0)]));
+    const reviewMap = new Map(reviewCounts.map(c => [String(c.contributorId), Number(c._count._all || 0)]));
+
+    // Get all contributors (ids and usernames) to iterate
+    const contributors = await prisma.contributor.findMany({ select: { id: true, username: true } });
+
+    let updated = 0;
+    for (const c of contributors) {
+        const idKey = String(c.id);
+        const pointsThisQuarter = sumMap.get(idKey) || 0;
+        const prsThisQuarter = prMap.get(idKey) || 0;
+        const reviewsThisQuarter = reviewMap.get(idKey) || 0;
+
+        await prisma.contributor.update({
+            where: { id: c.id },
+            data: {
+                quarterlyStats: {
+                    currentQuarter: quarter,
+                    quarterStartDate: start,
+                    quarterEndDate: end,
+                    prsThisQuarter,
+                    reviewsThisQuarter,
+                    pointsThisQuarter,
+                    lastUpdated: new Date()
+                }
+            }
+        });
+        updated++;
+    }
+
+    return { quarter, updated };
+}
+
+/**
+ * Recompute and upsert Hall of Fame entry for a given quarter from history
+ */
+export async function recomputeHallOfFame(quarterString) {
+    const quarter = quarterString || await getCurrentQuarter();
+    const { start, end } = await getQuarterDateRange(quarter);
+
+    // Sum points by contributor for the quarter
+    const totals = await prisma.pointHistory.groupBy({
+        by: ['contributorId'],
+        where: { timestamp: { gte: start, lte: end } },
+        _sum: { points: true }
+    });
+
+    if (totals.length === 0) {
+        return { quarter, updated: false, message: 'No point history found for quarter' };
+    }
+
+    // Fetch contributor profiles
+    const ids = totals.map(t => t.contributorId);
+    const profiles = await prisma.contributor.findMany({
+        where: { id: { in: ids } },
+        select: { id: true, username: true, avatarUrl: true }
+    });
+    const profileMap = new Map(profiles.map(p => [String(p.id), p]));
+
+    // Build sorted list
+    const ranked = totals
+        .map(t => ({ id: String(t.contributorId), points: Number(t._sum.points || 0n) }))
+        .filter(t => t.points > 0)
+        .sort((a, b) => b.points - a.points);
+
+    if (ranked.length === 0) {
+        return { quarter, updated: false, message: 'No points > 0 for quarter' };
+    }
+
+    const top3 = ranked.slice(0, 3).map((r, idx) => {
+        const p = profileMap.get(r.id);
+        return {
+            rank: idx + 1,
+            username: p?.username || 'unknown',
+            avatarUrl: p?.avatarUrl || null,
+            prsThisQuarter: 0,
+            reviewsThisQuarter: 0,
+            pointsThisQuarter: r.points
+        };
+    });
+
+    const winnerProfile = profileMap.get(ranked[0].id);
+    const winner = {
+        username: winnerProfile?.username || 'unknown',
+        avatarUrl: winnerProfile?.avatarUrl || null,
+        prsThisQuarter: 0,
+        reviewsThisQuarter: 0,
+        pointsThisQuarter: ranked[0].points
+    };
+
+    // Participants: contributors with any points in the quarter
+    const totalParticipants = ranked.length;
+
+    const [yearStr, qPart] = quarter.split('-Q');
+    const year = parseInt(yearStr);
+    const quarterNumber = parseInt(qPart);
+
+    await prisma.quarterlyWinner.upsert({
+        where: { quarter },
+        update: {
+            year,
+            quarterNumber,
+            quarterStart: start,
+            quarterEnd: end,
+            winner,
+            top3,
+            totalParticipants,
+            archivedDate: new Date()
+        },
+        create: {
+            quarter,
+            year,
+            quarterNumber,
+            quarterStart: start,
+            quarterEnd: end,
+            winner,
+            top3,
+            totalParticipants,
+            archivedDate: new Date()
+        }
+    });
+
+    return { quarter, updated: true };
 }
 
 /**

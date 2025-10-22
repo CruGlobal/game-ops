@@ -272,6 +272,29 @@
                     </ul>
                 </div>
             </div>
+
+            <!-- Leaderboards Maintenance -->
+            <div class="card">
+                <h2>🏆 Leaderboards Maintenance</h2>
+                <p class="settings-description">Recompute leaderboards from point history if you've performed a large backfill or changed configuration.</p>
+
+                <div class="action-buttons">
+                    <button id="recompute-current-quarter" class="btn btn-primary">
+                        <span>🔁 Recompute This Quarter Leaderboard</span>
+                    </button>
+                </div>
+
+                <div class="form-group" style="margin-top: 1rem;">
+                    <label for="recompute-hof-quarter">Quarter (e.g., 2025-Q3)</label>
+                    <input type="text" id="recompute-hof-quarter" class="form-control" placeholder="YYYY-QN" />
+                    <small class="form-hint">Leave empty to use current quarter.</small>
+                </div>
+                <div class="action-buttons">
+                    <button id="recompute-hof" class="btn btn-secondary">
+                        <span>🏅 Recompute Hall of Fame (Quarter)</span>
+                    </button>
+                </div>
+            </div>
         </div>
     </main>
 </div>
@@ -732,6 +755,46 @@ document.getElementById('stop-backfill')?.addEventListener('click', async () => 
     } catch (error) {
         console.error('Error stopping backfill:', error);
         showToast('Failed to stop backfill', 'error');
+    }
+});
+
+// Recompute This Quarter Leaderboard
+document.getElementById('recompute-current-quarter')?.addEventListener('click', async () => {
+    try {
+        const resp = await fetch('/api/admin/leaderboard/recompute/current-quarter', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        const result = await resp.json();
+        if (result.success) {
+            showToast(`Recomputed current quarter for ${result.quarter}. Updated ${result.updated} contributors.`, 'success');
+        } else {
+            showToast(result.message || 'Failed to recompute current quarter', 'error');
+        }
+    } catch (err) {
+        console.error('Error recomputing current quarter:', err);
+        showToast('Failed to recompute current quarter', 'error');
+    }
+});
+
+// Recompute Hall of Fame for quarter
+document.getElementById('recompute-hof')?.addEventListener('click', async () => {
+    try {
+        const quarter = document.getElementById('recompute-hof-quarter')?.value?.trim();
+        const resp = await fetch('/api/admin/leaderboard/recompute/hall-of-fame', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ quarter: quarter || undefined })
+        });
+        const result = await resp.json();
+        if (result.success) {
+            showToast(`Hall of Fame ${result.updated ? 'updated' : 'not updated'} for ${result.quarter}. ${result.message || ''}`.trim(), 'success');
+        } else {
+            showToast(result.message || 'Failed to recompute Hall of Fame', 'error');
+        }
+    } catch (err) {
+        console.error('Error recomputing Hall of Fame:', err);
+        showToast('Failed to recompute Hall of Fame', 'error');
     }
 });
 

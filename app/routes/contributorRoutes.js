@@ -38,6 +38,8 @@ import {
     getQuarterlyLeaderboardController,
     getQuarterlyLeaderboardByQuarterController,
     getHallOfFameController,
+    recomputeCurrentQuarterController,
+    recomputeHallOfFameController,
     startBackfillController,
     stopBackfillController,
     getBackfillStatusController
@@ -98,6 +100,10 @@ router.post('/admin/quarter-config', ensureAuthenticated, updateQuarterConfigCon
 router.post('/admin/backfill/start', ensureAuthenticated, startBackfillController);
 router.post('/admin/backfill/stop', ensureAuthenticated, stopBackfillController);
 router.get('/admin/backfill/status', ensureAuthenticated, getBackfillStatusController);
+
+// Admin recompute endpoints
+router.post('/admin/leaderboard/recompute/current-quarter', ensureAuthenticated, recomputeCurrentQuarterController);
+router.post('/admin/leaderboard/recompute/hall-of-fame', ensureAuthenticated, recomputeHallOfFameController);
 
 // Leaderboard Routes
 router.get('/leaderboard/all-time', getAllTimeLeaderboardController);
