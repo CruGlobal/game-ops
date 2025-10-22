@@ -300,7 +300,8 @@ export const fetchPullRequests = async () => {
                     contributor = await prisma.contributor.findUnique({
                         where: { username },
                         include: {
-                            activeChallenges: true
+                            activeChallenges: true,
+                            achievements: { select: { achievementId: true } }
                         }
                     });
 
@@ -394,7 +395,8 @@ export const fetchPullRequests = async () => {
                                 orderBy: { timestamp: 'desc' },
                                 take: 1
                             },
-                            activeChallenges: true
+                            activeChallenges: true,
+                            achievements: { select: { achievementId: true } }
                         }
                     });
                     
