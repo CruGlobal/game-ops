@@ -164,7 +164,8 @@ export const ACHIEVEMENTS = {
 
 export const checkAchievements = (contributor) => {
     const newAchievements = [];
-    const earnedIds = new Set(contributor.achievements.map(a => a.achievementId));
+    // Safeguard against undefined achievements arrays
+    const earnedIds = new Set((contributor.achievements || []).map(a => a.achievementId));
 
     // Check PR milestones
     const prAchievements = ['first-pr', 'pr-10', 'pr-50', 'pr-100', 'pr-500', 'pr-1000'];
