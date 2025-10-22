@@ -276,6 +276,7 @@ model QuarterSettings {
   
   // Feature flags
   enableAchievementComments Boolean @default(false) @map("enable_achievement_comments") // Post achievement notifications to GitHub PRs
+  enableBillsComments       Boolean @default(false) @map("enable_bills_comments")       // Post bills/vonettes notifications to GitHub PRs
   
   lastModified DateTime @default(now()) @updatedAt @map("last_modified")
   modifiedBy   String   @default("system") @map("modified_by")

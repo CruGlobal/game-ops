@@ -118,7 +118,7 @@ export async function getQuarterDateRange(quarterString) {
  * @param {Boolean} enableAchievementComments - Whether to post achievement comments to GitHub PRs
  * @returns {Object} { config, quarterChanged, oldQuarter, newQuarter }
  */
-export async function updateQuarterConfig(systemType, q1StartMonth, modifiedBy, enableAchievementComments = false) {
+export async function updateQuarterConfig(systemType, q1StartMonth, modifiedBy, enableAchievementComments = false, enableBillsComments = false) {
     // Get old config and quarter
     const oldConfig = await getQuarterConfig();
     const oldQuarter = await getCurrentQuarter();
@@ -140,6 +140,7 @@ export async function updateQuarterConfig(systemType, q1StartMonth, modifiedBy, 
             systemType,
             q1StartMonth: actualStartMonth,
             enableAchievementComments,
+            enableBillsComments,
             lastModified: new Date(),
             modifiedBy
         },
@@ -148,6 +149,7 @@ export async function updateQuarterConfig(systemType, q1StartMonth, modifiedBy, 
             systemType,
             q1StartMonth: actualStartMonth,
             enableAchievementComments,
+            enableBillsComments,
             lastModified: new Date(),
             modifiedBy
         }

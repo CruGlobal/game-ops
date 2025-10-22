@@ -896,25 +896,27 @@ export const awardBillsAndVonettes = async (pullRequestNumber = null, test = fal
             }
 
             if (billsValue > 0) {
-                // Log the awarded bills and vonettes (commented out GitHub API call)
+                // Log the awarded bills and vonettes
                 console.log(`🎉 Congratulations @${contributor.username}, you've earned ${billsValue} ${billsAwarded}(s)! 🎉\n\n![${billsAwarded}](${domain}/images/${billsImage})`);
 
                 results.push({ username: contributor.username, bills: billsAwarded, billsImage: billsImage });
 
+                // Update database
+                await prisma.contributor.update({
+                    where: { username: contributor.username },
+                    data: {
+                        totalBillsAwarded: {
+                            increment: billsValue
+                        },
+                        first10PrsAwarded: contributor.first10PrsAwarded,
+                        first10ReviewsAwarded: contributor.first10ReviewsAwarded,
+                        first500PrsAwarded: contributor.first500PrsAwarded,
+                        first500ReviewsAwarded: contributor.first500ReviewsAwarded
+                    }
+                });
 
-                    await prisma.contributor.update({
-                        where: { username: contributor.username },
-                        data: {
-                            totalBillsAwarded: {
-                                increment: billsValue
-                            },
-                            first10PrsAwarded: contributor.first10PrsAwarded,
-                            first10ReviewsAwarded: contributor.first10ReviewsAwarded,
-                            first500PrsAwarded: contributor.first500PrsAwarded,
-                            first500ReviewsAwarded: contributor.first500ReviewsAwarded
-                        }
-                    });
-                
+                // Post comment to GitHub if enabled
+                await postBillsComment(contributor, billsAwarded, billsValue, billsImage);
             }
         }
     } catch (err) {
@@ -922,6 +924,76 @@ export const awardBillsAndVonettes = async (pullRequestNumber = null, test = fal
     }
     return results;
 };
+
+/**
+ * Post bills/vonettes notification as GitHub comment
+ * @param {Object} contributor - Contributor document
+ * @param {String} billType - 'Bill' or 'Vonette'
+ * @param {Number} billValue - Number of bills/vonettes awarded
+ * @param {String} billImage - Image filename
+ */
+async function postBillsComment(contributor, billType, billValue, billImage) {
+    try {
+        // Check if bills comments are enabled in settings
+        const settings = await prisma.quarterSettings.findUnique({
+            where: { id: 'quarter-config' }
+        });
+
+        if (!settings?.enableBillsComments) {
+            console.log('Bills comments disabled in settings');
+            return;
+        }
+
+        // Get repo config
+        const owner = process.env.REPO_OWNER || process.env.GITHUB_OWNER;
+        const repo = process.env.REPO_NAME || process.env.GITHUB_REPO;
+
+        // Skip if owner/repo not configured
+        if (!owner || !repo) {
+            console.log('Skipping bills comment - REPO_OWNER/REPO_NAME not configured');
+            return;
+        }
+
+        // Find the most recent PR by this contributor
+        const { data: prs } = await octokit.pulls.list({
+            owner,
+            repo,
+            state: 'all',
+            per_page: 10,
+            sort: 'updated',
+            direction: 'desc'
+        });
+
+        const userPR = prs.find(pr => pr.user.login === contributor.username);
+
+        if (userPR) {
+            const imageUrl = `${domain}/images/${billImage}`;
+            const pluralType = billValue > 1 ? `${billType}s` : billType;
+            
+            const comment = `💵 **${billType} Awarded!**
+
+Congratulations @${contributor.username}! You've earned **${billValue} ${pluralType}**! 🎉
+
+![${billType}](${imageUrl})
+
+Keep up the excellent work! Your contributions make a difference! 🌟`;
+
+            await octokit.issues.createComment({
+                owner,
+                repo,
+                issue_number: userPR.number,
+                body: comment
+            });
+
+            console.log(`Bills comment posted for ${contributor.username} on PR #${userPR.number}`);
+        } else {
+            console.log(`No recent PR found for ${contributor.username} to post bills comment`);
+        }
+    } catch (error) {
+        // Don't throw - this is a nice-to-have feature
+        console.log(`Could not post bills comment for ${contributor.username}: ${error.message}`);
+    }
+}
 
 // function to fetch activity data
 export const fetchActivityData = async (prFrom, prTo) => {
