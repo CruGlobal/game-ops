@@ -2,6 +2,10 @@ import { Octokit } from '@octokit/rest';
 import { prisma } from '../lib/prisma.js';
 import { getSocketIO } from '../utils/socketEmitter.js';
 import logger from '../utils/logger.js';
+import { awardPoints, calculatePoints } from './pointsService.js';
+import { POINT_REASONS, POINT_VALUES } from '../config/points-config.js';
+import { updateQuarterlyStats, recomputeHallOfFameAll, recomputeCurrentQuarterStats } from './quarterlyService.js';
+import { checkAndAwardAchievements } from './achievementService.js';
 
 const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
 const repoOwner = process.env.REPO_OWNER || 'CruGlobal';
@@ -208,10 +212,20 @@ async function processPR(pr) {
                 });
             }
 
+            // Calculate and award points for the merged PR using labels/streak logic
+            const pointsData = calculatePoints(pr, contributor);
+            await awardPoints(contributor, pointsData.points, POINT_REASONS.PR_MERGED, pr.number);
+
+            // Update quarterly stats (count PR and points) if within current quarter
+            await updateQuarterlyStats(username, { prs: 1, points: pointsData.points }, mergedDate);
+
+            // Check and award achievements
+            await checkAndAwardAchievements(contributor);
+
             prAdded = 1;
             logger.debug(`Added PR #${pr.number} for ${username}`);
             if (backfillState.verboseLogging) {
-                logger.info(`✅ [BACKFILL] Added NEW PR #${pr.number} by ${username} - "${pr.title}"`);
+                logger.info(`✅ [BACKFILL] Added NEW PR #${pr.number} by ${username} - "${pr.title}" - Points awarded!`);
             }
         } else {
             logger.debug(`PR #${pr.number} already processed for ${username}, but checking reviews...`);
@@ -311,10 +325,21 @@ async function processPR(pr) {
                             });
                         }
 
+                        // Award points for the review
+                        const reviewDate = new Date(review.submitted_at);
+                        // Use configured review points via POINT_REASONS and awardPoints helper
+                        await awardPoints(reviewerRecord, POINT_VALUES.review, POINT_REASONS.REVIEW_COMPLETED, null);
+
+                        // Update quarterly stats for review (count + points)
+                        await updateQuarterlyStats(reviewerUsername, { reviews: 1, points: POINT_VALUES.review }, reviewDate);
+
+                        // Check and award achievements
+                        await checkAndAwardAchievements(reviewerRecord);
+
                         reviewsAdded++;
                         logger.debug(`Added review by ${reviewerUsername} on PR #${pr.number}`);
                         if (backfillState.verboseLogging) {
-                            logger.info(`✅ [BACKFILL] Added NEW review by ${reviewerUsername} on PR #${pr.number}`);
+                            logger.info(`✅ [BACKFILL] Added NEW review by ${reviewerUsername} on PR #${pr.number} - Points awarded!`);
                         }
                     } else {
                         if (backfillState.verboseLogging) {
@@ -500,21 +525,44 @@ export async function startBackfill(startDate, endDate, checkRateLimits = true, 
             page++;
         }
 
-        // Complete
+    // Complete PR/review import
         backfillState.progress.endTime = Date.now();
-        backfillState.progress.status = backfillState.shouldStop ? 'Stopped' : 'Completed';
+    backfillState.progress.status = backfillState.shouldStop ? 'Stopped' : 'Recomputing leaderboards...';
         backfillState.isRunning = false;
 
         emitBackfillProgress();
 
         const duration = Math.floor((backfillState.progress.endTime - backfillState.progress.startTime) / 1000);
 
+        // If not stopped, recompute quarterly stats and Hall of Fame as a finalization step
+        let hofSummary = '';
+        if (!backfillState.shouldStop) {
+            try {
+                // Recompute current quarter leaderboard stats from fresh point history
+                const qRes = await recomputeCurrentQuarterStats();
+                logger.info(`Recomputed current quarter stats for ${qRes.quarter}: updated=${qRes.updated}, skippedNoActivity=${qRes.skippedNoActivity}`);
+
+                // Recompute Hall of Fame across all quarters (robust fallback logic inside)
+                backfillState.progress.status = 'Recomputing Hall of Fame...';
+                emitBackfillProgress();
+                const hofRes = await recomputeHallOfFameAll();
+                const updatedCount = (hofRes.updatedQuarters || []).length;
+                hofSummary = ` Recomputed Hall of Fame for ${updatedCount} quarter(s).`;
+                logger.info(`Recomputed Hall of Fame for ${updatedCount} quarter(s).`);
+            } catch (recomputeErr) {
+                logger.error('Error recomputing leaderboards after backfill:', recomputeErr);
+                hofSummary = ' (HoF recompute encountered an error; you can retry from Admin UI).';
+            }
+            backfillState.progress.status = 'Completed';
+            emitBackfillProgress();
+        }
+
         const statusMessage = backfillState.shouldStop ? 'stopped' : 'completed';
         const detailedMessage = `Backfill ${statusMessage}. Found ${totalPRsFound} PRs in date range. ` +
             `${totalPRsProcessed > 0 ? `Added ${totalPRsProcessed} new PRs. ` : 'All PRs already in database. '}` +
             `${totalReviewsProcessed > 0 ? `Added ${totalReviewsProcessed} new reviews. ` : 'All reviews already in database. '}` +
             `${totalPRsFound - totalPRsProcessed > 0 ? `Skipped ${totalPRsFound - totalPRsProcessed} duplicate PRs. ` : ''}` +
-            `Duration: ${duration}s`;
+            `Duration: ${duration}s` + hofSummary;
 
         logger.info(detailedMessage);
 

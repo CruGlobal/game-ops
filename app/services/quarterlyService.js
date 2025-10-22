@@ -1,5 +1,5 @@
 import { prisma } from '../lib/prisma.js';
-import { POINT_REASONS } from '../config/points-config.js';
+import { POINT_REASONS, POINT_VALUES } from '../config/points-config.js';
 
 /**
  * Get quarter configuration from database
@@ -611,12 +611,59 @@ export async function recomputeHallOfFame(quarterString) {
         _sum: { points: true }
     });
 
-    if (totals.length === 0) {
-        return { quarter, updated: false, message: 'No point history found for quarter' };
+    // If no point history exists for this quarter, fall back to processed PRs/reviews
+    let rankings = totals;
+    let fallbackUsed = false;
+    if (rankings.length === 0) {
+        fallbackUsed = true;
+        // Prefer Contribution/Review tables (historical data), else processedPR/processedReview
+        let prMap = new Map();
+        let reviewMap = new Map();
+        const contribPrs = await prisma.contribution.groupBy({
+            by: ['contributorId'],
+            where: { date: { gte: start, lte: end }, merged: true },
+            _sum: { count: true }
+        });
+        const contribReviews = await prisma.review.groupBy({
+            by: ['contributorId'],
+            where: { date: { gte: start, lte: end } },
+            _sum: { count: true }
+        });
+
+        if (contribPrs.length > 0 || contribReviews.length > 0) {
+            prMap = new Map(contribPrs.map(p => [String(p.contributorId), Number(p._sum.count || 0) ]));
+            reviewMap = new Map(contribReviews.map(r => [String(r.contributorId), Number(r._sum.count || 0) ]));
+        } else {
+            // Fall back to processed tables if contribution/review empty
+            const prs = await prisma.processedPR.groupBy({
+                by: ['contributorId'],
+                where: {
+                    processedDate: { gte: start, lte: end },
+                    action: 'authored'
+                },
+                _count: { _all: true }
+            });
+            const reviews = await prisma.processedReview.groupBy({
+                by: ['contributorId'],
+                where: { processedDate: { gte: start, lte: end } },
+                _count: { _all: true }
+            });
+            prMap = new Map(prs.map(p => [String(p.contributorId), Number(p._count._all || 0)]));
+            reviewMap = new Map(reviews.map(r => [String(r.contributorId), Number(r._count._all || 0)]));
+        }
+
+        // Compute default points = PRs * default PR points + reviews * review points
+        const idSet = new Set([...prMap.keys(), ...reviewMap.keys()]);
+        rankings = Array.from(idSet).map(id => {
+            const prCount = prMap.get(id) || 0;
+            const reviewCount = reviewMap.get(id) || 0;
+            const points = prCount * (POINT_VALUES.default || 40) + reviewCount * (POINT_VALUES.review || 15);
+            return { contributorId: id, _sum: { points: BigInt(points) }, __counts: { prs: prCount, reviews: reviewCount } };
+        });
     }
 
     // Fetch contributor profiles
-    const ids = totals.map(t => t.contributorId);
+    const ids = rankings.map(t => t.contributorId);
     const profiles = await prisma.contributor.findMany({
         where: { id: { in: ids } },
         select: { id: true, username: true, avatarUrl: true }
@@ -624,7 +671,7 @@ export async function recomputeHallOfFame(quarterString) {
     const profileMap = new Map(profiles.map(p => [String(p.id), p]));
 
     // Build sorted list
-    const ranked = totals
+    const ranked = rankings
         .map(t => ({ id: String(t.contributorId), points: Number(t._sum.points || 0n) }))
         .filter(t => t.points > 0)
         .sort((a, b) => b.points - a.points);
@@ -633,14 +680,25 @@ export async function recomputeHallOfFame(quarterString) {
         return { quarter, updated: false, message: 'No points > 0 for quarter' };
     }
 
+    // Also compute PR/review counts for top 3 if using fallback (for richer display)
     const top3 = ranked.slice(0, 3).map((r, idx) => {
         const p = profileMap.get(r.id);
+        let prsThisQuarter = 0;
+        let reviewsThisQuarter = 0;
+        if (fallbackUsed) {
+            // Derive counts from computed rankings (attached in fallback)
+            const rRaw = rankings.find(x => String(x.contributorId) === r.id);
+            if (rRaw && rRaw.__counts) {
+                prsThisQuarter = rRaw.__counts.prs || 0;
+                reviewsThisQuarter = rRaw.__counts.reviews || 0;
+            }
+        }
         return {
             rank: idx + 1,
             username: p?.username || 'unknown',
             avatarUrl: p?.avatarUrl || null,
-            prsThisQuarter: 0,
-            reviewsThisQuarter: 0,
+            prsThisQuarter,
+            reviewsThisQuarter,
             pointsThisQuarter: r.points
         };
     });
@@ -649,8 +707,8 @@ export async function recomputeHallOfFame(quarterString) {
     const winner = {
         username: winnerProfile?.username || 'unknown',
         avatarUrl: winnerProfile?.avatarUrl || null,
-        prsThisQuarter: 0,
-        reviewsThisQuarter: 0,
+        prsThisQuarter: fallbackUsed ? (ranked[0] && (rankings.find(x => String(x.contributorId) === ranked[0].id)?.__counts?.prs || 0)) : 0,
+        reviewsThisQuarter: fallbackUsed ? (ranked[0] && (rankings.find(x => String(x.contributorId) === ranked[0].id)?.__counts?.reviews || 0)) : 0,
         pointsThisQuarter: ranked[0].points
     };
 
@@ -697,15 +755,21 @@ export async function recomputeHallOfFameAll() {
     const config = await getQuarterConfig();
     const q1Start = config.q1StartMonth;
 
-    const range = await prisma.pointHistory.aggregate({
-        _min: { timestamp: true },
-        _max: { timestamp: true }
-    });
-    const minTs = range._min.timestamp;
-    const maxTs = range._max.timestamp;
+    // Aggregate ranges across all relevant tables to ensure full historical coverage
+    const phRange = await prisma.pointHistory.aggregate({ _min: { timestamp: true }, _max: { timestamp: true } });
+    const cRange = await prisma.contribution.aggregate({ _min: { date: true }, _max: { date: true } });
+    const rRange = await prisma.review.aggregate({ _min: { date: true }, _max: { date: true } });
+    const prRange = await prisma.processedPR.aggregate({ _min: { processedDate: true }, _max: { processedDate: true } });
+    const rvRange = await prisma.processedReview.aggregate({ _min: { processedDate: true }, _max: { processedDate: true } });
+
+    const minCandidates = [phRange._min.timestamp, cRange._min.date, rRange._min.date, prRange._min.processedDate, rvRange._min.processedDate].filter(Boolean);
+    const maxCandidates = [phRange._max.timestamp, cRange._max.date, rRange._max.date, prRange._max.processedDate, rvRange._max.processedDate].filter(Boolean);
+
+    const minTs = minCandidates.length ? new Date(Math.min(...minCandidates.map(d => d.getTime()))) : null;
+    const maxTs = maxCandidates.length ? new Date(Math.max(...maxCandidates.map(d => d.getTime()))) : null;
 
     if (!minTs || !maxTs) {
-        return { updatedQuarters: [], message: 'No point history found' };
+        return { updatedQuarters: [], message: 'No historical activity found' };
     }
 
     // Helper: get quarter string for a date based on q1Start

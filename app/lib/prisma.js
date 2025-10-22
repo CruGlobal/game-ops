@@ -11,6 +11,19 @@ const logConfig = process.env.NODE_ENV === 'development'
   ? ['query', 'info', 'warn', 'error']
   : ['warn', 'error'];
 
+// Safety guard: never run tests against a production database by mistake
+const dbUrl = process.env.DATABASE_URL || '';
+if (process.env.NODE_ENV === 'test') {
+  const looksLikeProd = /neon\.tech|aws|azure|gcp|render|railway|vercel|prod|production/i.test(dbUrl);
+  if (!dbUrl || looksLikeProd) {
+    // Throw early to avoid destructive operations against a real DB during tests
+    throw new Error(
+      'Refusing to run tests without a dedicated test DATABASE_URL. ' +
+      'Set DATABASE_URL in app/.env.test to a safe test database.'
+    );
+  }
+}
+
 export const prisma = globalForPrisma.prisma || new PrismaClient({
   log: logConfig.map(level => ({
     emit: 'event',

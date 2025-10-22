@@ -308,6 +308,19 @@
                         <span>🧮 Recompute Hall of Fame (ALL Quarters)</span>
                     </button>
                 </div>
+
+                <!-- Dev-only quick action and exports -->
+                <div class="action-buttons" style="margin-top: 1rem; gap: .5rem; display: flex; flex-wrap: wrap;">
+                    <button id="dev-recompute-hof-all" class="btn btn-outline" style="display:none;">
+                        <span>⚙️ Dev: Quick Recompute HoF (ALL)</span>
+                    </button>
+                    <button id="export-hof-json" class="btn btn-secondary">
+                        <span>📤 Export Hall of Fame (JSON)</span>
+                    </button>
+                    <button id="export-hof-csv" class="btn btn-secondary">
+                        <span>📤 Export Hall of Fame (CSV)</span>
+                    </button>
+                </div>
             </div>
 
             <!-- Contributors Management Section -->
@@ -364,8 +377,38 @@ function showToast(message, type = 'info') {
 <script nonce="lexicostatistics">
 // Data Overview Functionality
 (async function initDataOverview() {
-    // Load PR range info on page load
-    await loadPRRangeInfo();
+    // Auth gate: check if user is authenticated before hitting admin APIs
+    const authBanner = document.getElementById('auth-status');
+    const adminContent = document.getElementById('admin-content');
+    try {
+        const authResp = await fetch('/api/auth/status');
+        const authJson = await authResp.json();
+        if (authJson && authJson.isAuthenticated) {
+            if (authBanner) {
+                authBanner.className = 'auth-status auth-ok';
+                authBanner.textContent = `Signed in${authJson.username ? ' as ' + authJson.username : ''}.`;
+            }
+            if (adminContent) adminContent.style.display = 'block';
+            // Load PR range info on page load (only when authed)
+            await loadPRRangeInfo();
+        } else {
+            if (authBanner) {
+                authBanner.className = 'auth-status auth-warn';
+                authBanner.innerHTML = `You are not signed in. <a href="/auth/github">Sign in with GitHub</a> to view admin data.`;
+            }
+            if (adminContent) adminContent.style.display = 'none';
+            // Do not proceed with admin API calls when unauthenticated
+            return;
+        }
+    } catch (e) {
+        // If auth check fails, keep content hidden and show a hint
+        if (authBanner) {
+            authBanner.className = 'auth-status auth-error';
+            authBanner.textContent = 'Unable to verify authentication. Please refresh or sign in.';
+        }
+        if (adminContent) adminContent.style.display = 'none';
+        return;
+    }
 
     // Refresh button
     document.getElementById('refresh-stats')?.addEventListener('click', async () => {
@@ -389,6 +432,15 @@ function showToast(message, type = 'info') {
 async function loadPRRangeInfo() {
     try {
         const response = await fetch('/api/admin/pr-range-info');
+        // If not authorized, prompt login and exit early
+        if (response.status === 401) {
+            const authBanner = document.getElementById('auth-status');
+            if (authBanner) {
+                authBanner.className = 'auth-status auth-warn';
+                authBanner.innerHTML = `You are not signed in. <a href="/auth/github">Sign in with GitHub</a> to view admin data.`;
+            }
+            return;
+        }
         const result = await response.json();
 
         if (result.success) {
@@ -865,6 +917,96 @@ document.getElementById('recompute-hof-all')?.addEventListener('click', async ()
     }
 });
 
+// Dev-only: show quick HoF recompute if not production
+(async () => {
+    try {
+        const resp = await fetch('/api/health');
+        const j = await resp.json();
+        if (j && j.environment && j.environment !== 'production') {
+            const devBtn = document.getElementById('dev-recompute-hof-all');
+            if (devBtn) devBtn.style.display = 'inline-block';
+        }
+    } catch (e) {
+        // ignore health check errors
+    }
+})();
+
+// Dev quick recompute (ALL)
+document.getElementById('dev-recompute-hof-all')?.addEventListener('click', async () => {
+    try {
+        const resp = await fetch('/api/admin/leaderboard/recompute/hall-of-fame/all', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        const result = await resp.json();
+        if (result.success) {
+            const count = (result.updatedQuarters || []).length;
+            showToast(`Dev: Recomputed Hall of Fame for ${count} quarter(s).`, 'success');
+        } else {
+            showToast(result.message || 'Dev: HoF recompute failed', 'error');
+        }
+    } catch (err) {
+        console.error('Dev HoF recompute error:', err);
+        showToast('Dev: HoF recompute failed', 'error');
+    }
+});
+
+// Export Hall of Fame JSON
+document.getElementById('export-hof-json')?.addEventListener('click', async () => {
+    try {
+        const resp = await fetch('/api/leaderboard/hall-of-fame?limit=500');
+        const j = await resp.json();
+        const data = j.data || [];
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `hall-of-fame-${new Date().toISOString().slice(0,10)}.json`;
+        document.body.appendChild(a);
+        a.click();
+        URL.revokeObjectURL(url);
+        a.remove();
+        showToast('Exported Hall of Fame (JSON)', 'success');
+    } catch (err) {
+        console.error('Export JSON failed:', err);
+        showToast('Failed to export Hall of Fame (JSON)', 'error');
+    }
+});
+
+// Export Hall of Fame CSV
+document.getElementById('export-hof-csv')?.addEventListener('click', async () => {
+    try {
+        const resp = await fetch('/api/leaderboard/hall-of-fame?limit=500');
+        const j = await resp.json();
+        const rows = (j.data || []).map(w => ({
+            quarter: w.quarter,
+            year: w.year,
+            quarterNumber: w.quarterNumber,
+            winner: (w.winner && w.winner.username) || '',
+            winnerPoints: (w.winner && w.winner.pointsThisQuarter) || 0,
+            participants: w.totalParticipants || 0
+        }));
+        const header = ['quarter','year','quarterNumber','winner','winnerPoints','participants'];
+        const csv = [header.join(','), ...rows.map(r => header.map(h => {
+            const val = r[h] ?? '';
+            const s = String(val).replace(/"/g, '""');
+            return /[,"]/.test(s) ? `"${s}"` : s;
+        }).join(','))].join('\n');
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `hall-of-fame-${new Date().toISOString().slice(0,10)}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        URL.revokeObjectURL(url);
+        a.remove();
+        showToast('Exported Hall of Fame (CSV)', 'success');
+    } catch (err) {
+        console.error('Export CSV failed:', err);
+        showToast('Failed to export Hall of Fame (CSV)', 'error');
+    }
+});
 // Listen for backfill progress updates via WebSocket
 // This will be set up after socket.io is loaded and initialized
 

@@ -307,61 +307,70 @@ export const fetchPullRequests = async () => {
 
                     if (contributor) {
                         // Add to processedPRs with contributorId (not username)
-                        await prisma.processedPR.create({
-                            data: {
-                                contributorId: contributor.id,
-                                prNumber: BigInt(pr.number),
-                                prTitle: pr.title,
-                                action: 'authored',
-                                processedDate: new Date()
-                            }
-                        });
-                        prsAdded++;
-
-                    // Update streak
-                    await updateStreak(contributor, pr.merged_at);
-                    await checkStreakBadges(contributor);
-
-                    // Award points based on PR labels
-                    const pointsData = calculatePoints(pr, contributor);
-                    await awardPoints(contributor, pointsData.points, 'PR Merged', pr.number);
-
-                    // Update quarterly stats (only if PR merged in current quarter)
-                    await updateQuarterlyStats(username, {
-                        prs: 1,
-                        points: pointsData.points
-                    }, pr.merged_at);
-
-                    // Update challenge progress
-                    if (contributor.activeChallenges && contributor.activeChallenges.length > 0) {
-                        const { checkLabelMatch } = await import('./challengeService.js');
-
-                        for (const activeChallenge of contributor.activeChallenges) {
-                            const challenge = await prisma.challenge.findUnique({
-                                where: { id: activeChallenge.challengeId }
+                        try {
+                            await prisma.processedPR.create({
+                                data: {
+                                    contributorId: contributor.id,
+                                    prNumber: BigInt(pr.number),
+                                    prTitle: pr.title,
+                                    action: 'authored',
+                                    processedDate: new Date()
+                                }
                             });
-
-                            if (!challenge) continue;
-
-                            let shouldIncrement = false;
-
-                            // Check challenge type
-                            if (challenge.type === 'pr-merge') {
-                                shouldIncrement = true;
-                            } else if (challenge.type === 'okr-label') {
-                                // Check if PR labels match challenge filters
-                                const prLabels = pr.labels || [];
-                                shouldIncrement = checkLabelMatch(prLabels, challenge.labelFilters);
+                            prsAdded++;
+                        } catch (createError) {
+                            // Handle duplicate key error (P2002) - PR was processed by another process (e.g., backfill)
+                            if (createError.code === 'P2002') {
+                                console.log(`PR #${pr.number} already processed by another process, skipping gamification to avoid duplicates`);
+                                continue; // Skip gamification for this PR to avoid duplicate points
                             }
+                            throw createError; // Re-throw other errors
+                        }
 
-                            if (shouldIncrement) {
-                                await updateChallengeProgress(username, challenge.id, 1);
+                        // Update streak
+                        await updateStreak(contributor, pr.merged_at);
+                        await checkStreakBadges(contributor);
+
+                        // Award points based on PR labels
+                        const pointsData = calculatePoints(pr, contributor);
+                        await awardPoints(contributor, pointsData.points, 'PR Merged', pr.number);
+
+                        // Update quarterly stats (only if PR merged in current quarter)
+                        await updateQuarterlyStats(username, {
+                            prs: 1,
+                            points: pointsData.points
+                        }, pr.merged_at);
+
+                        // Update challenge progress
+                        if (contributor.activeChallenges && contributor.activeChallenges.length > 0) {
+                            const { checkLabelMatch } = await import('./challengeService.js');
+
+                            for (const activeChallenge of contributor.activeChallenges) {
+                                const challenge = await prisma.challenge.findUnique({
+                                    where: { id: activeChallenge.challengeId }
+                                });
+
+                                if (!challenge) continue;
+
+                                let shouldIncrement = false;
+
+                                // Check challenge type
+                                if (challenge.type === 'pr-merge') {
+                                    shouldIncrement = true;
+                                } else if (challenge.type === 'okr-label') {
+                                    // Check if PR labels match challenge filters
+                                    const prLabels = pr.labels || [];
+                                    shouldIncrement = checkLabelMatch(prLabels, challenge.labelFilters);
+                                }
+
+                                if (shouldIncrement) {
+                                    await updateChallengeProgress(username, challenge.id, 1);
+                                }
                             }
                         }
-                    }
 
-                    // Check and award achievements
-                    await checkAndAwardAchievements(contributor);
+                        // Check and award achievements
+                        await checkAndAwardAchievements(contributor);
                     }  // End if (contributor)
                 }  // End if (merged)
             } catch (gamificationError) {
@@ -406,15 +415,24 @@ export const fetchPullRequests = async () => {
 
                         if (!alreadyProcessedReview) {
                             // Add to processedReviews with contributorId (not username)
-                            await prisma.processedReview.create({
-                                data: {
-                                    contributorId: reviewer.id,
-                                    prNumber: BigInt(pr.number),
-                                    reviewId: BigInt(review.id),
-                                    processedDate: new Date()
+                            try {
+                                await prisma.processedReview.create({
+                                    data: {
+                                        contributorId: reviewer.id,
+                                        prNumber: BigInt(pr.number),
+                                        reviewId: BigInt(review.id),
+                                        processedDate: new Date()
+                                    }
+                                });
+                                reviewsAdded++;
+                            } catch (createError) {
+                                // Handle duplicate key error (P2002) - review was processed by another process
+                                if (createError.code === 'P2002') {
+                                    console.log(`Review ${review.id} on PR #${pr.number} already processed by another process, skipping gamification to avoid duplicates`);
+                                    continue; // Skip gamification for this review to avoid duplicate points
                                 }
-                            });
-                            reviewsAdded++;
+                                throw createError; // Re-throw other errors
+                            }
                         }
 
                         const award = await awardReviewPoints(reviewer);
@@ -1168,8 +1186,10 @@ export async function getPRRangeInfo() {
                 }
             },
             update: {
+                firstPRFetched: firstPR,
                 latestPRFetched: latestPR,
                 totalPRsInDB: prNumbers.length,
+                dateRangeStart: oldestDate,
                 dateRangeEnd: newestDate,
                 lastFetchDate: new Date()
             },
