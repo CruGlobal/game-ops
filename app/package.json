@@ -15,7 +15,12 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "recompute:quarter:fallback": "node scripts/recompute-quarter-fallback.js",
+    "recompute:quarter:history": "node scripts/recompute-quarter-history.js",
+  "recompute:alltime:history": "node scripts/recompute-alltime-from-history.js",
+    "backdate:point-history": "node scripts/backdate-point-history.js",
+    "verify:quarter:user": "node scripts/verify-quarter-user.js"
   },
   "dependencies": {
     "@octokit/rest": "^20.0.0",

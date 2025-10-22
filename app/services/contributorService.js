@@ -4,6 +4,7 @@ import fetch from 'node-fetch';
 import { emitPRUpdate, emitBadgeAwarded, emitLeaderboardUpdate, emitReviewUpdate } from '../utils/socketEmitter.js';
 import { updateStreak, checkStreakBadges } from './streakService.js';
 import { calculatePoints, awardPoints, awardReviewPoints } from './pointsService.js';
+import { POINT_REASONS } from '../config/points-config.js';
 import { checkAndAwardAchievements } from './achievementService.js';
 import { updateChallengeProgress } from './challengeService.js';
 import { checkAndResetIfNewQuarter, updateQuarterlyStats } from './quarterlyService.js';
@@ -266,10 +267,11 @@ export const fetchPullRequests = async () => {
         });
 
         for (const pr of pullRequests) {
-          if (pr.merged_at || pr.state === 'closed' && pr.merge_commit_sha) {
-            const username = pr.user.login;
-            const date = new Date(pr.updated_at);
-            const merged = !!pr.merged_at; // Check if the PR is merged
+                    if (pr.merged_at || pr.state === 'closed' && pr.merge_commit_sha) {
+                        const username = pr.user.login;
+                        // Use actual merged_at for merged PRs; fall back to updated_at only if not merged
+                        const merged = !!pr.merged_at; // Check if the PR is merged
+                        const date = merged ? new Date(pr.merged_at) : new Date(pr.updated_at);
 
             // Gamification: Update streak, award points, check achievements
             try {
@@ -314,7 +316,7 @@ export const fetchPullRequests = async () => {
                                     prNumber: BigInt(pr.number),
                                     prTitle: pr.title,
                                     action: 'authored',
-                                    processedDate: new Date()
+                                    processedDate: merged ? new Date(pr.merged_at) : new Date()
                                 }
                             });
                             prsAdded++;
@@ -333,7 +335,7 @@ export const fetchPullRequests = async () => {
 
                         // Award points based on PR labels
                         const pointsData = calculatePoints(pr, contributor);
-                        await awardPoints(contributor, pointsData.points, 'PR Merged', pr.number);
+                        await awardPoints(contributor, pointsData.points, POINT_REASONS.PR_MERGED, pr.number, pr.merged_at);
 
                         // Update quarterly stats (only if PR merged in current quarter)
                         await updateQuarterlyStats(username, {
@@ -421,7 +423,7 @@ export const fetchPullRequests = async () => {
                                         contributorId: reviewer.id,
                                         prNumber: BigInt(pr.number),
                                         reviewId: BigInt(review.id),
-                                        processedDate: new Date()
+                                        processedDate: new Date(review.submitted_at)
                                     }
                                 });
                                 reviewsAdded++;
@@ -435,7 +437,7 @@ export const fetchPullRequests = async () => {
                             }
                         }
 
-                        const award = await awardReviewPoints(reviewer);
+                        const award = await awardReviewPoints(reviewer, review.submitted_at, pr.number);
 
                         // Update quarterly stats for review using the awarded points (only if review in current quarter)
                         await updateQuarterlyStats(reviewUsername, {

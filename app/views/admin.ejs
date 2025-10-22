@@ -54,6 +54,27 @@
                 <button id="reset-notifications" class="secondary-button">Reset to Defaults</button>
             </div>
 
+            <!-- Cron Controls Section -->
+            <div class="card">
+                <h2>⏱️ Cron Controls</h2>
+                <p class="settings-description">Enable or pause all scheduled background jobs (PR fetch, badges, challenges, quarter checks). Disabled by default.</p>
+
+                <div class="settings-controls">
+                    <div class="setting-item">
+                        <label class="toggle-label">
+                            <input type="checkbox" id="cron-toggle" class="toggle-checkbox">
+                            <span class="toggle-slider"></span>
+                            <span class="toggle-text">Enable Cron Jobs</span>
+                        </label>
+                        <p class="setting-hint">When off, all scheduled jobs will be skipped. This does not stop manual actions or admin-triggered tasks.</p>
+                    </div>
+                </div>
+
+                <div style="margin-top: .5rem; color: var(--text-muted)">
+                    Status: <strong id="cron-status-text">Loading...</strong>
+                </div>
+            </div>
+
             <!-- Quarter Configuration Section -->
             <div class="card">
                 <h2>📅 Quarter Configuration</h2>
@@ -391,6 +412,7 @@ function showToast(message, type = 'info') {
             if (adminContent) adminContent.style.display = 'block';
             // Load PR range info on page load (only when authed)
             await loadPRRangeInfo();
+            await initCronControls();
         } else {
             if (authBanner) {
                 authBanner.className = 'auth-status auth-warn';
@@ -1052,6 +1074,50 @@ document.getElementById('export-hof-csv')?.addEventListener('click', async () =>
             console.error('Error checking backfill status:', error);
         }
     })();
+</script>
+
+<script nonce="lexicostatistics">
+// Cron controls
+async function initCronControls() {
+    try {
+        const resp = await fetch('/api/admin/cron-status');
+        if (resp.status === 401) return; // not authed
+        const j = await resp.json();
+        const enabled = !!j.enabled;
+        const toggle = document.getElementById('cron-toggle');
+        const status = document.getElementById('cron-status-text');
+        if (toggle) toggle.checked = enabled;
+        if (status) status.textContent = enabled ? 'Enabled' : 'Disabled';
+
+        toggle?.addEventListener('change', async (e) => {
+            const newVal = !!e.target.checked;
+            try {
+                const res2 = await fetch('/api/admin/cron-status', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ enabled: newVal })
+                });
+                const j2 = await res2.json();
+                const ok = j2.success !== false; // default to optimistic
+                const final = ok ? !!j2.enabled : !newVal; // if failed, revert
+                if (!ok) {
+                    if (typeof showToast === 'function') showToast('Failed to update cron status', 'error');
+                } else {
+                    if (typeof showToast === 'function') showToast(`Cron ${final ? 'enabled' : 'disabled'}`, 'success');
+                }
+                if (toggle) toggle.checked = final;
+                if (status) status.textContent = final ? 'Enabled' : 'Disabled';
+            } catch (err) {
+                console.error('Cron toggle failed', err);
+                if (typeof showToast === 'function') showToast('Failed to update cron status', 'error');
+                // revert checkbox
+                if (toggle) toggle.checked = !newVal;
+            }
+        });
+    } catch (err) {
+        console.error('Failed to initialize cron controls', err);
+    }
+}
 </script>
 
 <!-- Socket.IO Client Library -->

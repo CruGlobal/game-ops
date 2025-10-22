@@ -48,6 +48,7 @@ import {
 import { authenticate } from '../middleware/authMiddleware.js';
 import { login } from '../controllers/authController.js';
 import { ensureAuthenticated } from '../middleware/ensureAuthenticated.js';
+import { getCronStatusController, setCronStatusController } from '../controllers/adminController.js';
 
 const router = express.Router();
 const __filename = fileURLToPath(import.meta.url);
@@ -101,6 +102,10 @@ router.post('/admin/quarter-config', ensureAuthenticated, updateQuarterConfigCon
 router.post('/admin/backfill/start', ensureAuthenticated, startBackfillController);
 router.post('/admin/backfill/stop', ensureAuthenticated, stopBackfillController);
 router.get('/admin/backfill/status', ensureAuthenticated, getBackfillStatusController);
+
+// Cron controls (admin only)
+router.get('/admin/cron-status', ensureAuthenticated, getCronStatusController);
+router.post('/admin/cron-status', ensureAuthenticated, setCronStatusController);
 
 // Admin recompute endpoints
 router.post('/admin/leaderboard/recompute/current-quarter', ensureAuthenticated, recomputeCurrentQuarterController);

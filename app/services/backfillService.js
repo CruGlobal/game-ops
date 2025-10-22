@@ -214,7 +214,7 @@ async function processPR(pr) {
 
             // Calculate and award points for the merged PR using labels/streak logic
             const pointsData = calculatePoints(pr, contributor);
-            await awardPoints(contributor, pointsData.points, POINT_REASONS.PR_MERGED, pr.number);
+            await awardPoints(contributor, pointsData.points, POINT_REASONS.PR_MERGED, pr.number, mergedDate);
 
             // Update quarterly stats (count PR and points) if within current quarter
             await updateQuarterlyStats(username, { prs: 1, points: pointsData.points }, mergedDate);
@@ -325,10 +325,15 @@ async function processPR(pr) {
                             });
                         }
 
-                        // Award points for the review
+                        // Award points for the review using PR number for traceability
                         const reviewDate = new Date(review.submitted_at);
-                        // Use configured review points via POINT_REASONS and awardPoints helper
-                        await awardPoints(reviewerRecord, POINT_VALUES.review, POINT_REASONS.REVIEW_COMPLETED, null);
+                        await awardPoints(
+                            reviewerRecord,
+                            POINT_VALUES.review,
+                            POINT_REASONS.REVIEW_COMPLETED,
+                            pr.number,
+                            submittedDate
+                        );
 
                         // Update quarterly stats for review (count + points)
                         await updateQuarterlyStats(reviewerUsername, { reviews: 1, points: POINT_VALUES.review }, reviewDate);

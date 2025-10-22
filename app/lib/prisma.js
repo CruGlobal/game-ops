@@ -1,6 +1,10 @@
 // lib/prisma.js
 // Prisma Client singleton for the application with enhanced logging and monitoring
 
+// Ensure environment variables from .env are loaded before Prisma reads them
+import dotenv from 'dotenv';
+dotenv.config();
+
 import { PrismaClient } from '@prisma/client';
 import logger from '../utils/logger.js';
 

@@ -12,9 +12,11 @@ import {
     getQuarterlyLeaderboard,
     getHallOfFame,
     recomputeCurrentQuarterStats,
+    recomputeCurrentQuarterStatsFallback,
     recomputeHallOfFame,
     recomputeHallOfFameAll
 } from '../services/quarterlyService.js';
+import { ensureAppSettingsTable, getCronEnabled, setCronEnabled } from '../lib/appSettings.js';
 
 // Function to get all contributors
 export const getContributors = async (req, res) => {
@@ -366,7 +368,8 @@ export async function getHallOfFameController(req, res) {
 export async function recomputeCurrentQuarterController(req, res) {
     try {
         console.log('Admin requested recompute current quarter');
-        const result = await recomputeCurrentQuarterStats();
+        const useFallback = req.query.fallback === 'true';
+        const result = useFallback ? await recomputeCurrentQuarterStatsFallback() : await recomputeCurrentQuarterStats();
         res.json({ success: true, ...result });
     } catch (error) {
         console.error('Error in recomputeCurrentQuarterController:', error);
@@ -472,5 +475,36 @@ export async function getBackfillStatusController(req, res) {
             message: 'Failed to get backfill status',
             error: error.message
         });
+    }
+}
+
+/**
+ * Get cron status (enabled/disabled)
+ * GET /api/admin/cron-status
+ */
+export async function getCronStatusController(req, res) {
+    try {
+        await ensureAppSettingsTable();
+        const enabled = await getCronEnabled();
+        res.json({ success: true, enabled });
+    } catch (error) {
+        console.error('Error in getCronStatusController:', error);
+        res.status(500).json({ success: false, message: 'Failed to get cron status', error: error.message });
+    }
+}
+
+/**
+ * Set cron status
+ * POST /api/admin/cron-status { enabled: boolean }
+ */
+export async function setCronStatusController(req, res) {
+    try {
+        const { enabled } = req.body || {};
+        await ensureAppSettingsTable();
+        const newVal = await setCronEnabled(Boolean(enabled));
+        res.json({ success: true, enabled: newVal });
+    } catch (error) {
+        console.error('Error in setCronStatusController:', error);
+        res.status(500).json({ success: false, message: 'Failed to set cron status', error: error.message });
     }
 }

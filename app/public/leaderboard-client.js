@@ -562,6 +562,7 @@ function createLeaderboardCard(user, rank, type) {
         </div>
 
         <div class="badges-section">
+            ${type === 'all-time' ? '<div class="alltime-badge">🌟 All-Time</div>' : ''}
             ${badgesHTML}
         </div>
     `;

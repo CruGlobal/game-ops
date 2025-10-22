@@ -39,7 +39,7 @@ export const calculatePoints = (prData, contributor) => {
  * @param {Number} prNumber - PR number (optional)
  * @returns {Object} Updated points data
  */
-export const awardPoints = async (contributor, points, reason, prNumber = null) => {
+export const awardPoints = async (contributor, points, reason, prNumber = null, timestamp = null) => {
     try {
         // Update contributor with new points
         const updatedContributor = await prisma.contributor.update({
@@ -53,7 +53,7 @@ export const awardPoints = async (contributor, points, reason, prNumber = null) 
                         points: BigInt(points),
                         reason,
                         prNumber: prNumber ? BigInt(prNumber) : null,
-                        timestamp: new Date()
+                        timestamp: timestamp ? new Date(timestamp) : new Date()
                     }
                 }
             },
@@ -102,14 +102,15 @@ export const awardPoints = async (contributor, points, reason, prNumber = null) 
  * @param {Object} contributor - Contributor document
  * @returns {Object} Updated points data
  */
-export const awardReviewPoints = async (contributor) => {
+export const awardReviewPoints = async (contributor, timestamp = null, prNumber = null) => {
     try {
         const reviewPoints = POINT_VALUES.review;
         return await awardPoints(
             contributor,
             reviewPoints,
             POINT_REASONS.REVIEW_COMPLETED,
-            null
+            prNumber,
+            timestamp
         );
     } catch (error) {
         logger.error('Error awarding review points', {

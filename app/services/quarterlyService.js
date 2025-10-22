@@ -598,6 +598,84 @@ export async function recomputeCurrentQuarterStats() {
 }
 
 /**
+ * Recompute This Quarter leaderboard stats from processed tables as a fallback
+ * - Uses Contribution and Review (or processedPR/processedReview) within the quarter
+ * - Computes points = PRs * POINT_VALUES.default + Reviews * POINT_VALUES.review
+ * - Does NOT alter all-time totals
+ */
+export async function recomputeCurrentQuarterStatsFallback(quarterString = null) {
+    const quarter = quarterString || await getCurrentQuarter();
+    const { start, end } = await getQuarterDateRange(quarter);
+
+    // Prefer contribution/review aggregates
+    const contribPrs = await prisma.contribution.groupBy({
+        by: ['contributorId'],
+        where: { date: { gte: start, lte: end }, merged: true },
+        _sum: { count: true }
+    });
+    const contribReviews = await prisma.review.groupBy({
+        by: ['contributorId'],
+        where: { date: { gte: start, lte: end } },
+        _sum: { count: true }
+    });
+
+    let prMap = new Map(contribPrs.map(p => [String(p.contributorId), Number(p._sum.count || 0)]));
+    let reviewMap = new Map(contribReviews.map(r => [String(r.contributorId), Number(r._sum.count || 0)]));
+
+    // If both are empty, fall back to processed tables
+    if (prMap.size === 0 && reviewMap.size === 0) {
+        const prs = await prisma.processedPR.groupBy({
+            by: ['contributorId'],
+            where: { processedDate: { gte: start, lte: end }, action: 'authored' },
+            _count: { _all: true }
+        });
+        const reviews = await prisma.processedReview.groupBy({
+            by: ['contributorId'],
+            where: { processedDate: { gte: start, lte: end } },
+            _count: { _all: true }
+        });
+        prMap = new Map(prs.map(p => [String(p.contributorId), Number(p._count._all || 0)]));
+        reviewMap = new Map(reviews.map(r => [String(r.contributorId), Number(r._count._all || 0)]));
+    }
+
+    const ids = new Set([...prMap.keys(), ...reviewMap.keys()]);
+    if (ids.size === 0) return { quarter, updated: 0 };
+
+    const contributors = await prisma.contributor.findMany({
+        where: { id: { in: Array.from(ids) } },
+        select: { id: true, username: true }
+    });
+    const idToUsername = new Map(contributors.map(c => [String(c.id), c.username]));
+
+    let updated = 0;
+    for (const id of ids) {
+        const username = idToUsername.get(id);
+        if (!username) continue;
+        const prsThisQuarter = prMap.get(id) || 0;
+        const reviewsThisQuarter = reviewMap.get(id) || 0;
+        const pointsThisQuarter = prsThisQuarter * (POINT_VALUES.default || 40) + reviewsThisQuarter * (POINT_VALUES.review || 15);
+
+        await prisma.contributor.update({
+            where: { id },
+            data: {
+                quarterlyStats: {
+                    currentQuarter: quarter,
+                    quarterStartDate: start,
+                    quarterEndDate: end,
+                    prsThisQuarter,
+                    reviewsThisQuarter,
+                    pointsThisQuarter,
+                    lastUpdated: new Date()
+                }
+            }
+        });
+        updated++;
+    }
+
+    return { quarter, updated };
+}
+
+/**
  * Recompute and upsert Hall of Fame entry for a given quarter from history
  */
 export async function recomputeHallOfFame(quarterString) {
@@ -680,7 +758,25 @@ export async function recomputeHallOfFame(quarterString) {
         return { quarter, updated: false, message: 'No points > 0 for quarter' };
     }
 
-    // Also compute PR/review counts for top 3 if using fallback (for richer display)
+    // Compute PR/review counts for top 3
+    // If fallback was used we already attached counts; otherwise compute from pointHistory by reason
+    let prCountsMap = new Map();
+    let reviewCountsMap = new Map();
+    if (!fallbackUsed) {
+        const prCounts = await prisma.pointHistory.groupBy({
+            by: ['contributorId'],
+            where: { timestamp: { gte: start, lte: end }, reason: POINT_REASONS.PR_MERGED },
+            _count: { _all: true }
+        });
+        const rvCounts = await prisma.pointHistory.groupBy({
+            by: ['contributorId'],
+            where: { timestamp: { gte: start, lte: end }, reason: POINT_REASONS.REVIEW_COMPLETED },
+            _count: { _all: true }
+        });
+        prCountsMap = new Map(prCounts.map(c => [String(c.contributorId), Number(c._count._all || 0)]));
+        reviewCountsMap = new Map(rvCounts.map(c => [String(c.contributorId), Number(c._count._all || 0)]));
+    }
+
     const top3 = ranked.slice(0, 3).map((r, idx) => {
         const p = profileMap.get(r.id);
         let prsThisQuarter = 0;
@@ -692,6 +788,9 @@ export async function recomputeHallOfFame(quarterString) {
                 prsThisQuarter = rRaw.__counts.prs || 0;
                 reviewsThisQuarter = rRaw.__counts.reviews || 0;
             }
+        } else {
+            prsThisQuarter = prCountsMap.get(r.id) || 0;
+            reviewsThisQuarter = reviewCountsMap.get(r.id) || 0;
         }
         return {
             rank: idx + 1,
@@ -707,8 +806,12 @@ export async function recomputeHallOfFame(quarterString) {
     const winner = {
         username: winnerProfile?.username || 'unknown',
         avatarUrl: winnerProfile?.avatarUrl || null,
-        prsThisQuarter: fallbackUsed ? (ranked[0] && (rankings.find(x => String(x.contributorId) === ranked[0].id)?.__counts?.prs || 0)) : 0,
-        reviewsThisQuarter: fallbackUsed ? (ranked[0] && (rankings.find(x => String(x.contributorId) === ranked[0].id)?.__counts?.reviews || 0)) : 0,
+        prsThisQuarter: fallbackUsed
+            ? (ranked[0] && (rankings.find(x => String(x.contributorId) === ranked[0].id)?.__counts?.prs || 0))
+            : (prCountsMap.get(ranked[0].id) || 0),
+        reviewsThisQuarter: fallbackUsed
+            ? (ranked[0] && (rankings.find(x => String(x.contributorId) === ranked[0].id)?.__counts?.reviews || 0))
+            : (reviewCountsMap.get(ranked[0].id) || 0),
         pointsThisQuarter: ranked[0].points
     };
 
