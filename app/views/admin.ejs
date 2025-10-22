@@ -1047,9 +1047,10 @@ document.getElementById('export-hof-csv')?.addEventListener('click', async () =>
                 // Update with current progress
                 const progress = result.data.progress;
                 if (progress) {
+                    let percentage = 0;
                     const progressBar = document.getElementById('backfill-progress-bar');
                     if (progressBar && progress.totalPRs > 0) {
-                        const percentage = Math.floor((progress.processedPRs / progress.totalPRs) * 100);
+                        percentage = Math.floor((progress.processedPRs / progress.totalPRs) * 100);
                         progressBar.style.width = `${percentage}%`;
                     }
 
