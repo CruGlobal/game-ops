@@ -51,16 +51,20 @@ app.use(helmet({
 }));
 app.use(cors());
 
-app.use((req, res, next) => {
-    res.setHeader('Cross-Origin-Embedder-Policy', 'require-corp');
-    res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
-    if (req.url.includes('github.com')) {
-        res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-    } else {
-        res.setHeader('Cross-Origin-Resource-Policy', 'same-site');
-    }
-    next();
-});
+// Only enable COEP/COOP when needed (e.g., production or explicitly enabled)
+if (process.env.NODE_ENV === 'production' || process.env.ENABLE_COEP === 'true') {
+    app.use((req, res, next) => {
+        res.setHeader('Cross-Origin-Embedder-Policy', 'require-corp');
+        res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
+        // CORP applies to our resources; using conservative default
+        if (req.url.includes('github.com')) {
+            res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+        } else {
+            res.setHeader('Cross-Origin-Resource-Policy', 'same-site');
+        }
+        next();
+    });
+}
 
 // Rate limiting - environment-aware configuration
 const limiter = rateLimit({
