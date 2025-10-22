@@ -313,10 +313,31 @@ export async function resetQuarterlyStats(newQuarter = null) {
  * Update contributor's quarterly stats
  * @param {String} username - Contributor username
  * @param {Object} updates - Stats to update { prs, reviews, points }
+ * @param {Date} activityDate - Optional: date of the activity (PR merge/review). If provided, only counts if within current quarter.
+ * 
+ * Note: Uses dynamic quarter configuration from database (quarterSettings table).
+ * Quarter dates are calculated based on the configured q1StartMonth and systemType,
+ * so this works correctly regardless of calendar/fiscal/academic/custom quarter settings.
  */
-export async function updateQuarterlyStats(username, updates) {
+export async function updateQuarterlyStats(username, updates, activityDate = null) {
     try {
+        // Get current quarter and date range from database config (dynamic, not hardcoded)
         const currentQuarter = await getCurrentQuarter();
+        const { start, end } = await getQuarterDateRange(currentQuarter);
+
+        // If activityDate is provided, check if it falls within current quarter's configured date range
+        if (activityDate) {
+            const activityTimestamp = new Date(activityDate).getTime();
+            const quarterStart = new Date(start).getTime();
+            const quarterEnd = new Date(end).getTime();
+            
+            // Only update stats if activity is within current quarter (based on configured dates)
+            if (activityTimestamp < quarterStart || activityTimestamp > quarterEnd) {
+                // Activity is outside current quarter, skip update
+                return null;
+            }
+        }
+
         const contributor = await prisma.contributor.findUnique({
             where: { username },
             select: { quarterlyStats: true }
@@ -331,11 +352,10 @@ export async function updateQuarterlyStats(username, updates) {
 
         // Initialize quarterly stats if not set or if quarter changed
         if (!quarterlyStats.currentQuarter || quarterlyStats.currentQuarter !== currentQuarter) {
-            const quarterDates = await getQuarterDateRange(currentQuarter);
             quarterlyStats = {
                 currentQuarter,
-                quarterStartDate: quarterDates.start,
-                quarterEndDate: quarterDates.end,
+                quarterStartDate: start,
+                quarterEndDate: end,
                 prsThisQuarter: 0,
                 reviewsThisQuarter: 0,
                 pointsThisQuarter: 0,

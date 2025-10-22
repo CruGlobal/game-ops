@@ -296,10 +296,15 @@ export async function getQuarterlyLeaderboardController(req, res) {
         const quarterString = req.params.quarter || await getCurrentQuarter();
         const { start, end } = await getQuarterDateRange(quarterString);
         const raw = await getQuarterlyLeaderboard(quarterString, limit);
-        // Only include contributors with points > 0 and flatten pointsThisQuarter to top level
+        // Only include contributors with points > 0 and flatten quarterly stats to top level
         const data = raw
             .filter(c => (c.quarterlyStats?.pointsThisQuarter || 0) > 0)
-            .map(c => ({ ...c, pointsThisQuarter: c.quarterlyStats?.pointsThisQuarter || 0 }));
+            .map(c => ({
+                ...c,
+                pointsThisQuarter: c.quarterlyStats?.pointsThisQuarter || 0,
+                prsThisQuarter: c.quarterlyStats?.prsThisQuarter || 0,
+                reviewsThisQuarter: c.quarterlyStats?.reviewsThisQuarter || 0
+            }));
         res.json({ success: true, quarter: quarterString, quarterStart: start, quarterEnd: end, data });
     } catch (error) {
         console.error('Error in getQuarterlyLeaderboardController:', error);

@@ -326,11 +326,11 @@ export const fetchPullRequests = async () => {
                     const pointsData = calculatePoints(pr, contributor);
                     await awardPoints(contributor, pointsData.points, 'PR Merged', pr.number);
 
-                    // Update quarterly stats
+                    // Update quarterly stats (only if PR merged in current quarter)
                     await updateQuarterlyStats(username, {
                         prs: 1,
                         points: pointsData.points
-                    });
+                    }, pr.merged_at);
 
                     // Update challenge progress
                     if (contributor.activeChallenges && contributor.activeChallenges.length > 0) {
@@ -419,11 +419,11 @@ export const fetchPullRequests = async () => {
 
                         const award = await awardReviewPoints(reviewer);
 
-                        // Update quarterly stats for review using the awarded points
+                        // Update quarterly stats for review using the awarded points (only if review in current quarter)
                         await updateQuarterlyStats(reviewUsername, {
                             reviews: 1,
                             points: award?.points || 0
-                        });
+                        }, review.submitted_at);
 
                         // Update challenge progress for reviews
                         if (reviewer.activeChallenges && reviewer.activeChallenges.length > 0) {

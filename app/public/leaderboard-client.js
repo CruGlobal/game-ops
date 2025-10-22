@@ -161,13 +161,25 @@ async function loadLeaderboardData() {
 
         allContributors = contributorsData;
         allReviewers = reviewersData;
-        allTimeLeaderboard = allTimeData.data || [];
-        quarterlyLeaderboard = quarterlyData.data?.leaderboard || [];
-        hallOfFame = hallOfFameData.data || [];
+        // Server returns { success, data: [...] } for all-time
+        allTimeLeaderboard = allTimeData?.data || allTimeData || [];
+        // Server returns { success, data: [...] } for quarterly (array of contributors)
+        // Older client expected data.leaderboard; support both just in case
+        quarterlyLeaderboard = Array.isArray(quarterlyData?.data)
+            ? quarterlyData.data
+            : (quarterlyData?.leaderboard || quarterlyData || []);
+        hallOfFame = hallOfFameData?.data || [];
 
         // Update quarter info display
         if (quarterInfoData && quarterInfoData.success) {
-            currentQuarterInfo = quarterInfoData.data;
+            // API returns top-level fields: currentQuarter, quarterStart, quarterEnd
+            currentQuarterInfo = {
+                currentQuarter: quarterInfoData.currentQuarter,
+                quarterDates: {
+                    start: quarterInfoData.quarterStart,
+                    end: quarterInfoData.quarterEnd
+                }
+            };
             updateQuarterInfoDisplay();
         }
 
@@ -297,7 +309,8 @@ function renderAllTimeLeaderboard() {
 
 function renderQuarterlyLeaderboard() {
     const filteredUsers = filterUsers(quarterlyLeaderboard);
-    const sortedUsers = sortUsers(filteredUsers, 'quarterlyStats.pointsThisQuarter');
+    // Controller flattens pointsThisQuarter to top-level; sort by that for correctness
+    const sortedUsers = sortUsers(filteredUsers, 'pointsThisQuarter');
 
     renderQuarterlyGrid('quarterly-grid', sortedUsers);
 }
@@ -340,9 +353,9 @@ function createQuarterlyCard(user, rank) {
     const rankEmoji = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : rank;
 
     const quarterStats = user.quarterlyStats || {};
-    const prsThisQuarter = quarterStats.prsThisQuarter || 0;
-    const reviewsThisQuarter = quarterStats.reviewsThisQuarter || 0;
-    const pointsThisQuarter = quarterStats.pointsThisQuarter || 0;
+    const prsThisQuarter = (typeof user.prsThisQuarter === 'number') ? user.prsThisQuarter : (quarterStats.prsThisQuarter || 0);
+    const reviewsThisQuarter = (typeof user.reviewsThisQuarter === 'number') ? user.reviewsThisQuarter : (quarterStats.reviewsThisQuarter || 0);
+    const pointsThisQuarter = (typeof user.pointsThisQuarter === 'number') ? user.pointsThisQuarter : (quarterStats.pointsThisQuarter || 0);
 
     card.innerHTML = `
         <div class="${rankBadgeClass}">${rankEmoji}</div>
@@ -687,7 +700,7 @@ function generateBadgesHTML(user) {
 }
 
 function showLoading() {
-    const grids = ['all-leaders-grid', 'contributors-grid', 'reviewers-grid', 'points-grid', 'streaks-grid'];
+    const grids = ['all-time-grid', 'quarterly-grid', 'contributors-grid', 'reviewers-grid', 'points-grid', 'streaks-grid'];
     grids.forEach(gridId => {
         const grid = document.getElementById(gridId);
         if (grid) {
@@ -701,7 +714,7 @@ function showLoading() {
 }
 
 function showError(message) {
-    const grids = ['all-leaders-grid', 'contributors-grid', 'reviewers-grid', 'points-grid', 'streaks-grid'];
+    const grids = ['all-time-grid', 'quarterly-grid', 'contributors-grid', 'reviewers-grid', 'points-grid', 'streaks-grid'];
     grids.forEach(gridId => {
         const grid = document.getElementById(gridId);
         if (grid) {
