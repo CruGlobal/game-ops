@@ -126,8 +126,15 @@ export const awardAchievement = async (contributor, achievement) => {
 const postAchievementComment = async (contributor, achievement) => {
     try {
         // Find the most recent PR by this contributor
-        const owner = process.env.GITHUB_OWNER || 'cru';
-        const repo = process.env.GITHUB_REPO || 'cru';
+        // Use REPO_OWNER/REPO_NAME (standard env vars) or fallback to GITHUB_OWNER/GITHUB_REPO
+        const owner = process.env.REPO_OWNER || process.env.GITHUB_OWNER;
+        const repo = process.env.REPO_NAME || process.env.GITHUB_REPO;
+
+        // Skip if owner/repo not configured
+        if (!owner || !repo) {
+            logger.debug('Skipping achievement comment - REPO_OWNER/REPO_NAME not configured');
+            return;
+        }
 
         const { data: prs } = await octokit.pulls.list({
             owner,
@@ -161,10 +168,16 @@ You've been awarded **${achievement.points} bonus points**! Keep up the great wo
                 achievement: achievement.name,
                 prNumber: userPR.number
             });
+        } else {
+            logger.debug('No recent PR found for achievement comment', {
+                username: contributor.username,
+                achievement: achievement.name
+            });
         }
     } catch (error) {
         // Don't throw - this is a nice-to-have feature
-        logger.warn('Could not post achievement comment', {
+        // Only log as debug to avoid spamming logs
+        logger.debug('Could not post achievement comment', {
             username: contributor.username,
             error: error.message
         });
