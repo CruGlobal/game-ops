@@ -275,6 +275,12 @@
                         <span>🏅 Recompute Hall of Fame (Quarter)</span>
                     </button>
                 </div>
+
+                <div class="action-buttons" style="margin-top: 0.75rem;">
+                    <button id="recompute-hof-all" class="btn btn-danger">
+                        <span>🧮 Recompute Hall of Fame (ALL Quarters)</span>
+                    </button>
+                </div>
             </div>
 
             <!-- Contributors Management Section -->
@@ -795,6 +801,27 @@ document.getElementById('recompute-hof')?.addEventListener('click', async () => 
     } catch (err) {
         console.error('Error recomputing Hall of Fame:', err);
         showToast('Failed to recompute Hall of Fame', 'error');
+    }
+});
+
+// Recompute Hall of Fame for ALL quarters
+document.getElementById('recompute-hof-all')?.addEventListener('click', async () => {
+    try {
+        if (!confirm('This will recompute Hall of Fame for ALL quarters based on point history. Continue?')) return;
+        const resp = await fetch('/api/admin/leaderboard/recompute/hall-of-fame/all', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        const result = await resp.json();
+        if (result.success) {
+            const count = (result.updatedQuarters || []).length;
+            showToast(`Recomputed Hall of Fame for ${count} quarter(s).`, 'success');
+        } else {
+            showToast(result.message || 'Failed to recompute Hall of Fame (all)', 'error');
+        }
+    } catch (err) {
+        console.error('Error recomputing Hall of Fame (all):', err);
+        showToast('Failed to recompute Hall of Fame (all)', 'error');
     }
 });
 

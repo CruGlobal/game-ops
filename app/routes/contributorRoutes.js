@@ -40,6 +40,7 @@ import {
     getHallOfFameController,
     recomputeCurrentQuarterController,
     recomputeHallOfFameController,
+    recomputeHallOfFameAllController,
     startBackfillController,
     stopBackfillController,
     getBackfillStatusController
@@ -104,6 +105,7 @@ router.get('/admin/backfill/status', ensureAuthenticated, getBackfillStatusContr
 // Admin recompute endpoints
 router.post('/admin/leaderboard/recompute/current-quarter', ensureAuthenticated, recomputeCurrentQuarterController);
 router.post('/admin/leaderboard/recompute/hall-of-fame', ensureAuthenticated, recomputeHallOfFameController);
+router.post('/admin/leaderboard/recompute/hall-of-fame/all', ensureAuthenticated, recomputeHallOfFameAllController);
 
 // Leaderboard Routes
 router.get('/leaderboard/all-time', getAllTimeLeaderboardController);

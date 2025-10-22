@@ -658,6 +658,61 @@ export async function recomputeHallOfFame(quarterString) {
 }
 
 /**
+ * Recompute Hall of Fame for all quarters present in point history
+ * Scans from earliest to latest pointHistory timestamp and recomputes per quarter
+ */
+export async function recomputeHallOfFameAll() {
+    const config = await getQuarterConfig();
+    const q1Start = config.q1StartMonth;
+
+    const range = await prisma.pointHistory.aggregate({
+        _min: { timestamp: true },
+        _max: { timestamp: true }
+    });
+    const minTs = range._min.timestamp;
+    const maxTs = range._max.timestamp;
+
+    if (!minTs || !maxTs) {
+        return { updatedQuarters: [], message: 'No point history found' };
+    }
+
+    // Helper: get quarter string for a date based on q1Start
+    const quarterFromDate = (date) => {
+        const year = date.getUTCFullYear();
+        const month = date.getUTCMonth() + 1; // 1-12
+        let qYear = year;
+        let quarterNum;
+        if (month < q1Start) {
+            quarterNum = 4;
+            qYear = year - 1;
+        } else {
+            const monthsSinceQ1 = month - q1Start;
+            quarterNum = Math.floor(monthsSinceQ1 / 3) + 1;
+        }
+        return `${qYear}-Q${quarterNum}`;
+    };
+
+    // Generate all quarter strings in range
+    const quarters = new Set();
+    let cursor = new Date(Date.UTC(minTs.getUTCFullYear(), minTs.getUTCMonth(), 1));
+    const end = new Date(Date.UTC(maxTs.getUTCFullYear(), maxTs.getUTCMonth(), 1));
+    while (cursor <= end) {
+        quarters.add(quarterFromDate(cursor));
+        // advance one month
+        const m = cursor.getUTCMonth();
+        cursor = new Date(Date.UTC(cursor.getUTCFullYear(), m + 1, 1));
+    }
+
+    const updatedQuarters = [];
+    for (const q of quarters) {
+        const res = await recomputeHallOfFame(q);
+        if (res.updated) updatedQuarters.push(q);
+    }
+
+    return { updatedQuarters };
+}
+
+/**
  * Check if we're in a new quarter and trigger reset if needed
  * @returns {Object} { quarterChanged, oldQuarter, newQuarter }
  */
