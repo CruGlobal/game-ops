@@ -101,9 +101,24 @@
                         </div>
                     </div>
 
+                    <!-- Feature Flags -->
+                    <div style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border-color, #dee2e6);">
+                        <h3 style="margin-bottom: 1rem;">⚙️ Feature Settings</h3>
+                        <div class="form-group" style="display: flex; align-items: center; gap: 0.75rem;">
+                            <input type="checkbox" id="enable-achievement-comments" class="form-check-input" style="width: 20px; height: 20px; margin: 0; cursor: pointer;">
+                            <label for="enable-achievement-comments" style="margin: 0; cursor: pointer; user-select: none;">
+                                <strong>Enable Achievement Comments on GitHub PRs</strong>
+                                <p style="margin: 0.25rem 0 0 0; color: var(--text-muted, #6c757d); font-size: 0.875rem;">
+                                    When enabled, the system will post congratulatory comments on GitHub PRs when users unlock achievements.
+                                    <br><strong>⚠️ Disable for testing environments to avoid spamming your repository.</strong>
+                                </p>
+                            </label>
+                        </div>
+                    </div>
+
                     <!-- Save Button -->
                     <button id="save-quarter-config" class="btn btn-primary" style="margin-top: 1rem;">
-                        <span>💾 Save Quarter Configuration</span>
+                        <span>💾 Save Configuration</span>
                     </button>
 
                     <!-- Warning about resets -->
@@ -635,6 +650,12 @@ async function loadQuarterConfig() {
             document.getElementById('quarter-system').value = config.systemType;
             document.getElementById('q1-start-month').value = config.q1StartMonth;
 
+            // Set feature flags
+            const achievementCommentsCheckbox = document.getElementById('enable-achievement-comments');
+            if (achievementCommentsCheckbox) {
+                achievementCommentsCheckbox.checked = config.enableAchievementComments || false;
+            }
+
             // Show custom config if needed
             if (config.systemType === 'custom') {
                 document.getElementById('custom-quarter-config').style.display = 'block';
@@ -658,6 +679,7 @@ async function saveQuarterConfig() {
     const button = document.getElementById('save-quarter-config');
     const systemType = document.getElementById('quarter-system').value;
     const q1StartMonth = parseInt(document.getElementById('q1-start-month').value);
+    const enableAchievementComments = document.getElementById('enable-achievement-comments')?.checked || false;
 
     button.disabled = true;
     button.innerHTML = '<span>⏳ Saving...</span>';
@@ -666,32 +688,32 @@ async function saveQuarterConfig() {
         const response = await fetch('/api/admin/quarter-config', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ systemType, q1StartMonth })
+            body: JSON.stringify({ systemType, q1StartMonth, enableAchievementComments })
         });
 
         const result = await response.json();
 
         if (result.success) {
             if (typeof showToast === 'function') {
-                let message = 'Quarter configuration saved successfully';
+                let message = 'Configuration saved successfully';
                 if (result.quarterChanged) {
                     message += `. Quarter changed to ${result.newQuarter}`;
                 }
                 showToast(message, 'success');
             }
-            await loadQuarterConfig(); // Reload to show updated quarter
+            await loadQuarterConfig(); // Reload to show updated settings
             document.getElementById('quarter-change-warning').style.display = 'none';
         } else {
             throw new Error(result.message);
         }
     } catch (error) {
-        console.error('Error saving quarter config:', error);
+        console.error('Error saving config:', error);
         if (typeof showToast === 'function') {
             showToast('Failed to save configuration', 'error');
         }
     } finally {
         button.disabled = false;
-        button.innerHTML = '<span>💾 Save Quarter Configuration</span>';
+        button.innerHTML = '<span>💾 Save Configuration</span>';
     }
 }
 

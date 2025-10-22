@@ -274,6 +274,9 @@ model QuarterSettings {
   q1StartMonth   Int    @default(1) @map("q1_start_month")
   customQuarters Json?  @map("custom_quarters") // Array of quarter definitions
   
+  // Feature flags
+  enableAchievementComments Boolean @default(false) @map("enable_achievement_comments") // Post achievement notifications to GitHub PRs
+  
   lastModified DateTime @default(now()) @updatedAt @map("last_modified")
   modifiedBy   String   @default("system") @map("modified_by")
   

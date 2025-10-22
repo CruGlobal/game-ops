@@ -125,6 +125,16 @@ export const awardAchievement = async (contributor, achievement) => {
  */
 const postAchievementComment = async (contributor, achievement) => {
     try {
+        // Check if achievement comments are enabled in settings
+        const settings = await prisma.quarterSettings.findUnique({
+            where: { id: 'quarter-config' }
+        });
+
+        if (!settings?.enableAchievementComments) {
+            logger.debug('Achievement comments disabled in settings');
+            return;
+        }
+
         // Find the most recent PR by this contributor
         // Use REPO_OWNER/REPO_NAME (standard env vars) or fallback to GITHUB_OWNER/GITHUB_REPO
         const owner = process.env.REPO_OWNER || process.env.GITHUB_OWNER;

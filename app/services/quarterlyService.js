@@ -115,9 +115,10 @@ export async function getQuarterDateRange(quarterString) {
  * @param {String} systemType - 'calendar', 'fiscal-us', 'academic', 'custom'
  * @param {Number} q1StartMonth - 1-12
  * @param {String} modifiedBy - Username
+ * @param {Boolean} enableAchievementComments - Whether to post achievement comments to GitHub PRs
  * @returns {Object} { config, quarterChanged, oldQuarter, newQuarter }
  */
-export async function updateQuarterConfig(systemType, q1StartMonth, modifiedBy) {
+export async function updateQuarterConfig(systemType, q1StartMonth, modifiedBy, enableAchievementComments = false) {
     // Get old config and quarter
     const oldConfig = await getQuarterConfig();
     const oldQuarter = await getCurrentQuarter();
@@ -138,6 +139,7 @@ export async function updateQuarterConfig(systemType, q1StartMonth, modifiedBy) 
         update: {
             systemType,
             q1StartMonth: actualStartMonth,
+            enableAchievementComments,
             lastModified: new Date(),
             modifiedBy
         },
@@ -145,6 +147,7 @@ export async function updateQuarterConfig(systemType, q1StartMonth, modifiedBy) 
             id: 'quarter-config',
             systemType,
             q1StartMonth: actualStartMonth,
+            enableAchievementComments,
             lastModified: new Date(),
             modifiedBy
         }
