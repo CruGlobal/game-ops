@@ -539,11 +539,18 @@ export async function recomputeCurrentQuarterStats() {
     const contributors = await prisma.contributor.findMany({ select: { id: true, username: true } });
 
     let updated = 0;
+    let skippedNoActivity = 0;
     for (const c of contributors) {
         const idKey = String(c.id);
         const pointsThisQuarter = sumMap.get(idKey) || 0;
         const prsThisQuarter = prMap.get(idKey) || 0;
         const reviewsThisQuarter = reviewMap.get(idKey) || 0;
+
+        // Do not overwrite existing stats with zeros if no activity found in pointHistory
+        if (pointsThisQuarter === 0 && prsThisQuarter === 0 && reviewsThisQuarter === 0) {
+            skippedNoActivity++;
+            continue;
+        }
 
         await prisma.contributor.update({
             where: { id: c.id },
@@ -562,7 +569,7 @@ export async function recomputeCurrentQuarterStats() {
         updated++;
     }
 
-    return { quarter, updated };
+    return { quarter, updated, skippedNoActivity };
 }
 
 /**
