@@ -410,6 +410,212 @@ export async function recomputeHallOfFameAllController(req, res) {
 }
 
 /**
+ * Recompute all streaks from contribution and review history
+ * POST /api/admin/recompute/streaks
+ */
+export async function recomputeStreaksController(req, res) {
+    try {
+        console.log('Admin requested recompute streaks');
+
+        // Import the recompute-streaks script logic
+        const { prisma } = await import('../lib/prisma.js');
+        const { updateStreak, checkStreakBadges } = await import('../services/streakService.js');
+
+        const contributors = await prisma.contributor.findMany({
+            include: {
+                contributions: {
+                    where: { merged: true },
+                    select: { date: true },
+                    distinct: ['date']
+                },
+                reviews: {
+                    select: { date: true },
+                    distinct: ['date']
+                }
+            }
+        });
+
+        let updated = 0;
+        let topCurrentStreak = { username: '', streak: 0 };
+        let topLongestStreak = { username: '', streak: 0 };
+
+        for (const contributor of contributors) {
+            // Combine and deduplicate dates
+            const allDates = new Set();
+            contributor.contributions.forEach(c => allDates.add(c.date.toISOString().split('T')[0]));
+            contributor.reviews.forEach(r => allDates.add(r.date.toISOString().split('T')[0]));
+
+            if (allDates.size === 0) continue;
+
+            // Process each date chronologically to rebuild streaks
+            const sortedDates = Array.from(allDates).map(d => new Date(d + 'T00:00:00Z')).sort((a, b) => a - b);
+
+            for (const date of sortedDates) {
+                await updateStreak(contributor, date);
+            }
+
+            await checkStreakBadges(contributor);
+
+            // Get updated contributor
+            const updatedContributor = await prisma.contributor.findUnique({
+                where: { id: contributor.id },
+                select: { username: true, currentStreak: true, longestStreak: true }
+            });
+
+            if (updatedContributor) {
+                updated++;
+                const currentStreak = Number(updatedContributor.currentStreak);
+                const longestStreak = Number(updatedContributor.longestStreak);
+
+                if (currentStreak > topCurrentStreak.streak) {
+                    topCurrentStreak = { username: updatedContributor.username, streak: currentStreak };
+                }
+                if (longestStreak > topLongestStreak.streak) {
+                    topLongestStreak = { username: updatedContributor.username, streak: longestStreak };
+                }
+            }
+        }
+
+        await prisma.$disconnect();
+
+        res.json({
+            success: true,
+            message: `Recomputed streaks for ${updated} contributors`,
+            updated,
+            topCurrentStreak: `${topCurrentStreak.username} (${topCurrentStreak.streak} days)`,
+            topLongestStreak: `${topLongestStreak.username} (${topLongestStreak.streak} days)`
+        });
+    } catch (error) {
+        console.error('Error in recomputeStreaksController:', error);
+        res.status(500).json({ success: false, message: 'Failed to recompute streaks', error: error.message });
+    }
+}
+
+/**
+ * Recompute all badges from contributor stats
+ * POST /api/admin/recompute/badges
+ */
+export async function recomputeBadgesController(req, res) {
+    try {
+        console.log('Admin requested recompute badges');
+
+        // Import the recompute-badges script logic
+        const { prisma } = await import('../lib/prisma.js');
+        const { checkStreakBadges } = await import('../services/streakService.js');
+        const { checkAndAwardAchievements } = await import('../services/achievementService.js');
+
+        const contributors = await prisma.contributor.findMany();
+
+        let stats = {
+            processed: 0,
+            prBadgesAwarded: 0,
+            reviewBadgesAwarded: 0,
+            streakBadgesAwarded: 0,
+            achievementsAwarded: 0,
+            billsAwarded: 0,
+            skipped: 0
+        };
+
+        for (const contributor of contributors) {
+            // Skip contributors with no activity
+            if (Number(contributor.prCount) === 0 && Number(contributor.reviewCount) === 0) {
+                stats.skipped++;
+                continue;
+            }
+
+            const allUpdates = {};
+            const badgesAwarded = [];
+
+            // Check PR badges
+            const prCount = Number(contributor.prCount);
+            const prMilestones = [
+                { threshold: 1, flag: 'firstPrAwarded', name: 'First PR' },
+                { threshold: 10, flag: 'first10PrsAwarded', name: '10 PRs' },
+                { threshold: 50, flag: 'first50PrsAwarded', name: '50 PRs' },
+                { threshold: 100, flag: 'first100PrsAwarded', name: '100 PRs' },
+                { threshold: 500, flag: 'first500PrsAwarded', name: '500 PRs' },
+                { threshold: 1000, flag: 'first1000PrsAwarded', name: '1000 PRs' }
+            ];
+
+            for (const milestone of prMilestones) {
+                if (prCount >= milestone.threshold && !contributor[milestone.flag]) {
+                    allUpdates[milestone.flag] = true;
+                    badgesAwarded.push(milestone.name);
+                    stats.prBadgesAwarded++;
+                }
+            }
+
+            // Check review badges
+            const reviewCount = Number(contributor.reviewCount);
+            const reviewMilestones = [
+                { threshold: 1, flag: 'firstReviewAwarded', name: 'First Review' },
+                { threshold: 10, flag: 'first10ReviewsAwarded', name: '10 Reviews' },
+                { threshold: 50, flag: 'first50ReviewsAwarded', name: '50 Reviews' },
+                { threshold: 100, flag: 'first100ReviewsAwarded', name: '100 Reviews' },
+                { threshold: 500, flag: 'first500ReviewsAwarded', name: '500 Reviews' },
+                { threshold: 1000, flag: 'first1000ReviewsAwarded', name: '1000 Reviews' }
+            ];
+
+            for (const milestone of reviewMilestones) {
+                if (reviewCount >= milestone.threshold && !contributor[milestone.flag]) {
+                    allUpdates[milestone.flag] = true;
+                    badgesAwarded.push(milestone.name);
+                    stats.reviewBadgesAwarded++;
+                }
+            }
+
+            // Check Bill awards
+            const totalBills = Number(contributor.totalBillsAwarded);
+            const billsEarned = Math.floor(prCount / 50);
+            if (billsEarned > totalBills) {
+                const billsToAward = billsEarned - totalBills;
+                allUpdates.totalBillsAwarded = billsEarned;
+                badgesAwarded.push(`${billsToAward} Bill(s)`);
+                stats.billsAwarded += billsToAward;
+            }
+
+            // Check streak badges
+            const streakBadges = await checkStreakBadges(contributor);
+            if (streakBadges.length > 0) {
+                badgesAwarded.push(...streakBadges.map(b => b.name));
+                stats.streakBadgesAwarded += streakBadges.length;
+            }
+
+            // Check achievements
+            const achievements = await checkAndAwardAchievements(contributor);
+            if (achievements.length > 0) {
+                badgesAwarded.push(...achievements.map(a => a.name));
+                stats.achievementsAwarded += achievements.length;
+            }
+
+            // Update contributor if there are badge changes
+            if (Object.keys(allUpdates).length > 0) {
+                await prisma.contributor.update({
+                    where: { id: contributor.id },
+                    data: allUpdates
+                });
+            }
+
+            stats.processed++;
+        }
+
+        await prisma.$disconnect();
+
+        const totalBadges = stats.prBadgesAwarded + stats.reviewBadgesAwarded + stats.streakBadgesAwarded + stats.achievementsAwarded + stats.billsAwarded;
+
+        res.json({
+            success: true,
+            message: `Recomputed badges for ${stats.processed} contributors. Awarded ${totalBadges} total badges/awards.`,
+            ...stats,
+            totalBadges
+        });
+    } catch (error) {
+        console.error('Error in recomputeBadgesController:', error);
+        res.status(500).json({ success: false, message: 'Failed to recompute badges', error: error.message });
+    }
+}
+
+/**
  * Start historical data backfill
  * POST /api/admin/backfill/start
  */

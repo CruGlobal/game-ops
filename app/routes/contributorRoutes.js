@@ -41,6 +41,8 @@ import {
     recomputeCurrentQuarterController,
     recomputeHallOfFameController,
     recomputeHallOfFameAllController,
+    recomputeStreaksController,
+    recomputeBadgesController,
     startBackfillController,
     stopBackfillController,
     getBackfillStatusController
@@ -111,6 +113,10 @@ router.post('/admin/cron-status', ensureAuthenticated, setCronStatusController);
 router.post('/admin/leaderboard/recompute/current-quarter', ensureAuthenticated, recomputeCurrentQuarterController);
 router.post('/admin/leaderboard/recompute/hall-of-fame', ensureAuthenticated, recomputeHallOfFameController);
 router.post('/admin/leaderboard/recompute/hall-of-fame/all', ensureAuthenticated, recomputeHallOfFameAllController);
+
+// Recompute streaks and badges
+router.post('/admin/recompute/streaks', ensureAuthenticated, recomputeStreaksController);
+router.post('/admin/recompute/badges', ensureAuthenticated, recomputeBadgesController);
 
 // Leaderboard Routes
 router.get('/leaderboard/all-time', getAllTimeLeaderboardController);

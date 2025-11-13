@@ -344,6 +344,32 @@
                 </div>
             </div>
 
+            <!-- Badge & Streak Maintenance -->
+            <div class="card">
+                <h2>🏅 Badge & Streak Maintenance</h2>
+                <p class="settings-description">Recompute badges and streaks from historical contribution data. Run after backfills or when badges/streaks are out of sync.</p>
+
+                <div class="action-buttons">
+                    <button id="recompute-streaks" class="btn btn-primary">
+                        <span>🔥 Recompute All Streaks</span>
+                    </button>
+                </div>
+
+                <div class="action-buttons" style="margin-top: 0.75rem;">
+                    <button id="recompute-badges" class="btn btn-primary">
+                        <span>🎖️ Recompute All Badges</span>
+                    </button>
+                </div>
+
+                <div class="info-box" style="margin-top: 1rem;">
+                    <strong>ℹ️ When to use:</strong>
+                    <ul style="margin: 0.5rem 0 0 1.5rem; font-size: 0.9rem;">
+                        <li><strong>Streaks:</strong> After implementing workweek logic or running historical backfill</li>
+                        <li><strong>Badges:</strong> When badge counts don't match PR/review counts (backfill doesn't award badges)</li>
+                    </ul>
+                </div>
+            </div>
+
             <!-- Contributors Management Section -->
             <div class="card">
                 <h2>👥 Contributor Management</h2>
@@ -970,6 +996,71 @@ document.getElementById('dev-recompute-hof-all')?.addEventListener('click', asyn
     } catch (err) {
         console.error('Dev HoF recompute error:', err);
         showToast('Dev: HoF recompute failed', 'error');
+    }
+});
+
+// Recompute all streaks
+document.getElementById('recompute-streaks')?.addEventListener('click', async () => {
+    try {
+        if (!confirm('This will recompute streaks for all contributors from historical data. This may take a few moments. Continue?')) return;
+
+        const btn = document.getElementById('recompute-streaks');
+        btn.disabled = true;
+        btn.innerHTML = '<span>⏳ Recomputing Streaks...</span>';
+
+        const resp = await fetch('/api/admin/recompute/streaks', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        const result = await resp.json();
+
+        btn.disabled = false;
+        btn.innerHTML = '<span>🔥 Recompute All Streaks</span>';
+
+        if (result.success) {
+            showToast(`✅ Recomputed streaks for ${result.updated} contributors. Top current: ${result.topCurrentStreak}. Top all-time: ${result.topLongestStreak}`, 'success');
+        } else {
+            showToast(result.message || 'Failed to recompute streaks', 'error');
+        }
+    } catch (err) {
+        console.error('Error recomputing streaks:', err);
+        const btn = document.getElementById('recompute-streaks');
+        btn.disabled = false;
+        btn.innerHTML = '<span>🔥 Recompute All Streaks</span>';
+        showToast('Failed to recompute streaks', 'error');
+    }
+});
+
+// Recompute all badges
+document.getElementById('recompute-badges')?.addEventListener('click', async () => {
+    try {
+        if (!confirm('This will recompute all badges for all contributors based on their current stats. This may take a few moments. Continue?')) return;
+
+        const btn = document.getElementById('recompute-badges');
+        btn.disabled = true;
+        btn.innerHTML = '<span>⏳ Recomputing Badges...</span>';
+
+        const resp = await fetch('/api/admin/recompute/badges', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        const result = await resp.json();
+
+        btn.disabled = false;
+        btn.innerHTML = '<span>🎖️ Recompute All Badges</span>';
+
+        if (result.success) {
+            const summary = `✅ Recomputed badges for ${result.processed} contributors. Awarded: ${result.totalBadges} total (${result.prBadgesAwarded} PR, ${result.reviewBadgesAwarded} Review, ${result.streakBadgesAwarded} Streak, ${result.achievementsAwarded} Achievements, ${result.billsAwarded} Bills)`;
+            showToast(summary, 'success');
+        } else {
+            showToast(result.message || 'Failed to recompute badges', 'error');
+        }
+    } catch (err) {
+        console.error('Error recomputing badges:', err);
+        const btn = document.getElementById('recompute-badges');
+        btn.disabled = false;
+        btn.innerHTML = '<span>🎖️ Recompute All Badges</span>';
+        showToast('Failed to recompute badges', 'error');
     }
 });
 
