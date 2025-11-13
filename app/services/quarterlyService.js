@@ -682,10 +682,15 @@ export async function recomputeHallOfFame(quarterString) {
     const quarter = quarterString || await getCurrentQuarter();
     const { start, end } = await getQuarterDateRange(quarter);
 
-    // Sum points by contributor for the quarter
+    // Sum points by contributor for the quarter (exclude achievement points)
     const totals = await prisma.pointHistory.groupBy({
         by: ['contributorId'],
-        where: { timestamp: { gte: start, lte: end } },
+        where: {
+            timestamp: { gte: start, lte: end },
+            reason: {
+                in: [POINT_REASONS.PR_MERGED, POINT_REASONS.REVIEW_COMPLETED]
+            }
+        },
         _sum: { points: true }
     });
 

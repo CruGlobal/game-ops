@@ -132,13 +132,14 @@ async function processPR(pr) {
         let prAdded = 0;
         let reviewsAdded = 0;
 
-        // Find or create contributor
+        // Find or create contributor (include achievements to prevent duplicates)
         let contributor = await prisma.contributor.findUnique({
             where: { username },
             include: {
                 processedPRs: {
                     where: { prNumber: BigInt(pr.number) }
-                }
+                },
+                achievements: true
             }
         });
 
@@ -264,9 +265,12 @@ async function processPR(pr) {
                         });
                     }
 
-                    // Now get the reviewer with ID
+                    // Now get the reviewer with ID (include achievements to prevent duplicates)
                     const reviewerRecord = await prisma.contributor.findUnique({
-                        where: { username: reviewerUsername }
+                        where: { username: reviewerUsername },
+                        include: {
+                            achievements: true
+                        }
                     });
 
                     // Check if this specific review was already processed
