@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Streak Badge Preview</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 40px;
+            margin: 0;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 40px;
+        }
+        .badge-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 30px;
+            margin-top: 30px;
+        }
+        .badge-card {
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            border-radius: 15px;
+            padding: 30px;
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        .badge-card:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 15px 40px rgba(0,0,0,0.2);
+        }
+        .badge-card img {
+            width: 150px;
+            height: 150px;
+            margin-bottom: 20px;
+            filter: drop-shadow(0 5px 15px rgba(0,0,0,0.2));
+        }
+        .badge-name {
+            font-size: 20px;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 8px;
+        }
+        .badge-description {
+            font-size: 14px;
+            color: #666;
+            line-height: 1.6;
+        }
+        .badge-card.week-warrior {
+            background: linear-gradient(135deg, #FF6B35 0%, #FF8C42 100%);
+        }
+        .badge-card.monthly-master {
+            background: linear-gradient(135deg, #8B5CF6 0%, #A78BFA 100%);
+        }
+        .badge-card.quarter-champion {
+            background: linear-gradient(135deg, #3B82F6 0%, #93C5FD 100%);
+        }
+        .badge-card.year-long-hero {
+            background: linear-gradient(135deg, #F59E0B 0%, #FCD34D 100%);
+        }
+        .badge-card.week-warrior .badge-name,
+        .badge-card.monthly-master .badge-name,
+        .badge-card.quarter-champion .badge-name,
+        .badge-card.year-long-hero .badge-name {
+            color: white;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        .badge-card.week-warrior .badge-description,
+        .badge-card.monthly-master .badge-description,
+        .badge-card.quarter-champion .badge-description,
+        .badge-card.year-long-hero .badge-description {
+            color: rgba(255,255,255,0.95);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔥 Streak Badge Collection</h1>
+        <p class="subtitle">Unique badge designs for workweek-aware contribution streaks</p>
+
+        <div class="badge-grid">
+            <div class="badge-card week-warrior">
+                <img src="/images/badges/week_warrior_badge.svg" alt="Week Warrior Badge">
+                <div class="badge-name">Week Warrior</div>
+                <div class="badge-description">
+                    Maintain a 7-day contribution streak<br>
+                    <strong>Business days (Mon-Fri)</strong><br>
+                    Weekends don't break your streak!
+                </div>
+            </div>
+
+            <div class="badge-card monthly-master">
+                <img src="/images/badges/monthly_master_badge.svg" alt="Monthly Master Badge">
+                <div class="badge-name">Monthly Master</div>
+                <div class="badge-description">
+                    Maintain a 30-day contribution streak<br>
+                    <strong>Consistent contributor</strong><br>
+                    PRs and reviews both count!
+                </div>
+            </div>
+
+            <div class="badge-card quarter-champion">
+                <img src="/images/badges/quarter_champion_badge.svg" alt="Quarter Champion Badge">
+                <div class="badge-name">Quarter Champion</div>
+                <div class="badge-description">
+                    Maintain a 90-day contribution streak<br>
+                    <strong>Dedicated team player</strong><br>
+                    A full quarter of contributions!
+                </div>
+            </div>
+
+            <div class="badge-card year-long-hero">
+                <img src="/images/badges/year_long_hero_badge.svg" alt="Year-Long Hero Badge">
+                <div class="badge-name">Year-Long Hero</div>
+                <div class="badge-description">
+                    Maintain a 365-day contribution streak<br>
+                    <strong>Ultimate dedication</strong><br>
+                    A full year of daily contributions!
+                </div>
+            </div>
+        </div>
+
+        <div style="margin-top: 40px; padding: 20px; background: #f8f9fa; border-radius: 10px; border-left: 4px solid #3B82F6;">
+            <h3 style="margin-top: 0; color: #333;">How Streaks Work</h3>
+            <ul style="color: #666; line-height: 1.8;">
+                <li><strong>Business Days Only:</strong> Streaks count Monday-Friday contributions</li>
+                <li><strong>Weekend Gaps OK:</strong> Friday → Monday doesn't break your streak</li>
+                <li><strong>PRs and Reviews Count:</strong> Both merged PRs and code reviews maintain streaks</li>
+                <li><strong>Smart Detection:</strong> Missing weekdays breaks the streak (e.g., Thursday → Tuesday)</li>
+            </ul>
+        </div>
+    </div>
+</body>
+</html>

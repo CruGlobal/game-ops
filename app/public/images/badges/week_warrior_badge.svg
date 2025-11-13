@@ -1,0 +1,51 @@
+<svg width="200" height="200" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+  <!-- Circular background gradient -->
+  <defs>
+    <linearGradient id="weekWarriorGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#FF6B35;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#FF8C42;stop-opacity:1" />
+    </linearGradient>
+    <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-opacity="0.3"/>
+    </filter>
+    <radialGradient id="shine">
+      <stop offset="0%" style="stop-color:#FFFFFF;stop-opacity:0.3" />
+      <stop offset="100%" style="stop-color:#FFFFFF;stop-opacity:0" />
+    </radialGradient>
+  </defs>
+
+  <!-- Outer circle -->
+  <circle cx="100" cy="100" r="95" fill="url(#weekWarriorGradient)" filter="url(#shadow)"/>
+
+  <!-- Inner circle border -->
+  <circle cx="100" cy="100" r="85" fill="none" stroke="#FFFFFF" stroke-width="3" opacity="0.5"/>
+
+  <!-- Flame icon (7-day streak) -->
+  <g transform="translate(100, 75)">
+    <!-- Main flame -->
+    <path d="M 0,-35 C -8,-28 -15,-20 -15,-10 C -15,5 -5,15 0,20 C 5,15 15,5 15,-10 C 15,-20 8,-28 0,-35 Z"
+          fill="#FFD700" opacity="0.9"/>
+    <!-- Inner flame -->
+    <path d="M 0,-25 C -5,-20 -8,-15 -8,-8 C -8,2 -3,8 0,12 C 3,8 8,2 8,-8 C 8,-15 5,-20 0,-25 Z"
+          fill="#FFFFFF" opacity="0.8"/>
+    <!-- Flame tip -->
+    <circle cx="0" cy="-30" r="4" fill="#FF6B35"/>
+  </g>
+
+  <!-- "7" number -->
+  <text x="100" y="130" font-family="Arial, sans-serif" font-size="48" font-weight="bold"
+        fill="#FFFFFF" text-anchor="middle" dominant-baseline="middle">7</text>
+
+  <!-- "DAYS" text -->
+  <text x="100" y="155" font-family="Arial, sans-serif" font-size="14" font-weight="bold"
+        fill="#FFFFFF" text-anchor="middle" opacity="0.9">DAYS</text>
+
+  <!-- Shine effect -->
+  <ellipse cx="100" cy="60" rx="60" ry="40" fill="url(#shine)"/>
+
+  <!-- Badge ribbon at bottom -->
+  <g transform="translate(100, 185)">
+    <path d="M -30,0 L -35,15 L -20,10 L 0,12 L 20,10 L 35,15 L 30,0 Z"
+          fill="#FF6B35" opacity="0.8"/>
+  </g>
+</svg>

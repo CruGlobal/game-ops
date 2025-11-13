@@ -1,0 +1,77 @@
+<svg width="200" height="200" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+  <!-- Circular background gradient - Blue/Gold theme for 90 days -->
+  <defs>
+    <linearGradient id="quarterChampionGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#3B82F6;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#60A5FA;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#93C5FD;stop-opacity:1" />
+    </linearGradient>
+    <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-opacity="0.3"/>
+    </filter>
+    <radialGradient id="shine">
+      <stop offset="0%" style="stop-color:#FFFFFF;stop-opacity:0.4" />
+      <stop offset="100%" style="stop-color:#FFFFFF;stop-opacity:0" />
+    </radialGradient>
+  </defs>
+
+  <!-- Outer circle -->
+  <circle cx="100" cy="100" r="95" fill="url(#quarterChampionGradient)" filter="url(#shadow)"/>
+
+  <!-- Inner circle border -->
+  <circle cx="100" cy="100" r="85" fill="none" stroke="#FFFFFF" stroke-width="3" opacity="0.6"/>
+  <circle cx="100" cy="100" r="75" fill="none" stroke="#FFD700" stroke-width="2" opacity="0.4"/>
+
+  <!-- Trophy icon for champion -->
+  <g transform="translate(100, 70)">
+    <!-- Trophy cup -->
+    <path d="M -20,-25 L -15,-10 L -10,10 L 10,10 L 15,-10 L 20,-25 Z"
+          fill="#FFD700" stroke="#FFA500" stroke-width="2"/>
+
+    <!-- Trophy handles -->
+    <path d="M -20,-20 C -30,-20 -35,-15 -35,-10 C -35,-5 -30,0 -20,0"
+          fill="none" stroke="#FFD700" stroke-width="3"/>
+    <path d="M 20,-20 C 30,-20 35,-15 35,-10 C 35,-5 30,0 20,0"
+          fill="none" stroke="#FFD700" stroke-width="3"/>
+
+    <!-- Trophy base -->
+    <rect x="-15" y="10" width="30" height="6" fill="#FFD700" stroke="#FFA500" stroke-width="1"/>
+    <rect x="-20" y="16" width="40" height="8" rx="2" fill="#FFD700" stroke="#FFA500" stroke-width="1"/>
+
+    <!-- Trophy shine -->
+    <ellipse cx="-5" cy="-15" rx="8" ry="12" fill="#FFFFFF" opacity="0.4"/>
+  </g>
+
+  <!-- "90" number -->
+  <text x="100" y="130" font-family="Arial, sans-serif" font-size="44" font-weight="bold"
+        fill="#FFFFFF" text-anchor="middle" dominant-baseline="middle">90</text>
+
+  <!-- "DAYS" text -->
+  <text x="100" y="155" font-family="Arial, sans-serif" font-size="14" font-weight="bold"
+        fill="#FFFFFF" text-anchor="middle" opacity="0.9">DAYS</text>
+
+  <!-- Shine effect -->
+  <ellipse cx="100" cy="60" rx="60" ry="40" fill="url(#shine)"/>
+
+  <!-- Star decorations around badge -->
+  <g opacity="0.8">
+    <g transform="translate(35, 40)">
+      <polygon points="0,-10 2.5,-3 10,-3 4,2 6,10 0,5 -6,10 -4,2 -10,-3 -2.5,-3" fill="#FFD700"/>
+    </g>
+    <g transform="translate(165, 40)">
+      <polygon points="0,-10 2.5,-3 10,-3 4,2 6,10 0,5 -6,10 -4,2 -10,-3 -2.5,-3" fill="#FFD700"/>
+    </g>
+    <g transform="translate(35, 160)">
+      <polygon points="0,-8 2,-2 8,-2 3,2 5,8 0,4 -5,8 -3,2 -8,-2 -2,-2" fill="#FFFFFF"/>
+    </g>
+    <g transform="translate(165, 160)">
+      <polygon points="0,-8 2,-2 8,-2 3,2 5,8 0,4 -5,8 -3,2 -8,-2 -2,-2" fill="#FFFFFF"/>
+    </g>
+  </g>
+
+  <!-- Badge ribbon at bottom -->
+  <g transform="translate(100, 185)">
+    <path d="M -30,0 L -35,15 L -20,10 L 0,12 L 20,10 L 35,15 L 30,0 Z"
+          fill="#3B82F6" opacity="0.8"/>
+  </g>
+</svg>

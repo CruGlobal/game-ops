@@ -129,11 +129,11 @@ function populateBadgeShowcase() {
         '500 Reviews badge': { name: '500 Reviews Badge', image: '/images/badges/500_reviews_badge.png' },
         '1000 PR badge': { name: '1000 PR Badge', image: '/images/badges/1000_prs_badge.png' },
         '1000 Reviews badge': { name: '1000 Reviews Badge', image: '/images/badges/1000_reviews_badge.png' },
-        // Streak badges (may not be in database yet, using placeholder images)
-        'Week Warrior': { name: 'Week Warrior', image: '/images/badges/50_prs_badge.png' },
-        'Monthly Master': { name: 'Monthly Master', image: '/images/badges/100_prs_badge.png' },
-        'Quarter Champion': { name: 'Quarter Champion', image: '/images/badges/500_prs_badge.png' },
-        'Year-Long Hero': { name: 'Year-Long Hero', image: '/images/badges/1000_prs_badge.png' }
+        // Streak badges with unique SVG designs
+        'Week Warrior': { name: 'Week Warrior (7 days)', image: '/images/badges/week_warrior_badge.svg' },
+        'Monthly Master': { name: 'Monthly Master (30 days)', image: '/images/badges/monthly_master_badge.svg' },
+        'Quarter Champion': { name: 'Quarter Champion (90 days)', image: '/images/badges/quarter_champion_badge.svg' },
+        'Year-Long Hero': { name: 'Year-Long Hero (365 days)', image: '/images/badges/year_long_hero_badge.svg' }
     };
 
     badgeShowcase.innerHTML = '';

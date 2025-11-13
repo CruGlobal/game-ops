@@ -1,0 +1,64 @@
+<svg width="200" height="200" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+  <!-- Circular background gradient - Purple theme for 30 days -->
+  <defs>
+    <linearGradient id="monthlyMasterGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#8B5CF6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#A78BFA;stop-opacity:1" />
+    </linearGradient>
+    <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-opacity="0.3"/>
+    </filter>
+    <radialGradient id="shine">
+      <stop offset="0%" style="stop-color:#FFFFFF;stop-opacity:0.3" />
+      <stop offset="100%" style="stop-color:#FFFFFF;stop-opacity:0" />
+    </radialGradient>
+  </defs>
+
+  <!-- Outer circle -->
+  <circle cx="100" cy="100" r="95" fill="url(#monthlyMasterGradient)" filter="url(#shadow)"/>
+
+  <!-- Inner circle border -->
+  <circle cx="100" cy="100" r="85" fill="none" stroke="#FFFFFF" stroke-width="3" opacity="0.5"/>
+
+  <!-- Double flame icon (stronger than 7-day) -->
+  <g transform="translate(85, 75)">
+    <!-- Left flame -->
+    <path d="M 0,-32 C -7,-25 -12,-18 -12,-10 C -12,3 -4,12 0,17 C 4,12 12,3 12,-10 C 12,-18 7,-25 0,-32 Z"
+          fill="#FFD700" opacity="0.9"/>
+    <path d="M 0,-22 C -4,-18 -6,-14 -6,-8 C -6,1 -2,6 0,10 C 2,6 6,1 6,-8 C 6,-14 4,-18 0,-22 Z"
+          fill="#FFFFFF" opacity="0.8"/>
+  </g>
+
+  <g transform="translate(115, 75)">
+    <!-- Right flame -->
+    <path d="M 0,-32 C -7,-25 -12,-18 -12,-10 C -12,3 -4,12 0,17 C 4,12 12,3 12,-10 C 12,-18 7,-25 0,-32 Z"
+          fill="#FFD700" opacity="0.9"/>
+    <path d="M 0,-22 C -4,-18 -6,-14 -6,-8 C -6,1 -2,6 0,10 C 2,6 6,1 6,-8 C 6,-14 4,-18 0,-22 Z"
+          fill="#FFFFFF" opacity="0.8"/>
+  </g>
+
+  <!-- "30" number -->
+  <text x="100" y="130" font-family="Arial, sans-serif" font-size="44" font-weight="bold"
+        fill="#FFFFFF" text-anchor="middle" dominant-baseline="middle">30</text>
+
+  <!-- "DAYS" text -->
+  <text x="100" y="155" font-family="Arial, sans-serif" font-size="14" font-weight="bold"
+        fill="#FFFFFF" text-anchor="middle" opacity="0.9">DAYS</text>
+
+  <!-- Shine effect -->
+  <ellipse cx="100" cy="60" rx="60" ry="40" fill="url(#shine)"/>
+
+  <!-- Star decorations -->
+  <g transform="translate(40, 50)" opacity="0.7">
+    <polygon points="0,-8 2,-2 8,-2 3,2 5,8 0,4 -5,8 -3,2 -8,-2 -2,-2" fill="#FFFFFF"/>
+  </g>
+  <g transform="translate(160, 50)" opacity="0.7">
+    <polygon points="0,-8 2,-2 8,-2 3,2 5,8 0,4 -5,8 -3,2 -8,-2 -2,-2" fill="#FFFFFF"/>
+  </g>
+
+  <!-- Badge ribbon at bottom -->
+  <g transform="translate(100, 185)">
+    <path d="M -30,0 L -35,15 L -20,10 L 0,12 L 20,10 L 35,15 L 30,0 Z"
+          fill="#8B5CF6" opacity="0.8"/>
+  </g>
+</svg>
