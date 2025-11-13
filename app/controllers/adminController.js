@@ -207,13 +207,11 @@ export async function getQuarterConfigController(req, res) {
 
         res.json({
             success: true,
-            data: {
-                config,
-                currentQuarter,
-                quarterDates: {
-                    start,
-                    end
-                }
+            config,
+            currentQuarter,
+            quarterDates: {
+                start,
+                end
             }
         });
     } catch (error) {

@@ -100,16 +100,23 @@ describe('API Integration Tests', () => {
 
   describe('GET /api/top-contributors-date-range', () => {
     it('should return contributors within date range', async () => {
+      // Use dates relative to now to ensure they're within the range
+      const now = new Date();
+      const fiveDaysAgo = new Date(now);
+      fiveDaysAgo.setDate(now.getDate() - 5);
+      const tenDaysAgo = new Date(now);
+      tenDaysAgo.setDate(now.getDate() - 10);
+
       const contributor = createTestContributor({
         username: 'activeuser',
         contributions: [
           {
-            date: new Date('2025-01-15'),
+            date: fiveDaysAgo,
             count: 2,
             merged: true
           },
           {
-            date: new Date('2024-12-15'),
+            date: tenDaysAgo,
             count: 1,
             merged: true
           }
@@ -124,6 +131,7 @@ describe('API Integration Tests', () => {
 
       expect(response.body.contributors).toHaveLength(1);
       expect(response.body.contributors[0].username).toBe('activeuser');
+      expect(response.body.contributors[0].totalPrCount).toBe(3); // 2 + 1
     });
 
     it('should return error when range parameter is missing', async () => {
