@@ -425,6 +425,8 @@ curl http://localhost:3000/api/challenges/user/johndoe
 
 ## Streak Endpoints
 
+**Note**: Streaks track consecutive **business days** (Mon-Fri) where a contributor either merges a PR or completes a code review. Weekend gaps are allowed and don't break streaks.
+
 ### GET /api/streaks/leaderboard
 
 Get the streak leaderboard.

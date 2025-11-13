@@ -284,7 +284,7 @@ Earned by completing code reviews:
 
 ### Streak Badges
 
-Earned by maintaining daily contribution streaks:
+Earned by maintaining **workweek contribution streaks** (Mon-Fri, weekends don't break streaks):
 
 | Badge | Requirement | Icon |
 |-------|------------|------|
@@ -292,6 +292,8 @@ Earned by maintaining daily contribution streaks:
 | **Monthly Master** | 30-day streak | 🌙 |
 | **Quarter Champion** | 90-day streak | 👑 |
 | **Year-Long Hero** | 365-day streak | 🏅 |
+
+**Note**: Streaks count business days only. Weekend gaps are allowed!
 
 ### How Badges Are Awarded
 
@@ -306,7 +308,15 @@ Earned by maintaining daily contribution streaks:
 
 ### What is a Streak?
 
-A streak counts consecutive days you contribute to the repository (either by merging PRs or completing reviews).
+A streak counts consecutive **business days** (Monday-Friday) where you contribute to the repository by either:
+- **Merging a Pull Request**, OR
+- **Completing a Code Review**
+
+**Key Features:**
+- ✅ **Weekends don't break streaks** - Friday → Monday = streak continues!
+- ✅ **Reviews count equally** - Both PRs and reviews maintain your streak
+- ✅ **Business days only** - Only weekdays (Mon-Fri) are counted
+- ❌ **Missing weekdays breaks streak** - Thursday → Tuesday (skipping Friday) = broken
 
 ### How Streaks Work
 

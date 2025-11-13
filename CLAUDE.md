@@ -250,11 +250,14 @@ app/
 - Automatic reconnection handling
 
 #### **NEW: Gamification System**
-- **Streak Tracking:**
-  - Daily contribution streak monitoring
+- **Workweek Streak Tracking:**
+  - Tracks **both PR merges and code reviews** as contributions
+  - **Business day streaks** (Mon-Fri) - weekend gaps don't break streaks
+  - Allows Friday → Monday without breaking (weekend gap is valid)
+  - Breaks only when missing weekdays (e.g., Thursday → Tuesday skipping Friday)
   - Streak badges: Week Warrior (7d), Monthly Master (30d), Quarter Champion (90d), Year-Long Hero (365d)
-  - Streak leaderboard
-  - Streak broken notifications
+  - Streak leaderboard with real-time updates
+  - Smart notifications for milestones and breaks
 
 - **Points System:**
   - Base points for PRs and reviews

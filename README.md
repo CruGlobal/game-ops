@@ -30,11 +30,13 @@ A gamified GitHub Pull Request tracking and leaderboard system with real-time up
 - **Auto-reconnection** - Handles network interruptions gracefully
 
 ### 🎮 Gamification System
-- **🔥 Streak Tracking**
-  - Daily contribution streak monitoring
+- **🔥 Workweek Streak Tracking**
+  - Tracks both **PR merges and code reviews** as contributions
+  - **Business day streaks** (Mon-Fri) - weekends don't break streaks!
+  - Streak continues across weekends (Friday → Monday = streak maintained)
   - Streak badges: Week Warrior (7d), Monthly Master (30d), Quarter Champion (90d), Year-Long Hero (365d)
-  - Streak leaderboard
-  - Streak continuation/break notifications
+  - Streak leaderboard with real-time updates
+  - Smart notifications for streak milestones and breaks
 
 - **⭐ Points System**
   - Base points for PRs (10pts) and reviews (5pts)
