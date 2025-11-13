@@ -845,9 +845,34 @@ export const getContributorByUsername = async (username) => {
         const contributor = await prisma.contributor.findUnique({
             where: { username }
         });
-        
+
         if (!contributor) return null;
-        
+
+        // Build badges array from badge flags
+        const badges = [];
+
+        // PR badges
+        if (contributor.firstPrAwarded) badges.push('1st PR badge');
+        if (contributor.first10PrsAwarded) badges.push('10 PR badge');
+        if (contributor.first50PrsAwarded) badges.push('50 PR badge');
+        if (contributor.first100PrsAwarded) badges.push('100 PR badge');
+        if (contributor.first500PrsAwarded) badges.push('500 PR badge');
+        if (contributor.first1000PrsAwarded) badges.push('1000 PR badge');
+
+        // Review badges
+        if (contributor.firstReviewAwarded) badges.push('1st Review badge');
+        if (contributor.first10ReviewsAwarded) badges.push('10 Reviews badge');
+        if (contributor.first50ReviewsAwarded) badges.push('50 Reviews badge');
+        if (contributor.first100ReviewsAwarded) badges.push('100 Reviews badge');
+        if (contributor.first500ReviewsAwarded) badges.push('500 Reviews badge');
+        if (contributor.first1000ReviewsAwarded) badges.push('1000 Reviews badge');
+
+        // Streak badges
+        if (contributor.sevenDayBadge) badges.push('Week Warrior');
+        if (contributor.thirtyDayBadge) badges.push('Monthly Master');
+        if (contributor.ninetyDayBadge) badges.push('Quarter Champion');
+        if (contributor.yearLongBadge) badges.push('Year-Long Hero');
+
         return {
             ...contributor,
             prCount: Number(contributor.prCount),
@@ -855,9 +880,10 @@ export const getContributorByUsername = async (username) => {
             totalPoints: Number(contributor.totalPoints),
             currentStreak: Number(contributor.currentStreak),
             longestStreak: Number(contributor.longestStreak),
-            totalBillsAwarded: Number(contributor.totalBillsAwarded)
+            totalBillsAwarded: Number(contributor.totalBillsAwarded),
+            badges: badges
         };
-    
+
 };
 
 // Award bills and vonettes to contributors based on their contributions
