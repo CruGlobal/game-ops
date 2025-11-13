@@ -679,12 +679,28 @@ function generateBadgesHTML(user) {
 
     // PR/Review badges
     if (user.badges && user.badges.length > 0) {
+        // Badge metadata mapping - matches badge names to their image files
+        const badgeImageMap = {
+            'Week Warrior': 'week_warrior_badge.svg',
+            'Monthly Master': 'monthly_master_badge.svg',
+            'Quarter Champion': 'quarter_champion_badge.svg',
+            'Year-Long Hero': 'year_long_hero_badge.svg'
+        };
+
         const badgeImages = user.badges
             .slice(0, 5) // Limit to 5 badges for display
             .map(badge => {
                 const badgeName = typeof badge === 'string' ? badge : badge.badge;
-                const imageName = badgeName.replace(/ /g, '_').toLowerCase();
-                return `<img src="/images/badges/${imageName}.png" alt="${badgeName}" class="badge-item" title="${badgeName}">`;
+
+                // Check if badge has custom SVG, otherwise use standard PNG naming
+                let imageFile;
+                if (badgeImageMap[badgeName]) {
+                    imageFile = badgeImageMap[badgeName];
+                } else {
+                    imageFile = badgeName.replace(/ /g, '_').toLowerCase() + '.png';
+                }
+
+                return `<img src="/images/badges/${imageFile}" alt="${badgeName}" class="badge-item" title="${badgeName}">`;
             })
             .join('');
 
