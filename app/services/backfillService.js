@@ -6,6 +6,7 @@ import { awardPoints, calculatePoints } from './pointsService.js';
 import { POINT_REASONS, POINT_VALUES } from '../config/points-config.js';
 import { updateQuarterlyStats, recomputeHallOfFameAll, recomputeCurrentQuarterStats } from './quarterlyService.js';
 import { checkAndAwardAchievements } from './achievementService.js';
+import { updateStreak, checkStreakBadges } from './streakService.js';
 
 const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
 const repoOwner = process.env.REPO_OWNER || 'CruGlobal';
@@ -220,6 +221,10 @@ async function processPR(pr) {
             // Update quarterly stats (count PR and points) if within current quarter
             await updateQuarterlyStats(username, { prs: 1, points: pointsData.points }, mergedDate);
 
+            // Update streak for PRs (with workweek-aware logic)
+            await updateStreak(contributor, mergedDate);
+            await checkStreakBadges(contributor);
+
             // Check and award achievements
             await checkAndAwardAchievements(contributor);
 
@@ -341,6 +346,10 @@ async function processPR(pr) {
 
                         // Update quarterly stats for review (count + points)
                         await updateQuarterlyStats(reviewerUsername, { reviews: 1, points: POINT_VALUES.review }, reviewDate);
+
+                        // Update streak for reviews (with workweek-aware logic)
+                        await updateStreak(reviewerRecord, submittedDate);
+                        await checkStreakBadges(reviewerRecord);
 
                         // Check and award achievements
                         await checkAndAwardAchievements(reviewerRecord);

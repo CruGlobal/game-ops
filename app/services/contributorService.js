@@ -457,6 +457,10 @@ export const fetchPullRequests = async () => {
                             }
                         }
 
+                        // Update streak for reviews (reviews count as contributions)
+                        await updateStreak(reviewer, review.submitted_at);
+                        await checkStreakBadges(reviewer);
+
                         await checkAndAwardAchievements(reviewer);
                     }
                 } catch (gamificationError) {

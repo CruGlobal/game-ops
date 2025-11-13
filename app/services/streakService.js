@@ -3,7 +3,33 @@ import { emitStreakUpdate } from '../utils/socketEmitter.js';
 import logger from '../utils/logger.js';
 
 /**
+ * Calculate the number of business days (weekdays) between two dates
+ * Excludes weekends (Saturday and Sunday)
+ * @param {Date} startDate - Start date (exclusive)
+ * @param {Date} endDate - End date (inclusive)
+ * @returns {Number} Number of business days between dates
+ */
+function getBusinessDaysBetween(startDate, endDate) {
+    let businessDays = 0;
+    let currentDate = new Date(startDate);
+    currentDate.setDate(currentDate.getDate() + 1); // Start from day after startDate
+
+    while (currentDate <= endDate) {
+        const dayOfWeek = currentDate.getDay();
+        // 0 = Sunday, 6 = Saturday - skip weekends
+        if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+            businessDays++;
+        }
+        currentDate.setDate(currentDate.getDate() + 1);
+    }
+
+    return businessDays;
+}
+
+/**
  * Update contributor's streak based on new contribution date
+ * Streak continues across weekends but breaks if workdays are missed
+ * Contributions include both PR merges and code reviews
  * @param {Object} contributor - Contributor document
  * @param {Date} contributionDate - Date of the new contribution
  * @returns {Object} Updated streak data
@@ -23,17 +49,41 @@ export const updateStreak = async (contributor, contributionDate) => {
 
         if (lastDate) {
             lastDate.setHours(0, 0, 0, 0);
-            const daysDiff = Math.floor((today - lastDate) / (1000 * 60 * 60 * 24));
+            const calendarDays = Math.floor((today - lastDate) / (1000 * 60 * 60 * 24));
+            const businessDaysGap = getBusinessDaysBetween(lastDate, today);
 
-            if (daysDiff === 0) {
+            if (calendarDays === 0) {
                 // Same day contribution - no streak change
                 return {
                     currentStreak: Number(contributor.currentStreak),
                     streakContinued: false,
                     streakBroken: false
                 };
-            } else if (daysDiff === 1) {
-                // Consecutive day - increment streak
+            } else if (businessDaysGap === 0) {
+                // Only weekends passed (e.g., Friday → Monday with no weekdays between)
+                // Update lastContributionDate but don't increment streak
+                await prisma.contributor.update({
+                    where: { username: contributor.username },
+                    data: {
+                        lastContributionDate: today
+                    }
+                });
+
+                logger.info('Streak maintained across weekend', {
+                    username: contributor.username,
+                    currentStreak: Number(contributor.currentStreak),
+                    calendarDays,
+                    businessDaysGap
+                });
+
+                return {
+                    currentStreak: Number(contributor.currentStreak),
+                    streakContinued: false,
+                    streakBroken: false,
+                    weekendGap: true
+                };
+            } else if (businessDaysGap === 1) {
+                // Next business day - increment streak
                 const newCurrentStreak = Number(contributor.currentStreak) + 1;
                 const newLongestStreak = Math.max(newCurrentStreak, Number(contributor.longestStreak));
 
@@ -55,7 +105,9 @@ export const updateStreak = async (contributor, contributionDate) => {
 
                 logger.info('Streak continued', {
                     username: updated.username,
-                    currentStreak: Number(updated.currentStreak)
+                    currentStreak: Number(updated.currentStreak),
+                    calendarDays,
+                    businessDaysGap
                 });
 
                 return {
@@ -64,7 +116,7 @@ export const updateStreak = async (contributor, contributionDate) => {
                     streakBroken: false
                 };
             } else {
-                // Streak broken - reset to 1
+                // Missed business days - streak broken, reset to 1
                 const oldStreak = Number(contributor.currentStreak);
 
                 const updated = await prisma.contributor.update({
@@ -78,7 +130,10 @@ export const updateStreak = async (contributor, contributionDate) => {
                 logger.info('Streak broken', {
                     username: updated.username,
                     oldStreak,
-                    newStreak: 1
+                    newStreak: 1,
+                    calendarDays,
+                    businessDaysGap: businessDaysGap,
+                    missedBusinessDays: businessDaysGap - 1
                 });
 
                 return {
