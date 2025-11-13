@@ -730,7 +730,7 @@ async function loadQuarterConfig() {
         const result = await response.json();
 
         if (result.success) {
-            const { config, currentQuarter, quarterDates } = result.data;
+            const { config, currentQuarter, quarterDates } = result;
 
             // Set dropdown values
             document.getElementById('quarter-system').value = config.systemType;
