@@ -10,13 +10,17 @@ import logger from '../utils/logger.js';
 export const createChallenge = async (challengeData) => {
     try {
         const challenge = await prisma.challenge.create({
-            data: challengeData
+            data: {
+                ...challengeData,
+                challengeCategory: challengeData.challengeCategory || 'general' // Default to general
+            }
         });
 
         logger.info('Challenge created', {
             challengeId: challenge.id,
             title: challenge.title,
-            type: challenge.type
+            type: challenge.type,
+            challengeCategory: challenge.challengeCategory
         });
 
         return challenge;
@@ -531,7 +535,8 @@ export const generateWeeklyChallenges = async () => {
                 startDate: startOfWeek,
                 endDate: endOfWeek,
                 status: 'active',
-                category: 'individual'
+                category: 'individual',
+                challengeCategory: 'weekly' // Mark as weekly challenge
             });
 
             generatedChallenges.push(challenge);
@@ -710,6 +715,7 @@ export const createOKRChallenge = async (okrData) => {
                 title,
                 description,
                 type: 'okr-label',
+                challengeCategory: 'okr', // Mark as OKR challenge
                 labelFilters,
                 target,
                 reward: reward || 300, // Default OKR reward
