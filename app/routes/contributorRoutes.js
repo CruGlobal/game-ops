@@ -47,7 +47,8 @@ import {
     getDevOpsTeamSettingsController,
     syncDevOpsTeamController,
     toggleDevOpsTeamSyncController,
-    toggleDevOpsLeaderboardFilterController
+    toggleDevOpsLeaderboardFilterController,
+    backfillBadgesController
 } from '../controllers/adminController.js';
 import { authenticate } from '../middleware/authMiddleware.js';
 import { login } from '../controllers/authController.js';
@@ -182,5 +183,8 @@ router.get('/:username/streak', getStreakStatsController);
 
 // Get single contributor by username
 router.get('/contributors/:username', getContributorController);
+
+// Backfill badges (admin only)
+router.post('/admin/backfill-badges', ensureAuthenticated, backfillBadgesController);
 
 export default router;

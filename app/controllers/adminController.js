@@ -629,3 +629,78 @@ export async function toggleDevOpsLeaderboardFilterController(req, res) {
         });
     }
 }
+
+/**
+ * Backfill badges array from badge flags
+ * POST /api/admin/backfill-badges
+ */
+export async function backfillBadgesController(req, res) {
+    try {
+        const contributors = await prisma.contributor.findMany();
+        let updatedCount = 0;
+
+        for (const contributor of contributors) {
+            const badges = [];
+
+            // Check all badge flags and rebuild badges array
+            if (contributor.firstPrAwarded) {
+                badges.push({ badge: '1st PR badge', date: contributor.createdAt.toISOString() });
+            }
+            if (contributor.firstReviewAwarded) {
+                badges.push({ badge: '1st Review badge', date: contributor.createdAt.toISOString() });
+            }
+            if (contributor.first10PrsAwarded) {
+                badges.push({ badge: '10 PR badge', date: contributor.createdAt.toISOString() });
+            }
+            if (contributor.first10ReviewsAwarded) {
+                badges.push({ badge: '10 Reviews badge', date: contributor.createdAt.toISOString() });
+            }
+            if (contributor.first50PrsAwarded) {
+                badges.push({ badge: '50 PR badge', date: contributor.createdAt.toISOString() });
+            }
+            if (contributor.first50ReviewsAwarded) {
+                badges.push({ badge: '50 Reviews badge', date: contributor.createdAt.toISOString() });
+            }
+            if (contributor.first100PrsAwarded) {
+                badges.push({ badge: '100 PR badge', date: contributor.createdAt.toISOString() });
+            }
+            if (contributor.first100ReviewsAwarded) {
+                badges.push({ badge: '100 Reviews badge', date: contributor.createdAt.toISOString() });
+            }
+            if (contributor.first500PrsAwarded) {
+                badges.push({ badge: '500 PR badge', date: contributor.createdAt.toISOString() });
+            }
+            if (contributor.first500ReviewsAwarded) {
+                badges.push({ badge: '500 Reviews badge', date: contributor.createdAt.toISOString() });
+            }
+            if (contributor.first1000PrsAwarded) {
+                badges.push({ badge: '1000 PR badge', date: contributor.createdAt.toISOString() });
+            }
+            if (contributor.first1000ReviewsAwarded) {
+                badges.push({ badge: '1000 Reviews badge', date: contributor.createdAt.toISOString() });
+            }
+
+            // Only update if badges array is different
+            if (badges.length > 0) {
+                await prisma.contributor.update({
+                    where: { username: contributor.username },
+                    data: { badges }
+                });
+                updatedCount++;
+            }
+        }
+
+        res.json({
+            success: true,
+            message: `Backfilled badges for ${updatedCount} contributors`,
+            updatedCount
+        });
+    } catch (error) {
+        console.error('Error backfilling badges:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to backfill badges',
+            error: error.message
+        });
+    }
+}
