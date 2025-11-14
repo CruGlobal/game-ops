@@ -25,9 +25,11 @@ docker-compose up --build
 
 ### Environment Setup
 - Copy `.env.example` to `.env` in app directory and populate with actual values:
-  - `GITHUB_TOKEN`: GitHub personal access token
+  - `GITHUB_TOKEN`: GitHub personal access token (**requires `read:org` scope for DevOps team sync**)
   - `DATABASE_URL`: PostgreSQL connection string
   - `NODE_ENV`: 'development' or 'production'
+  - `GITHUB_ORG`: Organization name (optional, defaults to `REPO_OWNER`)
+  - `DEVOPS_TEAM_SLUG`: GitHub team slug (optional, defaults to `devops-engineering-team`)
 
 ### Prisma Commands
 ```bash
@@ -98,6 +100,7 @@ npx prisma migrate reset
 - **NEW: Streak badges** (sevenDay, thirtyDay, ninetyDay, yearLong)
 - **PHASE 1: Duplicate prevention** (processedPRs, processedReviews arrays with PR numbers and dates)
 - **PHASE 2: Quarterly stats** (quarterlyStats subdocument with currentQuarter, prsThisQuarter, reviewsThisQuarter, pointsThisQuarter, quarter date range)
+- **DevOps Team Tracking** (isDevOps flag, devOpsTeamSyncedAt timestamp)
 
 **Challenge Schema** (`app/models/challenge.js`):
 - Challenge metadata (title, description, type, target, reward)
@@ -114,12 +117,17 @@ npx prisma migrate reset
 - Fetch history array with timestamps, PR counts, and review counts
 - Singleton pattern - one record per repository
 
-**QuarterSettings Schema** (`app/models/quarterSettings.js`) - **PHASE 2**:
-- Singleton configuration (_id: 'quarter-config')
+**QuarterSettings Schema** (`app/prisma/schema.prisma`) - **PHASE 2**:
+- Singleton configuration (id: 'quarter-config')
 - systemType: calendar, fiscal-us, academic, custom
 - q1StartMonth: 1-12 (defines quarter start)
-- Helper methods: getQuarterMonths(), getAllQuarters()
 - Modified timestamp and modifiedBy tracking
+- **DevOps Team Filter Settings**:
+  - devOpsTeamMembers: Cached GitHub team members (JSON array)
+  - excludeDevOpsFromLeaderboards: Toggle to filter DevOps from leaderboards
+  - devOpsTeamSlug: GitHub team slug (default: 'devops-engineering-team')
+  - devOpsTeamLastSync: Last sync timestamp from GitHub
+  - devOpsTeamSyncEnabled: Enable/disable automatic daily sync
 
 **QuarterlyWinner Schema** (`app/models/quarterlyWinner.js`) - **PHASE 2**:
 - quarter: Unique identifier (e.g., "2025-Q1")
@@ -144,6 +152,7 @@ npx prisma migrate reset
 - **NEW:** `challengeService.js`: Challenge lifecycle management, weekly auto-generation
 - **NEW:** `analyticsService.js`: Time-series data, heatmaps, growth metrics, CSV generation
 - **PHASE 2:** `quarterlyService.js`: Quarter calculation, quarterly stats management, leaderboards, winner archiving, reset automation
+- **DevOps Filter:** `devOpsTeamService.js`: GitHub Teams API integration, automatic sync, leaderboard filtering
 
 **Routes** (`app/routes/`):
 - `contributorRoutes.js`: API endpoints for scoreboard data and admin functions
@@ -400,6 +409,58 @@ app/
   - Large backfills (6+ months) can take several hours
   - Progress persists through browser close
 
+#### **DevOps Team Filter System**
+- **Purpose:** Automatically detect DevOps team members and optionally exclude them from leaderboards to encourage non-DevOps participation
+
+- **Key Features:**
+  - Automatic sync from GitHub Teams API (`devops-engineering-team`)
+  - Daily cron job sync at 2 AM UTC
+  - Manual "Sync Now" button in admin UI
+  - Smart caching (1 hour) to avoid GitHub rate limits
+  - Fallback to cached list if GitHub API unavailable
+  - Toggle to exclude/include DevOps from all leaderboards
+  - Automatic recalculation when filter toggled
+
+- **Database Tracking:**
+  - Cached team members in `QuarterSettings.devOpsTeamMembers` (JSON array)
+  - `Contributor.isDevOps` flag for fast filtering
+  - `Contributor.devOpsTeamSyncedAt` timestamp for audit trail
+  - Indexed `isDevOps` field for query performance
+
+- **Leaderboard Filtering:**
+  - Affects all leaderboards when enabled:
+    - All-time leaderboard
+    - Quarterly leaderboard
+    - Points leaderboard
+    - Streak leaderboard
+  - Query-level filtering using Prisma `where` clause
+  - No data modification - only changes query results
+
+- **Admin Controls:**
+  - View current DevOps team members
+  - View last sync timestamp
+  - Manual sync button (force refresh from GitHub)
+  - Enable/disable automatic daily sync
+  - Enable/disable leaderboard filter
+  - View contributor counts (total, DevOps, non-DevOps)
+
+- **API Endpoints:**
+  - GET `/api/admin/devops-team/settings` - Get settings and cached team
+  - POST `/api/admin/devops-team/sync` - Manually trigger GitHub sync
+  - POST `/api/admin/devops-team/toggle-sync` - Enable/disable auto-sync
+  - POST `/api/admin/devops-team/toggle-filter` - Enable/disable leaderboard filter
+
+- **Environment Variables:**
+  - `GITHUB_TOKEN` - Must have `read:org` scope
+  - `GITHUB_ORG` - Organization name (defaults to `REPO_OWNER`)
+  - `DEVOPS_TEAM_SLUG` - Team slug (defaults to `devops-engineering-team`)
+
+- **Cron Job:**
+  - Runs daily at 2 AM UTC
+  - Compares GitHub team to cached team
+  - Updates `Contributor.isDevOps` flags for added/removed members
+  - Logs sync results (added, removed, total members)
+
 #### **NEW: Modern UI/UX**
 - CSS design system with custom properties (60+ design tokens)
 - Dark mode with theme persistence
@@ -563,6 +624,7 @@ Defined in `app/config/points-config.js`:
 2. **Award Badges:** `awardBadgesAndBills()` - Check and award milestone badges
 3. **Check Streaks:** Verify contributor streaks, award streak badges
 4. **Check Quarterly Reset:** `checkAndResetIfNewQuarter()` - Detect quarter boundaries, archive winners, reset stats
+5. **Sync DevOps Team** (at 2 AM UTC): `syncDevOpsTeamFromGitHub()` - Sync DevOps team members from GitHub Teams API
 
 ### Weekly Jobs (runs Monday 00:00 UTC)
 1. **Generate Challenges:** `generateWeeklyChallenges()` - Create 3 new weekly challenges

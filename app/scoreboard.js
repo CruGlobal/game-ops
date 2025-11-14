@@ -16,6 +16,7 @@ import { fetchPRsCron, awardContributorBadgesCron } from './controllers/contribu
 import { awardBillsAndVonettes } from './services/contributorService.js';
 import { generateWeeklyChallenges, checkExpiredChallenges } from './services/challengeService.js';
 import { checkAndResetIfNewQuarter } from './services/quarterlyService.js';
+import { syncDevOpsTeamFromGitHub } from './services/devOpsTeamService.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import logger from './utils/logger.js';
 import session from 'express-session';
@@ -308,6 +309,26 @@ cron.schedule('0 0 * * *', async () => {
         }
     } catch (error) {
         logger.error('Error checking quarterly reset', { error: error.message });
+    }
+});
+
+// Sync DevOps team from GitHub daily at 2 AM UTC
+cron.schedule('0 2 * * *', async () => {
+    logger.info('Running daily task to sync DevOps team from GitHub');
+    try {
+        if (!(await shouldRunCron('syncDevOpsTeam'))) return;
+        const result = await syncDevOpsTeamFromGitHub(false);
+        if (result.success) {
+            logger.info('DevOps team synced from GitHub', {
+                totalMembers: result.totalMembers,
+                addedMembers: result.addedMembers?.length || 0,
+                removedMembers: result.removedMembers?.length || 0
+            });
+        } else {
+            logger.info('DevOps team sync skipped', { reason: result.message });
+        }
+    } catch (error) {
+        logger.error('Error syncing DevOps team from GitHub', { error: error.message });
     }
 });
 

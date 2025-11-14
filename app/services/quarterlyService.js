@@ -404,13 +404,21 @@ export async function getQuarterlyLeaderboard(quarterString = null, limit = 50) 
     try {
         const quarter = quarterString || await getCurrentQuarter();
 
+        // Check if DevOps filter is enabled
+        const settings = await prisma.quarterSettings.findUnique({
+            where: { id: 'quarter-config' }
+        });
+        const excludeDevOps = settings?.excludeDevOpsFromLeaderboards || false;
+
         const contributors = await prisma.contributor.findMany({
             where: {
                 username: {
                     not: {
                         endsWith: '[bot]'
                     }
-                }
+                },
+                // Exclude DevOps team members if filter is enabled
+                ...(excludeDevOps && { isDevOps: false })
             },
             select: {
                 username: true,
@@ -459,13 +467,21 @@ export async function getQuarterlyLeaderboard(quarterString = null, limit = 50) 
  */
 export async function getAllTimeLeaderboard(limit = 50) {
     try {
+        // Check if DevOps filter is enabled
+        const settings = await prisma.quarterSettings.findUnique({
+            where: { id: 'quarter-config' }
+        });
+        const excludeDevOps = settings?.excludeDevOpsFromLeaderboards || false;
+
         const contributors = await prisma.contributor.findMany({
             where: {
                 username: {
                     not: {
                         endsWith: '[bot]'
                     }
-                }
+                },
+                // Exclude DevOps team members if filter is enabled
+                ...(excludeDevOps && { isDevOps: false })
             },
             orderBy: {
                 totalPoints: 'desc'

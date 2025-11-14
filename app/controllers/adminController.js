@@ -17,6 +17,13 @@ import {
     recomputeHallOfFameAll
 } from '../services/quarterlyService.js';
 import { ensureAppSettingsTable, getCronEnabled, setCronEnabled } from '../lib/appSettings.js';
+import {
+    syncDevOpsTeamFromGitHub,
+    getDevOpsTeamSettings,
+    toggleDevOpsLeaderboardFilter,
+    toggleDevOpsTeamSync,
+    getContributorCounts
+} from '../services/devOpsTeamService.js';
 
 // Function to get all contributors
 export const getContributors = async (req, res) => {
@@ -504,5 +511,121 @@ export async function setCronStatusController(req, res) {
     } catch (error) {
         console.error('Error in setCronStatusController:', error);
         res.status(500).json({ success: false, message: 'Failed to set cron status', error: error.message });
+    }
+}
+
+/**
+ * Get DevOps team settings and cached team members
+ * GET /api/admin/devops-team/settings
+ */
+export async function getDevOpsTeamSettingsController(req, res) {
+    try {
+        const settings = await getDevOpsTeamSettings();
+        const counts = await getContributorCounts();
+
+        res.json({
+            success: true,
+            settings: {
+                ...settings,
+                githubOrg: process.env.GITHUB_ORG || process.env.REPO_OWNER,
+                teamSlug: settings.devOpsTeamSlug
+            },
+            counts
+        });
+    } catch (error) {
+        console.error('Error in getDevOpsTeamSettingsController:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to get DevOps team settings',
+            error: error.message
+        });
+    }
+}
+
+/**
+ * Manually sync DevOps team from GitHub
+ * POST /api/admin/devops-team/sync
+ */
+export async function syncDevOpsTeamController(req, res) {
+    try {
+        const forceSync = req.body?.forceSync === true;
+        const result = await syncDevOpsTeamFromGitHub(forceSync);
+
+        res.json({
+            success: true,
+            ...result
+        });
+    } catch (error) {
+        console.error('Error in syncDevOpsTeamController:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to sync DevOps team from GitHub',
+            error: error.message
+        });
+    }
+}
+
+/**
+ * Toggle DevOps team auto-sync on/off
+ * POST /api/admin/devops-team/toggle-sync
+ * Body: { enabled: boolean }
+ */
+export async function toggleDevOpsTeamSyncController(req, res) {
+    try {
+        const { enabled } = req.body;
+
+        if (typeof enabled !== 'boolean') {
+            return res.status(400).json({
+                success: false,
+                message: 'enabled field must be a boolean'
+            });
+        }
+
+        const result = await toggleDevOpsTeamSync(enabled);
+
+        res.json({
+            success: true,
+            ...result
+        });
+    } catch (error) {
+        console.error('Error in toggleDevOpsTeamSyncController:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to toggle DevOps team sync',
+            error: error.message
+        });
+    }
+}
+
+/**
+ * Toggle DevOps leaderboard filter on/off
+ * POST /api/admin/devops-team/toggle-filter
+ * Body: { exclude: boolean }
+ */
+export async function toggleDevOpsLeaderboardFilterController(req, res) {
+    try {
+        const { exclude } = req.body;
+
+        if (typeof exclude !== 'boolean') {
+            return res.status(400).json({
+                success: false,
+                message: 'exclude field must be a boolean'
+            });
+        }
+
+        const result = await toggleDevOpsLeaderboardFilter(exclude);
+
+        res.json({
+            success: true,
+            ...result,
+            message: `DevOps leaderboard filter ${exclude ? 'enabled' : 'disabled'}. Leaderboards will ${exclude ? 'exclude' : 'include'} DevOps team members.`
+        });
+    } catch (error) {
+        console.error('Error in toggleDevOpsLeaderboardFilterController:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to toggle DevOps leaderboard filter',
+            error: error.message
+        });
     }
 }

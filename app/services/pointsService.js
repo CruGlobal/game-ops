@@ -128,7 +128,17 @@ export const awardReviewPoints = async (contributor, timestamp = null, prNumber 
  */
 export const getPointsLeaderboard = async (limit = 10) => {
     try {
+        // Check if DevOps filter is enabled
+        const settings = await prisma.quarterSettings.findUnique({
+            where: { id: 'quarter-config' }
+        });
+        const excludeDevOps = settings?.excludeDevOpsFromLeaderboards || false;
+
         const contributors = await prisma.contributor.findMany({
+            where: {
+                // Exclude DevOps team members if filter is enabled
+                ...(excludeDevOps && { isDevOps: false })
+            },
             orderBy: { totalPoints: 'desc' },
             take: limit,
             select: {

@@ -37,6 +37,8 @@ model Contributor {
   thirtyDayBadge          Boolean                @default(false) @map("thirty_day_badge")
   ninetyDayBadge          Boolean                @default(false) @map("ninety_day_badge")
   yearLongBadge           Boolean                @default(false) @map("year_long_badge")
+  isDevOps                Boolean                @default(false) @map("is_devops")
+  devOpsTeamSyncedAt      DateTime?              @map("devops_team_synced_at")
   createdAt               DateTime               @default(now()) @map("created_at")
   updatedAt               DateTime               @updatedAt @map("updated_at")
   achievements            Achievement[]
@@ -210,13 +212,20 @@ model PRMetadata {
 }
 
 model QuarterSettings {
-  id                        String   @id @default("quarter-config")
-  systemType                String   @default("calendar") @map("system_type")
-  q1StartMonth              Int      @default(1) @map("q1_start_month")
-  customQuarters            Json?    @map("custom_quarters")
-  lastModified              DateTime @default(now()) @updatedAt @map("last_modified")
-  modifiedBy                String   @default("system") @map("modified_by")
-  createdAt                 DateTime @default(now()) @map("created_at")
+  id                            String    @id @default("quarter-config")
+  systemType                    String    @default("calendar") @map("system_type")
+  q1StartMonth                  Int       @default(1) @map("q1_start_month")
+  customQuarters                Json?     @map("custom_quarters")
+  lastModified                  DateTime  @default(now()) @updatedAt @map("last_modified")
+  modifiedBy                    String    @default("system") @map("modified_by")
+  createdAt                     DateTime  @default(now()) @map("created_at")
+
+  // DevOps Team Filter Settings
+  devOpsTeamMembers             Json      @default("[]") @map("devops_team_members")
+  excludeDevOpsFromLeaderboards Boolean   @default(false) @map("exclude_devops_from_leaderboards")
+  devOpsTeamSlug                String    @default("devops-engineering-team") @map("devops_team_slug")
+  devOpsTeamLastSync            DateTime? @map("devops_team_last_sync")
+  devOpsTeamSyncEnabled         Boolean   @default(true) @map("devops_team_sync_enabled")
   enableAchievementComments Boolean  @default(false) @map("enable_achievement_comments")
   enableBillsComments       Boolean  @default(false) @map("enable_bills_comments")
 

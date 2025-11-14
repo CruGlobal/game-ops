@@ -43,7 +43,11 @@ import {
     recomputeHallOfFameAllController,
     startBackfillController,
     stopBackfillController,
-    getBackfillStatusController
+    getBackfillStatusController,
+    getDevOpsTeamSettingsController,
+    syncDevOpsTeamController,
+    toggleDevOpsTeamSyncController,
+    toggleDevOpsLeaderboardFilterController
 } from '../controllers/adminController.js';
 import { authenticate } from '../middleware/authMiddleware.js';
 import { login } from '../controllers/authController.js';
@@ -106,6 +110,12 @@ router.get('/admin/backfill/status', ensureAuthenticated, getBackfillStatusContr
 // Cron controls (admin only)
 router.get('/admin/cron-status', ensureAuthenticated, getCronStatusController);
 router.post('/admin/cron-status', ensureAuthenticated, setCronStatusController);
+
+// DevOps Team Management (admin only)
+router.get('/admin/devops-team/settings', ensureAuthenticated, getDevOpsTeamSettingsController);
+router.post('/admin/devops-team/sync', ensureAuthenticated, syncDevOpsTeamController);
+router.post('/admin/devops-team/toggle-sync', ensureAuthenticated, toggleDevOpsTeamSyncController);
+router.post('/admin/devops-team/toggle-filter', ensureAuthenticated, toggleDevOpsLeaderboardFilterController);
 
 // Admin recompute endpoints
 router.post('/admin/leaderboard/recompute/current-quarter', ensureAuthenticated, recomputeCurrentQuarterController);

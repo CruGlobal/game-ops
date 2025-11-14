@@ -340,7 +340,17 @@ export const getStreakStats = async (username) => {
  */
 export const getStreakLeaderboard = async (limit = 10) => {
     try {
+        // Check if DevOps filter is enabled
+        const settings = await prisma.quarterSettings.findUnique({
+            where: { id: 'quarter-config' }
+        });
+        const excludeDevOps = settings?.excludeDevOpsFromLeaderboards || false;
+
         const contributors = await prisma.contributor.findMany({
+            where: {
+                // Exclude DevOps team members if filter is enabled
+                ...(excludeDevOps && { isDevOps: false })
+            },
             orderBy: [
                 { currentStreak: 'desc' },
                 { longestStreak: 'desc' }
