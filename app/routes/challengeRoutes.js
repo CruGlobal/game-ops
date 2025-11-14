@@ -5,9 +5,13 @@ import {
     joinChallengeController,
     getChallengeLeaderboardController,
     getUserChallengesController,
-    createOKRChallengeController
+    createOKRChallengeController,
+    createManualChallengeController,
+    getAllChallengesController,
+    deleteChallengeController
 } from '../controllers/challengeController.js';
 import { authenticate } from '../middleware/authMiddleware.js';
+import { ensureAuthenticated } from '../middleware/ensureAuthenticated.js';
 
 const router = express.Router();
 
@@ -28,5 +32,10 @@ router.get('/user/:username', getUserChallengesController);
 
 // Create OKR challenge (admin only)
 router.post('/okr/create', authenticate, createOKRChallengeController);
+
+// Admin routes for challenge management
+router.post('/admin/create', ensureAuthenticated, createManualChallengeController);
+router.get('/admin/all', ensureAuthenticated, getAllChallengesController);
+router.delete('/admin/:id', ensureAuthenticated, deleteChallengeController);
 
 export default router;

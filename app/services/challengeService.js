@@ -395,6 +395,83 @@ export const getUserChallenges = async (username) => {
 };
 
 /**
+ * Get all challenges (for admin management)
+ * @param {Object} options - Filter options
+ * @returns {Array} Challenges
+ */
+export const getAllChallenges = async (options = {}) => {
+    try {
+        const { status, limit = 50 } = options;
+
+        const where = {};
+        if (status) {
+            where.status = status;
+        }
+
+        const challenges = await prisma.challenge.findMany({
+            where,
+            orderBy: {
+                createdAt: 'desc'
+            },
+            take: limit,
+            include: {
+                participants: {
+                    select: {
+                        id: true,
+                        contributorId: true,
+                        progress: true,
+                        completed: true
+                    }
+                }
+            }
+        });
+
+        return challenges;
+    } catch (error) {
+        logger.error('Error getting all challenges', {
+            error: error.message
+        });
+        throw error;
+    }
+};
+
+/**
+ * Delete a challenge
+ * @param {String} challengeId - Challenge ID
+ * @returns {Object} Deleted challenge
+ */
+export const deleteChallenge = async (challengeId) => {
+    try {
+        // Check if challenge exists
+        const challenge = await prisma.challenge.findUnique({
+            where: { id: challengeId }
+        });
+
+        if (!challenge) {
+            throw new Error('Challenge not found');
+        }
+
+        // Delete challenge (cascade will delete participants)
+        await prisma.challenge.delete({
+            where: { id: challengeId }
+        });
+
+        logger.info('Challenge deleted', {
+            challengeId,
+            title: challenge.title
+        });
+
+        return challenge;
+    } catch (error) {
+        logger.error('Error deleting challenge', {
+            challengeId,
+            error: error.message
+        });
+        throw error;
+    }
+};
+
+/**
  * Generate weekly challenges automatically
  * @returns {Array} Generated challenges
  */
