@@ -185,9 +185,19 @@ export async function archiveQuarterWinners(quarterString = null) {
 
         console.log(`Archiving winners for ${quarter}`);
 
+        // Check if DevOps filter is enabled
+        const settings = await prisma.quarterSettings.findUnique({
+            where: { id: 'quarter-config' }
+        });
+        const excludeDevOps = settings?.excludeDevOpsFromLeaderboards || false;
+
         // Get top 3 contributors by points this quarter
         // Note: Prisma doesn't support ordering by JSON field directly, so we fetch all and sort in memory
         const allContributors = await prisma.contributor.findMany({
+            where: {
+                // Exclude DevOps team members if filter is enabled
+                ...(excludeDevOps && { isDevOps: false })
+            },
             select: {
                 username: true,
                 avatarUrl: true,
@@ -197,7 +207,7 @@ export async function archiveQuarterWinners(quarterString = null) {
 
         // Filter and sort in memory
         const topContributors = allContributors
-            .filter(c => 
+            .filter(c =>
                 c.quarterlyStats?.currentQuarter === quarter &&
                 c.quarterlyStats?.pointsThisQuarter > 0
             )

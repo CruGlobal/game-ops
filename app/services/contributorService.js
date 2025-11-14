@@ -633,6 +633,12 @@ export const awardBadges = async (pullRequestNumber = null) => {
 };
 
 export const getTopContributorsDateRange = async (startDate, endDate, page, limit) => {
+    // Check if DevOps filter is enabled
+    const settings = await prisma.quarterSettings.findUnique({
+        where: { id: 'quarter-config' }
+    });
+    const excludeDevOps = settings?.excludeDevOpsFromLeaderboards || false;
+
     // Get contributors with their contributions in the date range
     const contributors = await prisma.contributor.findMany({
         where: {
@@ -640,7 +646,9 @@ export const getTopContributorsDateRange = async (startDate, endDate, page, limi
                 not: {
                     endsWith: '[bot]'
                 }
-            }
+            },
+            // Exclude DevOps team members if filter is enabled
+            ...(excludeDevOps && { isDevOps: false })
         },
         select: {
             username: true,
@@ -691,6 +699,12 @@ export const getTopContributorsDateRange = async (startDate, endDate, page, limi
 };
 
 export const getTopReviewersDateRange = async (startDate, endDate, page, limit) => {
+    // Check if DevOps filter is enabled
+    const settings = await prisma.quarterSettings.findUnique({
+        where: { id: 'quarter-config' }
+    });
+    const excludeDevOps = settings?.excludeDevOpsFromLeaderboards || false;
+
     // Get reviewers with their reviews in the date range
     const reviewers = await prisma.contributor.findMany({
         where: {
@@ -698,7 +712,9 @@ export const getTopReviewersDateRange = async (startDate, endDate, page, limit) 
                 not: {
                     endsWith: '[bot]'
                 }
-            }
+            },
+            // Exclude DevOps team members if filter is enabled
+            ...(excludeDevOps && { isDevOps: false })
         },
         select: {
             username: true,
@@ -751,13 +767,21 @@ export const getTopReviewersDateRange = async (startDate, endDate, page, limit) 
 export const getTopContributors = async () => {
     let contributors;
 
+        // Check if DevOps filter is enabled
+        const settings = await prisma.quarterSettings.findUnique({
+            where: { id: 'quarter-config' }
+        });
+        const excludeDevOps = settings?.excludeDevOpsFromLeaderboards || false;
+
         contributors = await prisma.contributor.findMany({
             where: {
                 username: {
                     not: {
                         endsWith: '[bot]'
                     }
-                }
+                },
+                // Exclude DevOps team members if filter is enabled
+                ...(excludeDevOps && { isDevOps: false })
             },
             orderBy: {
                 prCount: 'desc'
@@ -797,13 +821,21 @@ export const getTopContributors = async () => {
 export const getTopReviewers = async () => {
     let reviewers;
 
+        // Check if DevOps filter is enabled
+        const settings = await prisma.quarterSettings.findUnique({
+            where: { id: 'quarter-config' }
+        });
+        const excludeDevOps = settings?.excludeDevOpsFromLeaderboards || false;
+
         reviewers = await prisma.contributor.findMany({
             where: {
                 username: {
                     not: {
                         endsWith: '[bot]'
                     }
-                }
+                },
+                // Exclude DevOps team members if filter is enabled
+                ...(excludeDevOps && { isDevOps: false })
             },
             orderBy: {
                 reviewCount: 'desc'
