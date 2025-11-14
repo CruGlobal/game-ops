@@ -46,6 +46,18 @@ export const getActiveChallenges = async () => {
                     gte: now
                 }
             },
+            include: {
+                participants: {
+                    include: {
+                        contributor: {
+                            select: {
+                                username: true,
+                                avatarUrl: true
+                            }
+                        }
+                    }
+                }
+            },
             orderBy: {
                 startDate: 'desc'
             }

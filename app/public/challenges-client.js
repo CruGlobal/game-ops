@@ -97,9 +97,12 @@ function createChallengeCard(challenge) {
     card.className = 'challenge-card';
     card.setAttribute('data-challenge-id', challenge._id);
 
+    // Ensure participants array exists
+    const participants = challenge.participants || [];
+
     // Check if user has joined this challenge
-    const hasJoined = challenge.participants.some(p => p.username === currentUsername);
-    const userParticipant = challenge.participants.find(p => p.username === currentUsername);
+    const hasJoined = participants.some(p => p.username === currentUsername || p.contributor?.username === currentUsername);
+    const userParticipant = participants.find(p => p.username === currentUsername || p.contributor?.username === currentUsername);
 
     // Calculate days remaining
     const endDate = new Date(challenge.endDate);
@@ -124,7 +127,7 @@ function createChallengeCard(challenge) {
                 <div class="challenge-stat-label">Points</div>
             </div>
             <div class="challenge-stat">
-                <div class="challenge-stat-value">${challenge.participants.length}</div>
+                <div class="challenge-stat-value">${participants.length}</div>
                 <div class="challenge-stat-label">Participants</div>
             </div>
         </div>
