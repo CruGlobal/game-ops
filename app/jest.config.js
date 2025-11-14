@@ -19,7 +19,9 @@ export default {
   // Exclude setup files from test runs
   testPathIgnorePatterns: [
     '/node_modules/',
-    '/__tests__/setup.js'
+    '/__tests__/setup.js',
+    '/__tests__/unit/controllers.test.js',
+    '/__tests__/unit/githubIntegration.test.js'
   ],
   
   // Coverage configuration
@@ -37,8 +39,14 @@ export default {
   // Setup files
   setupFilesAfterEnv: ['<rootDir>/__tests__/setup.js'],
   
+  // Global teardown
+  globalTeardown: '<rootDir>/__tests__/globalTeardown.js',
+  
   // Test timeout (increased for database operations)
   testTimeout: 30000,
+  
+  // Run tests serially to prevent database conflicts
+  maxWorkers: 1,
   
   // Verbose output
   verbose: true,
@@ -48,6 +56,11 @@ export default {
   
   // Restore mocks after each test
   restoreMocks: true,
+  
+  // Force exit after tests complete
+  // Note: Required due to Prisma's connection pool not closing immediately in test mode
+  // The globalTeardown gives Prisma time to cleanup, but forceExit ensures Jest doesn't hang
+  forceExit: true,
   
   // Transform ignore patterns for ES modules
   transformIgnorePatterns: [

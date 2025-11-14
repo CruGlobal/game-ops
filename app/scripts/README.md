@@ -4,87 +4,51 @@ This directory contains utility scripts for database management, validation, and
 
 ## Directory Structure
 
-### `validation/`
-Scripts for verifying database integrity and comparing data sources.
+### Active Scripts (Root Level)
 
-**Usage:** Run these scripts to verify data consistency and troubleshoot issues.
+**Current utility scripts (all use Prisma/PostgreSQL):**
 
-#### Data Verification Scripts:
-- `compare-github-vs-database.js` - Compare GitHub PR counts vs database counts for each month
-- `verify-september-data.js` - Verify September 2025 PR data in database
-- `verify-september-reviews.js` - Verify September 2025 review data in database
-- `test-september-reviews.js` - Test September PR reviews from GitHub API
-- `check-processed-reviews.js` - Check processedReviews tracking status
-- `check-actual-dates.js` - Display all PR dates in database by month
-- `check-backfill-progress.js` - Check backfill completion progress
-- `check-current-totals.js` - Show current database totals and latest PRs
-- `check-post-backfill-prs.js` - Check PRs added after backfill completion
-- `quick-db-check.js` - Quick database status check
-- `list-databases.js` - List all MongoDB databases and collections
+- `run-backfill.js` - **Populate database from GitHub API**
+  - Fetches historical PRs and reviews from specified date range
+  - Includes duplicate prevention and rate limit handling
+  - Usage: `node scripts/run-backfill.js YYYY-MM-DD YYYY-MM-DD`
+  - Example: `node scripts/run-backfill.js 2019-01-01 2025-10-23`
 
-#### Duplicate Detection & Repair:
-- `fix-duplicates-dry-run.js` - **Analyze duplicates without making changes (recommended first step)**
-  - Shows count mismatches between `prCount` and `processedPRs.length`
-  - Identifies duplicate entries in tracking arrays
-  - Provides detailed report of what would be fixed
+- `simple-fetch-prs.js` - Basic PR fetching script (dev/testing)
+- `recalculate-points.js` - Recalculate contributor points
+- `backdate-point-history.js` - Populate point history from contributions
+- `create-test-challenge.js` - Create test challenge data
+- `verify-quarter-user.js` - Verify quarterly stats for specific user
+- `recompute-quarter-fallback.js` - Recompute current quarter stats (fallback method)
+- `recompute-quarter-history.js` - Recompute quarter stats from history
+- `recompute-alltime-from-history.js` - Recompute all-time stats from contribution history
 
-- `fix-duplicates-execute.js` - **Fix duplicates and correct counts (modifies database)**
-  - Corrects `prCount` to match `processedPRs.length`
-  - Corrects `reviewCount` to match `processedReviews.length`
-  - Removes duplicate entries from tracking arrays
-  - Includes 5-second confirmation delay
-
-**⚠️ Important:** Always run `fix-duplicates-dry-run.js` first to review changes before executing!
-
-**Example:**
+**Example Usage:**
 ```bash
 cd app
 
-# 1. Check for duplicates (dry run - safe, no changes)
-node scripts/validation/fix-duplicates-dry-run.js
+# Populate database from GitHub (most common)
+node scripts/run-backfill.js 2024-01-01 2025-10-23
 
-# 2. Review the output, then fix if needed
-node scripts/validation/fix-duplicates-execute.js
+# Verify quarterly stats
+node scripts/verify-quarter-user.js cru-Luis-Rodriguez
 
-# 3. Restart Docker to apply cron fix
-docker-compose restart app
+# Recalculate points
+node scripts/recalculate-points.js
 ```
 
-Or use the Admin UI:
+### Duplicate Detection & Repair
+
+**Use the Admin UI (recommended):**
 1. Navigate to Admin page → Data Overview section
 2. Click "🔍 Check for Duplicates" to detect issues
 3. Click "🔧 Fix Duplicates" to repair (confirmation required)
 
-### `migration/`
-One-time migration scripts for database schema changes.
-
-**Usage:** Run these scripts once when deploying new features that require data migration.
-
-- `backfill-quarterly-stats.js` - Populate current quarter stats from existing contribution data
-- `backfill-hall-of-fame.js` - **Populate Hall of Fame with all historical quarterly winners**
-  - Analyzes all historical data from backfill (2019-present)
-  - Calculates top 3 contributors for each quarter
-  - Creates QuarterlyWinner records for Hall of Fame
-  - Processes 27+ quarters automatically
-  - Safe to re-run (updates existing records)
-
-**Example:**
-```bash
-cd app
-
-# Backfill current quarter only
-node scripts/migration/backfill-quarterly-stats.js
-
-# Backfill entire Hall of Fame (all historical quarters)
-node scripts/migration/backfill-hall-of-fame.js
-
-# Verify Hall of Fame was populated
-node scripts/validation/check-hall-of-fame.js
-```
-
-**When to Run:**
-- `backfill-hall-of-fame.js`: After initial backfill of historical PR data
-- Shows championship leaderboard (e.g., Omicron7: 13 wins, cru-Luis-Rodriguez: 10 wins)
+**Service-based duplicate detection:**
+The application includes built-in duplicate detection via `contributorService.js`:
+- `checkForDuplicates()` - Detect duplicate PRs/reviews
+- `fixDuplicates()` - Repair duplicates and correct counts
+- Accessible through Admin API endpoints
 
 ### `setup/`
 Initialization scripts for setting up new features.
@@ -107,19 +71,24 @@ Demo and example scripts for testing framework capabilities.
 - `test-demo.js` - Full test framework demo
 - `test-demo-simple.js` - Simplified test demo
 
+### `backup/mongoose-scripts/`
+**Legacy scripts (Mongoose/MongoDB - kept for reference only)**
+
+Old validation and migration scripts have been moved to `backup/mongoose-scripts/`. These are no longer used but kept for historical reference. The application now uses Prisma with PostgreSQL.
+
 ## Creating New Utility Scripts
 
 Parent directory: `/app/scripts/`
 
 **All scripts must:**
-1. Connect to the correct database: `mongodb://localhost:27017/github-scoreboard`
+1. Import Prisma client from `../lib/prisma.js`
 2. Load environment variables from project root: `dotenv.config({ path: join(__dirname, '../../.env') })`
 3. Include error handling and clear console output
-4. Disconnect from database before exiting
+4. Disconnect from Prisma before exiting: `await prisma.$disconnect()`
 
 **Template:**
 ```javascript
-import mongoose from 'mongoose';
+import { prisma } from '../lib/prisma.js';
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
@@ -127,37 +96,96 @@ import { dirname, join } from 'path';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// Load .env from project root (adjust path based on subfolder depth)
-dotenv.config({ path: join(__dirname, '../../.env') });  // For scripts/
-// dotenv.config({ path: join(__dirname, '../../../.env') });  // For scripts/validation/
+// Load .env from project root
+dotenv.config({ path: join(__dirname, '../../.env') });
 
 async function myScript() {
     try {
-        await mongoose.connect('mongodb://localhost:27017/github-scoreboard');
-        console.log('Connected to database\n');
+        console.log('Connected to PostgreSQL database\n');
 
         // Your code here
+        // Example: Query contributors
+        const contributors = await prisma.contributor.findMany({
+            take: 10,
+            orderBy: { prCount: 'desc' }
+        });
 
-        await mongoose.disconnect();
+        console.log(`Found ${contributors.length} contributors`);
+        contributors.forEach(c => {
+            console.log(`- ${c.username}: ${c.prCount} PRs`);
+        });
+
+        console.log('\nScript completed successfully');
     } catch (error) {
         console.error('Error:', error);
         process.exit(1);
+    } finally {
+        await prisma.$disconnect();
     }
 }
 
 myScript();
 ```
 
+**Key Prisma Patterns:**
+
+```javascript
+// Query records
+const contributors = await prisma.contributor.findMany({
+    where: { prCount: { gt: 10 } },
+    orderBy: { prCount: 'desc' },
+    take: 10
+});
+
+// Create record
+const contributor = await prisma.contributor.create({
+    data: {
+        username: 'newuser',
+        prCount: 1,
+        reviewCount: 0
+    }
+});
+
+// Update record
+await prisma.contributor.update({
+    where: { username: 'newuser' },
+    data: { prCount: 2 }
+});
+
+// Count records
+const count = await prisma.contributor.count({
+    where: { prCount: { gte: 100 } }
+});
+
+// Raw SQL (when needed)
+const result = await prisma.$queryRaw`
+    SELECT * FROM contributors WHERE pr_count > 100
+`;
+```
+
 ## Common Issues
 
-### "The `uri` parameter to `openUri()` must be a string"
-- Check that `.env` file exists in project root
-- Verify `dotenv.config()` path is correct based on script location
+### "Environment variable not found: DATABASE_URL"
+- Check that `.env` file exists in app directory
+- Verify `DATABASE_URL` is set: `postgresql://user:pass@localhost:5432/github_scoreboard`
+- Verify `dotenv.config()` path is correct
+
+### "P1001: Can't reach database server"
+- Ensure PostgreSQL is running: `docker ps` (look for `postgres_scoreboard`)
+- Start Docker if needed: `docker-compose up -d postgres`
+- Check connection string matches your database credentials
+
+### "P2002: Unique constraint failed"
+- Check for duplicate records before inserting
+- Use `upsert` instead of `create` when appropriate:
+  ```javascript
+  await prisma.contributor.upsert({
+      where: { username: 'user' },
+      update: { prCount: 10 },
+      create: { username: 'user', prCount: 10 }
+  });
+  ```
 
 ### "Not Found" error from GitHub API
 - Verify `REPO_OWNER` and `REPO_NAME` in `.env` (remove quotes if present)
 - Check `GITHUB_TOKEN` is valid and has repo access
-
-### Connecting to wrong database
-- Always use `github-scoreboard` database name
-- Check connection string: `mongodb://localhost:27017/github-scoreboard`

@@ -2,7 +2,6 @@ import express from 'express';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
-import Contributor from '../models/contributor.js';
 import { validateDateRange, validatePagination, validateRequest } from '../utils/validation.js';
 import {
     initializeDatabaseController,
@@ -37,7 +36,11 @@ import {
     updateQuarterConfigController,
     getAllTimeLeaderboardController,
     getQuarterlyLeaderboardController,
+    getQuarterlyLeaderboardByQuarterController,
     getHallOfFameController,
+    recomputeCurrentQuarterController,
+    recomputeHallOfFameController,
+    recomputeHallOfFameAllController,
     startBackfillController,
     stopBackfillController,
     getBackfillStatusController
@@ -45,6 +48,7 @@ import {
 import { authenticate } from '../middleware/authMiddleware.js';
 import { login } from '../controllers/authController.js';
 import { ensureAuthenticated } from '../middleware/ensureAuthenticated.js';
+import { getCronStatusController, setCronStatusController } from '../controllers/adminController.js';
 
 const router = express.Router();
 const __filename = fileURLToPath(import.meta.url);
@@ -72,13 +76,13 @@ router.get('/award-bills-vonettes', authenticate, awardBillsAndVonettesControlle
 router.post('/admin/login', login);
 
 // Route to get all contributors
-router.get('/admin/contributors', authenticate, getContributors);
+router.get('/admin/contributors', ensureAuthenticated, getContributors);
 
 // Route to reset a specific contributor
-router.post('/admin/reset-contributor', authenticate, resetContributor);
+router.post('/admin/reset-contributor', ensureAuthenticated, resetContributor);
 
 // Route to reset all contributors
-router.post('/admin/reset-all', authenticate, resetAllContributors);
+router.post('/admin/reset-all', ensureAuthenticated, resetAllContributors);
 
 // PR Range Info and Data Statistics
 router.get('/admin/pr-range-info', ensureAuthenticated, getPRRangeInfoController);
@@ -99,10 +103,19 @@ router.post('/admin/backfill/start', ensureAuthenticated, startBackfillControlle
 router.post('/admin/backfill/stop', ensureAuthenticated, stopBackfillController);
 router.get('/admin/backfill/status', ensureAuthenticated, getBackfillStatusController);
 
+// Cron controls (admin only)
+router.get('/admin/cron-status', ensureAuthenticated, getCronStatusController);
+router.post('/admin/cron-status', ensureAuthenticated, setCronStatusController);
+
+// Admin recompute endpoints
+router.post('/admin/leaderboard/recompute/current-quarter', ensureAuthenticated, recomputeCurrentQuarterController);
+router.post('/admin/leaderboard/recompute/hall-of-fame', ensureAuthenticated, recomputeHallOfFameController);
+router.post('/admin/leaderboard/recompute/hall-of-fame/all', ensureAuthenticated, recomputeHallOfFameAllController);
+
 // Leaderboard Routes
 router.get('/leaderboard/all-time', getAllTimeLeaderboardController);
 router.get('/leaderboard/quarterly', getQuarterlyLeaderboardController);
-router.get('/leaderboard/quarterly/:quarter', getQuarterlyLeaderboardController);
+router.get('/leaderboard/quarterly/:quarter', getQuarterlyLeaderboardByQuarterController);
 router.get('/leaderboard/hall-of-fame', getHallOfFameController);
 
 // Route to get the list of badge images
@@ -118,10 +131,14 @@ router.get('/badges', (req, res) => {
 });
 
 router.get('/auth/status', (req, res) => {
-    if (req.isAuthenticated()) {
-        res.json({ isAuthenticated: true, username: req.user.username });
-    } else {
-        res.json({ isAuthenticated: false });
+    try {
+        const isAuthed = typeof req.isAuthenticated === 'function' ? !!req.isAuthenticated() : false;
+        if (isAuthed) {
+            return res.json({ isAuthenticated: true, username: req.user?.username });
+        }
+        return res.json({ isAuthenticated: false });
+    } catch (e) {
+        return res.json({ isAuthenticated: false });
     }
 });
 

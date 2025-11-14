@@ -1,5 +1,4 @@
-import Challenge from '../models/challenge.js';
-import Contributor from '../models/contributor.js';
+import { prisma } from '../lib/prisma.js';
 import { emitChallengeProgress, emitChallengeCompleted } from '../utils/socketEmitter.js';
 import logger from '../utils/logger.js';
 
@@ -10,11 +9,12 @@ import logger from '../utils/logger.js';
  */
 export const createChallenge = async (challengeData) => {
     try {
-        const challenge = new Challenge(challengeData);
-        await challenge.save();
+        const challenge = await prisma.challenge.create({
+            data: challengeData
+        });
 
         logger.info('Challenge created', {
-            challengeId: challenge._id,
+            challengeId: challenge.id,
             title: challenge.title,
             type: challenge.type
         });
@@ -35,10 +35,17 @@ export const createChallenge = async (challengeData) => {
 export const getActiveChallenges = async () => {
     try {
         const now = new Date();
-        const challenges = await Challenge.find({
-            status: 'active',
-            endDate: { $gte: now }
-        }).sort({ startDate: -1 });
+        const challenges = await prisma.challenge.findMany({
+            where: {
+                status: 'active',
+                endDate: {
+                    gte: now
+                }
+            },
+            orderBy: {
+                startDate: 'desc'
+            }
+        });
 
         return challenges;
     } catch (error) {
@@ -56,7 +63,9 @@ export const getActiveChallenges = async () => {
  */
 export const getChallengeById = async (challengeId) => {
     try {
-        const challenge = await Challenge.findById(challengeId);
+        const challenge = await prisma.challenge.findUnique({
+            where: { id: challengeId }
+        });
 
         if (!challenge) {
             throw new Error('Challenge not found');
@@ -80,20 +89,29 @@ export const getChallengeById = async (challengeId) => {
  */
 export const joinChallenge = async (username, challengeId) => {
     try {
-        const challenge = await Challenge.findById(challengeId);
-        const contributor = await Contributor.findOne({ username });
-
-        if (!challenge) {
-            throw new Error('Challenge not found');
-        }
+        const contributor = await prisma.contributor.findUnique({
+            where: { username }
+        });
 
         if (!contributor) {
             throw new Error('Contributor not found. Only users with at least one merged PR can join challenges. Please contribute to the repository first.');
         }
 
+        const challenge = await prisma.challenge.findUnique({
+            where: { id: challengeId },
+            include: {
+                participants: {
+                    where: { contributorId: contributor.id }
+                }
+            }
+        });
+
+        if (!challenge) {
+            throw new Error('Challenge not found');
+        }
+
         // Check if already joined
-        const alreadyJoined = challenge.participants.some(p => p.username === username);
-        if (alreadyJoined) {
+        if (challenge.participants.length > 0) {
             throw new Error('Already joined this challenge');
         }
 
@@ -102,25 +120,16 @@ export const joinChallenge = async (username, challengeId) => {
             throw new Error('Challenge is not active');
         }
 
-        // Add to challenge participants
-        challenge.participants.push({
-            username,
-            progress: 0,
-            completed: false,
-            joinedAt: new Date()
+        // Add to challenge participants (this IS the active challenge list)
+        await prisma.challengeParticipant.create({
+            data: {
+                challengeId,
+                contributorId: contributor.id,
+                progress: 0,
+                completed: false,
+                joinedAt: new Date()
+            }
         });
-
-        await challenge.save();
-
-        // Add to contributor's active challenges
-        contributor.activeChallenges.push({
-            challengeId: challenge._id,
-            progress: 0,
-            target: challenge.target,
-            joined: new Date()
-        });
-
-        await contributor.save();
 
         logger.info('User joined challenge', {
             username,
@@ -128,9 +137,15 @@ export const joinChallenge = async (username, challengeId) => {
             title: challenge.title
         });
 
+        // Return updated contributor with active challenges
+        const updatedContributor = await prisma.contributor.findUnique({
+            where: { username },
+            include: { activeChallenges: true }
+        });
+
         return {
             challenge,
-            contributor
+            contributor: updatedContributor
         };
     } catch (error) {
         logger.error('Error joining challenge', {
@@ -151,56 +166,83 @@ export const joinChallenge = async (username, challengeId) => {
  */
 export const updateChallengeProgress = async (username, challengeId, increment = 1) => {
     try {
-        const challenge = await Challenge.findById(challengeId);
-        const contributor = await Contributor.findOne({ username });
+        const contributor = await prisma.contributor.findUnique({
+            where: { username },
+            select: { id: true }
+        });
 
-        if (!challenge || !contributor) {
+        if (!contributor) {
             return null;
         }
 
-        // Update challenge participant
-        const participant = challenge.participants.find(p => p.username === username);
-        if (participant) {
-            participant.progress += increment;
+        const challenge = await prisma.challenge.findUnique({
+            where: { id: challengeId }
+        });
 
-            // Check if completed
-            if (participant.progress >= challenge.target && !participant.completed) {
-                participant.completed = true;
-                await completeChallenge(username, challengeId);
-            } else {
-                await challenge.save();
-
-                // Emit progress update
-                emitChallengeProgress({
-                    username,
-                    challengeId: challenge._id,
-                    challengeName: challenge.title,
-                    progress: participant.progress,
-                    target: challenge.target,
-                    percentComplete: (participant.progress / challenge.target) * 100
-                });
+        const participant = await prisma.challengeParticipant.findUnique({
+            where: {
+                challengeId_contributorId: {
+                    challengeId,
+                    contributorId: contributor.id
+                }
             }
+        });
+
+        if (!challenge || !participant) {
+            return null;
         }
 
-        // Update contributor's active challenge
-        const activeChallenge = contributor.activeChallenges.find(
-            c => c.challengeId.toString() === challengeId
-        );
-        if (activeChallenge) {
-            activeChallenge.progress += increment;
-            await contributor.save();
+        const newProgress = participant.progress + increment;
+
+        // Check if completed
+        if (newProgress >= challenge.target && !participant.completed) {
+            await prisma.challengeParticipant.update({
+                where: {
+                    challengeId_contributorId: {
+                        challengeId,
+                        contributorId: contributor.id
+                    }
+                },
+                data: {
+                    progress: newProgress,
+                    completed: true
+                }
+            });
+            await completeChallenge(username, challengeId);
+        } else {
+            await prisma.challengeParticipant.update({
+                where: {
+                    challengeId_contributorId: {
+                        challengeId,
+                        contributorId: contributor.id
+                    }
+                },
+                data: {
+                    progress: newProgress
+                }
+            });
+
+            // Emit progress update
+            emitChallengeProgress({
+                username,
+                challengeId: challenge.id,
+                challengeName: challenge.title,
+                progress: newProgress,
+                target: challenge.target,
+                percentComplete: (newProgress / challenge.target) * 100
+            });
         }
 
         logger.info('Challenge progress updated', {
             username,
             challengeId,
-            newProgress: participant?.progress
+            newProgress
         });
 
         return {
-            progress: participant?.progress,
+            progress: newProgress,
             target: challenge.target,
-            completed: participant?.completed
+            completed: newProgress >= challenge.target
         };
     } catch (error) {
         logger.error('Error updating challenge progress', {
@@ -220,42 +262,60 @@ export const updateChallengeProgress = async (username, challengeId, increment =
  */
 export const completeChallenge = async (username, challengeId) => {
     try {
-        const challenge = await Challenge.findById(challengeId);
-        const contributor = await Contributor.findOne({ username });
+        const challenge = await prisma.challenge.findUnique({
+            where: { id: challengeId }
+        });
+
+        const contributor = await prisma.contributor.findUnique({
+            where: { username },
+            select: {
+                id: true,
+                totalPoints: true
+            }
+        });
 
         if (!challenge || !contributor) {
             throw new Error('Challenge or contributor not found');
         }
 
         // Award reward points
-        contributor.totalPoints += challenge.reward;
-        contributor.pointsHistory.push({
-            points: challenge.reward,
-            reason: 'Challenge Completed',
-            prNumber: null,
-            timestamp: new Date()
-        });
+        const newTotalPoints = Number(contributor.totalPoints) + challenge.reward;
 
-        // Move from active to completed
-        contributor.activeChallenges = contributor.activeChallenges.filter(
-            c => c.challengeId.toString() !== challengeId
-        );
-
-        contributor.completedChallenges.push({
-            challengeId: challenge._id,
-            completedAt: new Date(),
-            reward: challenge.reward
-        });
-
-        await contributor.save();
+        // Create completed challenge record and update points
+        await prisma.$transaction([
+            // Remove from active (ChallengeParticipant will be updated to completed=true by caller)
+            // Add to completed challenges
+            prisma.completedChallenge.create({
+                data: {
+                    contributorId: contributor.id,
+                    challengeId,
+                    reward: challenge.reward
+                }
+            }),
+            // Update contributor points
+            prisma.contributor.update({
+                where: { username },
+                data: {
+                    totalPoints: newTotalPoints,
+                    pointsHistory: {
+                        create: {
+                            points: challenge.reward,
+                            reason: 'Challenge Completed',
+                            prNumber: null,
+                            timestamp: new Date()
+                        }
+                    }
+                }
+            })
+        ]);
 
         // Emit completion event
         emitChallengeCompleted({
             username,
-            challengeId: challenge._id,
+            challengeId: challenge.id,
             challengeName: challenge.title,
             reward: challenge.reward,
-            totalPoints: contributor.totalPoints
+            totalPoints: newTotalPoints
         });
 
         logger.info('Challenge completed', {
@@ -268,7 +328,7 @@ export const completeChallenge = async (username, challengeId) => {
         return {
             challenge,
             reward: challenge.reward,
-            totalPoints: contributor.totalPoints
+            totalPoints: newTotalPoints
         };
     } catch (error) {
         logger.error('Error completing challenge', {
@@ -287,19 +347,43 @@ export const completeChallenge = async (username, challengeId) => {
  */
 export const getUserChallenges = async (username) => {
     try {
-        const contributor = await Contributor.findOne({ username })
-            .populate('activeChallenges.challengeId')
-            .populate('completedChallenges.challengeId');
+        const contributor = await prisma.contributor.findUnique({
+            where: { username },
+            include: {
+                activeChallenges: {
+                    include: {
+                        challenge: true
+                    }
+                },
+                completedChallenges: true
+            }
+        });
 
         if (!contributor) {
             throw new Error('Contributor not found');
         }
 
+        // Transform to match expected format
+        const activeChallenges = contributor.activeChallenges.map(ac => ({
+            challengeId: ac.challengeId,
+            progress: ac.progress,
+            target: ac.challenge.target,
+            joined: ac.joinedAt,
+            title: ac.challenge.title,
+            type: ac.challenge.type
+        }));
+
+        const completedChallenges = contributor.completedChallenges.map(cc => ({
+            challengeId: cc.challengeId,
+            completedAt: cc.completedAt,
+            reward: cc.reward
+        }));
+
         return {
             username,
-            activeChallenges: contributor.activeChallenges,
-            completedChallenges: contributor.completedChallenges,
-            totalCompleted: contributor.completedChallenges.length
+            activeChallenges,
+            completedChallenges,
+            totalCompleted: completedChallenges.length
         };
     } catch (error) {
         logger.error('Error getting user challenges', {
@@ -399,21 +483,23 @@ export const checkExpiredChallenges = async () => {
     try {
         const now = new Date();
 
-        const result = await Challenge.updateMany(
-            {
+        const result = await prisma.challenge.updateMany({
+            where: {
                 status: 'active',
-                endDate: { $lt: now }
+                endDate: {
+                    lt: now
+                }
             },
-            {
-                $set: { status: 'expired' }
+            data: {
+                status: 'expired'
             }
-        );
-
-        logger.info('Expired challenges updated', {
-            count: result.modifiedCount
         });
 
-        return result.modifiedCount;
+        logger.info('Expired challenges updated', {
+            count: result.count
+        });
+
+        return result.count;
     } catch (error) {
         logger.error('Error checking expired challenges', {
             error: error.message
@@ -429,19 +515,41 @@ export const checkExpiredChallenges = async () => {
  */
 export const getChallengeLeaderboard = async (challengeId) => {
     try {
-        const challenge = await Challenge.findById(challengeId);
+        const challenge = await prisma.challenge.findUnique({
+            where: { id: challengeId },
+            include: {
+                participants: {
+                    include: {
+                        contributor: {
+                            select: {
+                                username: true,
+                                avatarUrl: true
+                            }
+                        }
+                    },
+                    orderBy: {
+                        progress: 'desc'
+                    },
+                    take: 20
+                }
+            }
+        });
 
         if (!challenge) {
             throw new Error('Challenge not found');
         }
 
-        // Sort participants by progress
-        const leaderboard = challenge.participants
-            .sort((a, b) => b.progress - a.progress)
-            .slice(0, 20); // Top 20
+        // Transform participants to include username at top level
+        const leaderboard = challenge.participants.map(p => ({
+            username: p.contributor.username,
+            avatarUrl: p.contributor.avatarUrl,
+            progress: p.progress,
+            completed: p.completed,
+            joinedAt: p.joinedAt
+        }));
 
         return {
-            challengeId: challenge._id,
+            challengeId: challenge.id,
             title: challenge.title,
             target: challenge.target,
             leaderboard
@@ -520,25 +628,25 @@ export const createOKRChallenge = async (okrData) => {
             throw new Error('Target must be at least 1');
         }
 
-        const challenge = new Challenge({
-            title,
-            description,
-            type: 'okr-label',
-            labelFilters,
-            target,
-            reward: reward || 300, // Default OKR reward
-            startDate: startDate || new Date(),
-            endDate,
-            difficulty: difficulty || 'hard',
-            category: 'community', // OKR challenges are typically team-based
-            status: 'active',
-            okrMetadata: okrMetadata || {}
+        const challenge = await prisma.challenge.create({
+            data: {
+                title,
+                description,
+                type: 'okr-label',
+                labelFilters,
+                target,
+                reward: reward || 300, // Default OKR reward
+                startDate: startDate || new Date(),
+                endDate,
+                difficulty: difficulty || 'hard',
+                category: 'community', // OKR challenges are typically team-based
+                status: 'active',
+                okrMetadata: okrMetadata || {}
+            }
         });
 
-        await challenge.save();
-
         logger.info('OKR challenge created', {
-            challengeId: challenge._id,
+            challengeId: challenge.id,
             title: challenge.title,
             labelFilters: challenge.labelFilters,
             department: okrMetadata?.department

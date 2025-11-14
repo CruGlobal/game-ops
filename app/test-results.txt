@@ -1,0 +1,1520 @@
+
+> scoreboard@1.0.0 test
+> NODE_ENV=test node --experimental-vm-modules node_modules/.bin/jest
+
+(node:90326) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:90326) NOTE: The AWS SDK for JavaScript (v2) is in maintenance mode.
+ SDK releases are limited to address critical bug fixes and security issues only.
+
+Please migrate your code to use AWS SDK for JavaScript (v3).
+For more information, check the blog post at https://a.co/cUPnyil
+FAIL __tests__/integration/quarterlyApi.test.js (180.842 s)
+  Quarterly API Endpoints
+    GET /api/leaderboard/all-time
+      ✓ should return all-time leaderboard sorted by total points (82 ms)
+      ✕ should include rank in response (25 ms)
+      ✓ should return empty array if no contributors (16 ms)
+    GET /api/leaderboard/quarterly
+      ✕ should return current quarter leaderboard sorted by quarterly points (15 ms)
+      ✕ should include quarter info in response (13 ms)
+      ✕ should only include contributors with quarterly points > 0 (14 ms)
+    GET /api/leaderboard/quarterly/:quarter
+      ✕ should return specific quarter leaderboard from Hall of Fame (12 ms)
+      ✕ should return 404 if quarter not found (10 ms)
+      ✕ should validate quarter format (10 ms)
+    GET /api/leaderboard/hall-of-fame
+      ✓ should return all archived quarterly winners (13 ms)
+      ✓ should include top 3 and participant count (10 ms)
+      ✓ should return empty array if no winners archived (10 ms)
+    GET /api/admin/quarter-config
+      ✕ should return current quarter configuration (30053 ms)
+      ✕ should return default config if none exists (30047 ms)
+    POST /api/admin/quarter-config
+      ✕ should update quarter configuration (30037 ms)
+      ✕ should validate system type (30040 ms)
+      ✕ should validate q1StartMonth range (30032 ms)
+      ✕ should trigger quarter reset if quarter changed (30044 ms)
+
+  ● Quarterly API Endpoints › GET /api/leaderboard/all-time › should include rank in response
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 1
+    Received: undefined
+
+       96 |                 .expect(200);
+       97 |
+    >  98 |             expect(response.body.data[0].rank).toBe(1);
+          |                                                ^
+       99 |             expect(response.body.data[1].rank).toBe(2);
+      100 |         });
+      101 |
+
+      at Object.<anonymous> (__tests__/integration/quarterlyApi.test.js:98:48)
+
+  ● Quarterly API Endpoints › GET /api/leaderboard/quarterly › should return current quarter leaderboard sorted by quarterly points
+
+    expect(received).toHaveLength(expected)
+
+    Matcher error: received value must have a length property whose value must be a number
+
+    Received has type:  object
+    Received has value: {"leaderboard": [], "quarter": "2025-Q4"}
+
+      152 |
+      153 |             expect(response.body.success).toBe(true);
+    > 154 |             expect(response.body.data).toHaveLength(3);
+          |                                        ^
+      155 |
+      156 |             // Verify sorting by pointsThisQuarter descending
+      157 |             expect(response.body.data[0].username).toBe('user2');
+
+      at Object.<anonymous> (__tests__/integration/quarterlyApi.test.js:154:40)
+
+  ● Quarterly API Endpoints › GET /api/leaderboard/quarterly › should include quarter info in response
+
+    expect(received).toBeDefined()
+
+    Received: undefined
+
+      179 |                 .expect(200);
+      180 |
+    > 181 |             expect(response.body.quarter).toBeDefined();
+          |                                           ^
+      182 |             expect(response.body.quarterStart).toBeDefined();
+      183 |             expect(response.body.quarterEnd).toBeDefined();
+      184 |         });
+
+      at Object.<anonymous> (__tests__/integration/quarterlyApi.test.js:181:43)
+
+  ● Quarterly API Endpoints › GET /api/leaderboard/quarterly › should only include contributors with quarterly points > 0
+
+    expect(received).toHaveLength(expected)
+
+    Matcher error: received value must have a length property whose value must be a number
+
+    Received has type:  object
+    Received has value: {"leaderboard": [], "quarter": "2025-Q4"}
+
+      206 |                 .expect(200);
+      207 |
+    > 208 |             expect(response.body.data).toHaveLength(1);
+          |                                        ^
+      209 |             expect(response.body.data[0].username).toBe('active');
+      210 |         });
+      211 |     });
+
+      at Object.<anonymous> (__tests__/integration/quarterlyApi.test.js:208:40)
+
+  ● Quarterly API Endpoints › GET /api/leaderboard/quarterly/:quarter › should return specific quarter leaderboard from Hall of Fame
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: "2024-Q4"
+    Received: undefined
+
+      262 |
+      263 |             expect(response.body.success).toBe(true);
+    > 264 |             expect(response.body.quarter).toBe('2024-Q4');
+          |                                           ^
+      265 |             expect(response.body.data).toHaveLength(3);
+      266 |             expect(response.body.data[0].username).toBe('champion');
+      267 |             expect(response.body.totalParticipants).toBe(15);
+
+      at Object.<anonymous> (__tests__/integration/quarterlyApi.test.js:264:43)
+
+  ● Quarterly API Endpoints › GET /api/leaderboard/quarterly/:quarter › should return 404 if quarter not found
+
+    expected 404 "Not Found", got 200 "OK"
+
+      271 |             const response = await request(app)
+      272 |                 .get('/api/leaderboard/quarterly/2020-Q1')
+    > 273 |                 .expect(404);
+          |                  ^
+      274 |
+      275 |             expect(response.body.success).toBe(false);
+      276 |             expect(response.body.message).toContain('not found');
+
+      at Object.<anonymous> (__tests__/integration/quarterlyApi.test.js:273:18)
+      ----
+      at Test._assertStatus (node_modules/supertest/lib/test.js:252:14)
+      at node_modules/supertest/lib/test.js:308:13
+      at Test._assertFunction (node_modules/supertest/lib/test.js:285:13)
+      at Test.assert (node_modules/supertest/lib/test.js:164:23)
+      at Server.localAssert (node_modules/supertest/lib/test.js:120:14)
+
+  ● Quarterly API Endpoints › GET /api/leaderboard/quarterly/:quarter › should validate quarter format
+
+    expected 400 "Bad Request", got 200 "OK"
+
+      280 |             const response = await request(app)
+      281 |                 .get('/api/leaderboard/quarterly/invalid')
+    > 282 |                 .expect(400);
+          |                  ^
+      283 |
+      284 |             expect(response.body.success).toBe(false);
+      285 |         });
+
+      at Object.<anonymous> (__tests__/integration/quarterlyApi.test.js:282:18)
+      ----
+      at Test._assertStatus (node_modules/supertest/lib/test.js:252:14)
+      at node_modules/supertest/lib/test.js:308:13
+      at Test._assertFunction (node_modules/supertest/lib/test.js:285:13)
+      at Test.assert (node_modules/supertest/lib/test.js:164:23)
+      at Server.localAssert (node_modules/supertest/lib/test.js:120:14)
+
+  ● Quarterly API Endpoints › GET /api/admin/quarter-config › should return current quarter configuration
+
+    TypeError: req.isAuthenticated is not a function
+
+      2 |
+      3 | export const ensureAuthenticated = async (req, res, next) => {
+    > 4 |     if (req.isAuthenticated()) {
+        |             ^
+      5 |         const token = process.env.GITHUB_TOKEN;
+      6 |         const org = process.env.GITHUB_ORG; // Read GitHub organization from environment variable
+      7 |         const teamSlug = process.env.GITHUB_TEAM_SLUG; // Read GitHub team slug from environment variable
+
+      at ensureAuthenticated (middleware/ensureAuthenticated.js:4:13)
+      at Layer.handle [as handle_request] (node_modules/express/lib/router/layer.js:95:5)
+      at next (node_modules/express/lib/router/route.js:149:13)
+      at Route.dispatch (node_modules/express/lib/router/route.js:119:3)
+      at Layer.handle [as handle_request] (node_modules/express/lib/router/layer.js:95:5)
+      at node_modules/express/lib/router/index.js:284:15
+      at router.process_params (node_modules/express/lib/router/index.js:346:12)
+      at next (node_modules/express/lib/router/index.js:280:10)
+      at router.handle (node_modules/express/lib/router/index.js:175:3)
+      at router (node_modules/express/lib/router/index.js:47:12)
+      at Layer.handle [as handle_request] (node_modules/express/lib/router/layer.js:95:5)
+      at trim_prefix (node_modules/express/lib/router/index.js:328:13)
+      at node_modules/express/lib/router/index.js:286:9
+      at router.process_params (node_modules/express/lib/router/index.js:346:12)
+      at next (node_modules/express/lib/router/index.js:280:10)
+      at jsonParser (node_modules/body-parser/lib/types/json.js:113:7)
+      at Layer.handle [as handle_request] (node_modules/express/lib/router/layer.js:95:5)
+      at trim_prefix (node_modules/express/lib/router/index.js:328:13)
+      at node_modules/express/lib/router/index.js:286:9
+      at router.process_params (node_modules/express/lib/router/index.js:346:12)
+      at next (node_modules/express/lib/router/index.js:280:10)
+      at expressInit (node_modules/express/lib/middleware/init.js:40:5)
+      at Layer.handle [as handle_request] (node_modules/express/lib/router/layer.js:95:5)
+      at trim_prefix (node_modules/express/lib/router/index.js:328:13)
+      at node_modules/express/lib/router/index.js:286:9
+      at router.process_params (node_modules/express/lib/router/index.js:346:12)
+      at next (node_modules/express/lib/router/index.js:280:10)
+      at query (node_modules/express/lib/middleware/query.js:45:5)
+      at Layer.handle [as handle_request] (node_modules/express/lib/router/layer.js:95:5)
+      at trim_prefix (node_modules/express/lib/router/index.js:328:13)
+      at node_modules/express/lib/router/index.js:286:9
+      at router.process_params (node_modules/express/lib/router/index.js:346:12)
+      at next (node_modules/express/lib/router/index.js:280:10)
+      at router.handle (node_modules/express/lib/router/index.js:175:3)
+      at app.handle (node_modules/express/lib/application.js:181:10)
+      at Server.app (node_modules/express/lib/express.js:39:9)
+
+  ● Quarterly API Endpoints › GET /api/admin/quarter-config › should return current quarter configuration
+
+    thrown: "Exceeded timeout of 30000 ms for a test.
+    Add a timeout value to this test to increase the timeout, if this is a long-running test. See https://jestjs.io/docs/api#testname-fn-timeout."
+
+      385 |
+      386 |     describe('GET /api/admin/quarter-config', () => {
+    > 387 |         it('should return current quarter configuration', async () => {
+          |         ^
+      388 |             await prisma.quarterSettings.upsert({
+      389 |                 where: { id: 'quarter-config' },
+      390 |                 update: {
+
+      at __tests__/integration/quarterlyApi.test.js:387:9
+      at __tests__/integration/quarterlyApi.test.js:386:5
+      at __tests__/integration/quarterlyApi.test.js:15:1
+
+  ● Quarterly API Endpoints › GET /api/admin/quarter-config › should return default config if none exists
+
+    TypeError: req.isAuthenticated is not a function
+
+      2 |
+      3 | export const ensureAuthenticated = async (req, res, next) => {
+    > 4 |     if (req.isAuthenticated()) {
+        |             ^
+      5 |         const token = process.env.GITHUB_TOKEN;
+      6 |         const org = process.env.GITHUB_ORG; // Read GitHub organization from environment variable
+      7 |         const teamSlug = process.env.GITHUB_TEAM_SLUG; // Read GitHub team slug from environment variable
+
+      at ensureAuthenticated (middleware/ensureAuthenticated.js:4:13)
+      at Layer.handle [as handle_request] (node_modules/express/lib/router/layer.js:95:5)
+      at next (node_modules/express/lib/router/route.js:149:13)
+      at Route.dispatch (node_modules/express/lib/router/route.js:119:3)
+      at Layer.handle [as handle_request] (node_modules/express/lib/router/layer.js:95:5)
+      at node_modules/express/lib/router/index.js:284:15
+      at router.process_params (node_modules/express/lib/router/index.js:346:12)
+      at next (node_modules/express/lib/router/index.js:280:10)
+      at router.handle (node_modules/express/lib/router/index.js:175:3)
+      at router (node_modules/express/lib/router/index.js:47:12)
+      at Layer.handle [as handle_request] (node_modules/express/lib/router/layer.js:95:5)
+      at trim_prefix (node_modules/express/lib/router/index.js:328:13)
+      at node_modules/express/lib/router/index.js:286:9
+      at router.process_params (node_modules/express/lib/router/index.js:346:12)
+      at next (node_modules/express/lib/router/index.js:280:10)
+      at jsonParser (node_modules/body-parser/lib/types/json.js:113:7)
+      at Layer.handle [as handle_request] (node_modules/express/lib/router/layer.js:95:5)
+      at trim_prefix (node_modules/express/lib/router/index.js:328:13)
+      at node_modules/express/lib/router/index.js:286:9
+      at router.process_params (node_modules/express/lib/router/index.js:346:12)
+      at next (node_modules/express/lib/router/index.js:280:10)
+      at expressInit (node_modules/express/lib/middleware/init.js:40:5)
+      at Layer.handle [as handle_request] (node_modules/express/lib/router/layer.js:95:5)
+      at trim_prefix (node_modules/express/lib/router/index.js:328:13)
+      at node_modules/express/lib/router/index.js:286:9
+      at router.process_params (node_modules/express/lib/router/index.js:346:12)
+      at next (node_modules/express/lib/router/index.js:280:10)
+      at query (node_modules/express/lib/middleware/query.js:45:5)
+      at Layer.handle [as handle_request] (node_modules/express/lib/router/layer.js:95:5)
+      at trim_prefix (node_modules/express/lib/router/index.js:328:13)
+      at node_modules/express/lib/router/index.js:286:9
+      at router.process_params (node_modules/express/lib/router/index.js:346:12)
+      at next (node_modules/express/lib/router/index.js:280:10)
+      at router.handle (node_modules/express/lib/router/index.js:175:3)
+      at app.handle (node_modules/express/lib/application.js:181:10)
+      at Server.app (node_modules/express/lib/express.js:39:9)
+
+  ● Quarterly API Endpoints › GET /api/admin/quarter-config › should return default config if none exists
+
+    thrown: "Exceeded timeout of 30000 ms for a test.
+    Add a timeout value to this test to increase the timeout, if this is a long-running test. See https://jestjs.io/docs/api#testname-fn-timeout."
+
+      409 |         });
+      410 |
+    > 411 |         it('should return default config if none exists', async () => {
+          |         ^
+      412 |             await prisma.quarterSettings.deleteMany({});
+      413 |
+      414 |             const response = await request(app)
+
+      at __tests__/integration/quarterlyApi.test.js:411:9
+      at __tests__/integration/quarterlyApi.test.js:386:5
+      at __tests__/integration/quarterlyApi.test.js:15:1
+
+  ● Quarterly API Endpoints › POST /api/admin/quarter-config › should update quarter configuration
+
+    TypeError: req.isAuthenticated is not a function
+
+      2 |
+      3 | export const ensureAuthenticated = async (req, res, next) => {
+    > 4 |     if (req.isAuthenticated()) {
+        |             ^
+      5 |         const token = process.env.GITHUB_TOKEN;
+      6 |         const org = process.env.GITHUB_ORG; // Read GitHub organization from environment variable
+      7 |         const teamSlug = process.env.GITHUB_TEAM_SLUG; // Read GitHub team slug from environment variable
+
+      at ensureAuthenticated (middleware/ensureAuthenticated.js:4:13)
+      at Layer.handle [as handle_request] (node_modules/express/lib/router/layer.js:95:5)
+      at next (node_modules/express/lib/router/route.js:149:13)
+      at Route.dispatch (node_modules/express/lib/router/route.js:119:3)
+      at Layer.handle [as handle_request] (node_modules/express/lib/router/layer.js:95:5)
+      at node_modules/express/lib/router/index.js:284:15
+      at router.process_params (node_modules/express/lib/router/index.js:346:12)
+      at next (node_modules/express/lib/router/index.js:280:10)
+      at router.handle (node_modules/express/lib/router/index.js:175:3)
+      at router (node_modules/express/lib/router/index.js:47:12)
+      at Layer.handle [as handle_request] (node_modules/express/lib/router/layer.js:95:5)
+      at trim_prefix (node_modules/express/lib/router/index.js:328:13)
+      at node_modules/express/lib/router/index.js:286:9
+      at router.process_params (node_modules/express/lib/router/index.js:346:12)
+      at next (node_modules/express/lib/router/index.js:280:10)
+      at node_modules/body-parser/lib/read.js:137:5
+      at invokeCallback (node_modules/raw-body/index.js:238:16)
+      at done (node_modules/raw-body/index.js:227:7)
+      at IncomingMessage.onEnd (node_modules/raw-body/index.js:287:7)
+
+  ● Quarterly API Endpoints › POST /api/admin/quarter-config › should update quarter configuration
+
+    thrown: "Exceeded timeout of 30000 ms for a test.
+    Add a timeout value to this test to increase the timeout, if this is a long-running test. See https://jestjs.io/docs/api#testname-fn-timeout."
+
+      423 |
+      424 |     describe('POST /api/admin/quarter-config', () => {
+    > 425 |         it('should update quarter configuration', async () => {
+          |         ^
+      426 |             const response = await request(app)
+      427 |                 .post('/api/admin/quarter-config')
+      428 |                 .send({
+
+      at __tests__/integration/quarterlyApi.test.js:425:9
+      at __tests__/integration/quarterlyApi.test.js:424:5
+      at __tests__/integration/quarterlyApi.test.js:15:1
+
+  ● Quarterly API Endpoints › POST /api/admin/quarter-config › should validate system type
+
+    TypeError: req.isAuthenticated is not a function
+
+      2 |
+      3 | export const ensureAuthenticated = async (req, res, next) => {
+    > 4 |     if (req.isAuthenticated()) {
+        |             ^
+      5 |         const token = process.env.GITHUB_TOKEN;
+      6 |         const org = process.env.GITHUB_ORG; // Read GitHub organization from environment variable
+      7 |         const teamSlug = process.env.GITHUB_TEAM_SLUG; // Read GitHub team slug from environment variable
+
+      at ensureAuthenticated (middleware/ensureAuthenticated.js:4:13)
+      at Layer.handle [as handle_request] (node_modules/express/lib/router/layer.js:95:5)
+      at next (node_modules/express/lib/router/route.js:149:13)
+      at Route.dispatch (node_modules/express/lib/router/route.js:119:3)
+      at Layer.handle [as handle_request] (node_modules/express/lib/router/layer.js:95:5)
+      at node_modules/express/lib/router/index.js:284:15
+      at router.process_params (node_modules/express/lib/router/index.js:346:12)
+      at next (node_modules/express/lib/router/index.js:280:10)
+      at router.handle (node_modules/express/lib/router/index.js:175:3)
+      at router (node_modules/express/lib/router/index.js:47:12)
+      at Layer.handle [as handle_request] (node_modules/express/lib/router/layer.js:95:5)
+      at trim_prefix (node_modules/express/lib/router/index.js:328:13)
+      at node_modules/express/lib/router/index.js:286:9
+      at router.process_params (node_modules/express/lib/router/index.js:346:12)
+      at next (node_modules/express/lib/router/index.js:280:10)
+      at node_modules/body-parser/lib/read.js:137:5
+      at invokeCallback (node_modules/raw-body/index.js:238:16)
+      at done (node_modules/raw-body/index.js:227:7)
+      at IncomingMessage.onEnd (node_modules/raw-body/index.js:287:7)
+
+  ● Quarterly API Endpoints › POST /api/admin/quarter-config › should validate system type
+
+    thrown: "Exceeded timeout of 30000 ms for a test.
+    Add a timeout value to this test to increase the timeout, if this is a long-running test. See https://jestjs.io/docs/api#testname-fn-timeout."
+
+      444 |         });
+      445 |
+    > 446 |         it('should validate system type', async () => {
+          |         ^
+      447 |             const response = await request(app)
+      448 |                 .post('/api/admin/quarter-config')
+      449 |                 .send({
+
+      at __tests__/integration/quarterlyApi.test.js:446:9
+      at __tests__/integration/quarterlyApi.test.js:424:5
+      at __tests__/integration/quarterlyApi.test.js:15:1
+
+  ● Quarterly API Endpoints › POST /api/admin/quarter-config › should validate q1StartMonth range
+
+    TypeError: req.isAuthenticated is not a function
+
+      2 |
+      3 | export const ensureAuthenticated = async (req, res, next) => {
+    > 4 |     if (req.isAuthenticated()) {
+        |             ^
+      5 |         const token = process.env.GITHUB_TOKEN;
+      6 |         const org = process.env.GITHUB_ORG; // Read GitHub organization from environment variable
+      7 |         const teamSlug = process.env.GITHUB_TEAM_SLUG; // Read GitHub team slug from environment variable
+
+      at ensureAuthenticated (middleware/ensureAuthenticated.js:4:13)
+      at Layer.handle [as handle_request] (node_modules/express/lib/router/layer.js:95:5)
+      at next (node_modules/express/lib/router/route.js:149:13)
+      at Route.dispatch (node_modules/express/lib/router/route.js:119:3)
+      at Layer.handle [as handle_request] (node_modules/express/lib/router/layer.js:95:5)
+      at node_modules/express/lib/router/index.js:284:15
+      at router.process_params (node_modules/express/lib/router/index.js:346:12)
+      at next (node_modules/express/lib/router/index.js:280:10)
+      at router.handle (node_modules/express/lib/router/index.js:175:3)
+      at router (node_modules/express/lib/router/index.js:47:12)
+      at Layer.handle [as handle_request] (node_modules/express/lib/router/layer.js:95:5)
+      at trim_prefix (node_modules/express/lib/router/index.js:328:13)
+      at node_modules/express/lib/router/index.js:286:9
+      at router.process_params (node_modules/express/lib/router/index.js:346:12)
+      at next (node_modules/express/lib/router/index.js:280:10)
+      at node_modules/body-parser/lib/read.js:137:5
+      at invokeCallback (node_modules/raw-body/index.js:238:16)
+      at done (node_modules/raw-body/index.js:227:7)
+      at IncomingMessage.onEnd (node_modules/raw-body/index.js:287:7)
+
+  ● Quarterly API Endpoints › POST /api/admin/quarter-config › should validate q1StartMonth range
+
+    thrown: "Exceeded timeout of 30000 ms for a test.
+    Add a timeout value to this test to increase the timeout, if this is a long-running test. See https://jestjs.io/docs/api#testname-fn-timeout."
+
+      457 |         });
+      458 |
+    > 459 |         it('should validate q1StartMonth range', async () => {
+          |         ^
+      460 |             const response = await request(app)
+      461 |                 .post('/api/admin/quarter-config')
+      462 |                 .send({
+
+      at __tests__/integration/quarterlyApi.test.js:459:9
+      at __tests__/integration/quarterlyApi.test.js:424:5
+      at __tests__/integration/quarterlyApi.test.js:15:1
+
+  ● Quarterly API Endpoints › POST /api/admin/quarter-config › should trigger quarter reset if quarter changed
+
+    TypeError: req.isAuthenticated is not a function
+
+      2 |
+      3 | export const ensureAuthenticated = async (req, res, next) => {
+    > 4 |     if (req.isAuthenticated()) {
+        |             ^
+      5 |         const token = process.env.GITHUB_TOKEN;
+      6 |         const org = process.env.GITHUB_ORG; // Read GitHub organization from environment variable
+      7 |         const teamSlug = process.env.GITHUB_TEAM_SLUG; // Read GitHub team slug from environment variable
+
+      at ensureAuthenticated (middleware/ensureAuthenticated.js:4:13)
+      at Layer.handle [as handle_request] (node_modules/express/lib/router/layer.js:95:5)
+      at next (node_modules/express/lib/router/route.js:149:13)
+      at Route.dispatch (node_modules/express/lib/router/route.js:119:3)
+      at Layer.handle [as handle_request] (node_modules/express/lib/router/layer.js:95:5)
+      at node_modules/express/lib/router/index.js:284:15
+      at router.process_params (node_modules/express/lib/router/index.js:346:12)
+      at next (node_modules/express/lib/router/index.js:280:10)
+      at router.handle (node_modules/express/lib/router/index.js:175:3)
+      at router (node_modules/express/lib/router/index.js:47:12)
+      at Layer.handle [as handle_request] (node_modules/express/lib/router/layer.js:95:5)
+      at trim_prefix (node_modules/express/lib/router/index.js:328:13)
+      at node_modules/express/lib/router/index.js:286:9
+      at router.process_params (node_modules/express/lib/router/index.js:346:12)
+      at next (node_modules/express/lib/router/index.js:280:10)
+      at node_modules/body-parser/lib/read.js:137:5
+      at invokeCallback (node_modules/raw-body/index.js:238:16)
+      at done (node_modules/raw-body/index.js:227:7)
+      at IncomingMessage.onEnd (node_modules/raw-body/index.js:287:7)
+
+  ● Quarterly API Endpoints › POST /api/admin/quarter-config › should trigger quarter reset if quarter changed
+
+    thrown: "Exceeded timeout of 30000 ms for a test.
+    Add a timeout value to this test to increase the timeout, if this is a long-running test. See https://jestjs.io/docs/api#testname-fn-timeout."
+
+      470 |         });
+      471 |
+    > 472 |         it('should trigger quarter reset if quarter changed', async () => {
+          |         ^
+      473 |             // Delete the default config from beforeEach first
+      474 |             await prisma.quarterSettings.deleteMany({});
+      475 |             
+
+      at __tests__/integration/quarterlyApi.test.js:472:9
+      at __tests__/integration/quarterlyApi.test.js:424:5
+      at __tests__/integration/quarterlyApi.test.js:15:1
+
+FAIL __tests__/integration/websocket.test.js (61.54 s)
+  WebSocket Integration Tests
+    Connection Tests
+      ✓ should establish WebSocket connection (78 ms)
+      ✓ should handle disconnection (20 ms)
+      ✕ should reconnect after disconnection (30031 ms)
+    Event Emission Tests
+      ✓ should send and receive test event (39 ms)
+      ✓ should request and receive leaderboard update (27 ms)
+    Real-time Update Tests
+      ✓ should broadcast PR update to other clients (129 ms)
+      ✓ should not receive own broadcasts (233 ms)
+    Badge Award Events
+      ✓ should receive badge awarded event (82 ms)
+      ✓ should receive multiple badge events in sequence (183 ms)
+    Streak Events
+      ✓ should receive streak update event (76 ms)
+      ✓ should receive streak broken event (73 ms)
+    Challenge Events
+      ✓ should receive challenge progress update (71 ms)
+      ✓ should receive challenge completed event (72 ms)
+    Error Handling
+      ✓ should handle connection errors gracefully (24 ms)
+      ✓ should receive error events from server (86 ms)
+    Room and Namespace Tests
+      ✕ should join and leave rooms (30035 ms)
+    Performance Tests
+      ✓ should handle rapid sequential events (40 ms)
+      ✓ should measure event round-trip time (25 ms)
+    Data Integrity Tests
+      ✓ should preserve data structure in events (28 ms)
+      ✓ should handle large payloads (27 ms)
+
+  ● WebSocket Integration Tests › Connection Tests › should reconnect after disconnection
+
+    thrown: "Exceeded timeout of 30000 ms for a test while waiting for `done()` to be called.
+    Add a timeout value to this test to increase the timeout, if this is a long-running test. See https://jestjs.io/docs/api#testname-fn-timeout."
+
+      89 |         });
+      90 |
+    > 91 |         it('should reconnect after disconnection', (done) => {
+         |         ^
+      92 |             clientSocket = ioClient(`http://localhost:${TEST_PORT}`, {
+      93 |                 reconnection: true,
+      94 |                 reconnectionDelay: 100
+
+      at __tests__/integration/websocket.test.js:91:9
+      at __tests__/integration/websocket.test.js:68:5
+      at __tests__/integration/websocket.test.js:9:1
+
+  ● WebSocket Integration Tests › Room and Namespace Tests › should join and leave rooms
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: true
+    Received: false
+
+      409 |                 // Verify socket joined room
+      410 |                 const socketRooms = Array.from(serverSocket.rooms);
+    > 411 |                 expect(socketRooms.includes('test-room')).toBe(true);
+          |                                                           ^
+      412 |
+      413 |                 clientSocket.emit('leave-room', 'test-room');
+      414 |
+
+      at Timeout._onTimeout (__tests__/integration/websocket.test.js:411:59)
+
+  ● WebSocket Integration Tests › Room and Namespace Tests › should join and leave rooms
+
+    thrown: "Exceeded timeout of 30000 ms for a test while waiting for `done()` to be called.
+    Add a timeout value to this test to increase the timeout, if this is a long-running test. See https://jestjs.io/docs/api#testname-fn-timeout."
+
+      403 |         });
+      404 |
+    > 405 |         it('should join and leave rooms', (done) => {
+          |         ^
+      406 |             clientSocket.emit('join-room', 'test-room');
+      407 |
+      408 |             setTimeout(() => {
+
+      at __tests__/integration/websocket.test.js:405:9
+      at __tests__/integration/websocket.test.js:399:5
+      at __tests__/integration/websocket.test.js:9:1
+
+(node:90326) NOTE: The AWS SDK for JavaScript (v2) is in maintenance mode.
+ SDK releases are limited to address critical bug fixes and security issues only.
+
+Please migrate your code to use AWS SDK for JavaScript (v3).
+For more information, check the blog post at https://a.co/cUPnyil
+  console.error
+    Error initializing database RequestError [HttpError]: Bad credentials - https://docs.github.com/rest
+        at /Users/luisrodriguez/Documents/projects/scoreboard projects/github-pr-scoreboard/app/node_modules/@octokit/request/dist-node/index.js:125:21
+        at processTicksAndRejections (node:internal/process/task_queues:105:5)
+        at initializeDatabase (/Users/luisrodriguez/Documents/projects/scoreboard projects/github-pr-scoreboard/app/services/contributorService.js:40:31)
+        at initializeDatabaseController (/Users/luisrodriguez/Documents/projects/scoreboard projects/github-pr-scoreboard/app/controllers/contributorController.js:11:9) {
+      status: 401,
+      response: {
+        url: 'https://api.github.com/rate_limit',
+        status: 401,
+        headers: {
+          'access-control-allow-origin': '*',
+          'access-control-expose-headers': 'ETag, Link, Location, Retry-After, X-GitHub-OTP, X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Used, X-RateLimit-Resource, X-RateLimit-Reset, X-OAuth-Scopes, X-Accepted-OAuth-Scopes, X-Poll-Interval, X-GitHub-Media-Type, X-GitHub-SSO, X-GitHub-Request-Id, Deprecation, Sunset',
+          connection: 'close',
+          'content-security-policy': "default-src 'none'",
+          'content-type': 'application/json; charset=utf-8',
+          date: 'Tue, 21 Oct 2025 16:07:58 GMT',
+          'referrer-policy': 'origin-when-cross-origin, strict-origin-when-cross-origin',
+          server: 'github.com',
+          'strict-transport-security': 'max-age=31536000; includeSubdomains; preload',
+          vary: 'Accept-Encoding, Accept, X-Requested-With',
+          'x-content-type-options': 'nosniff',
+          'x-frame-options': 'deny',
+          'x-github-media-type': 'github.v3; format=json',
+          'x-github-request-id': 'DC71:3BCA6B:AC2C7E:2D956B2:68F7AFDE',
+          'x-xss-protection': '0'
+        },
+        data: {
+          message: 'Bad credentials',
+          documentation_url: 'https://docs.github.com/rest',
+          status: '401'
+        }
+      },
+      request: {
+        method: 'GET',
+        url: 'https://api.github.com/rate_limit',
+        headers: {
+          accept: 'application/vnd.github.v3+json',
+          'user-agent': 'octokit-rest.js/20.1.2 octokit-core.js/5.2.2 Node.js/24',
+          authorization: 'token [REDACTED]'
+        },
+        request: {
+          fetch: [AsyncFunction: fetch],
+          hook: [Function: bound bound register]
+        }
+      }
+    }
+
+       95 |         return 'Database initialized successfully.';
+       96 |     } catch (err) {
+    >  97 |         console.error('Error initializing database', err);
+          |                 ^
+       98 |         throw err;
+       99 |     }
+      100 | };
+
+      at initializeDatabase (services/contributorService.js:97:17)
+      at initializeDatabaseController (controllers/contributorController.js:11:9)
+
+  console.log
+    Created default quarter configuration (calendar)
+
+      at getQuarterConfig (services/quarterlyService.js:21:17)
+
+  console.log
+    Initializing quarterly system for 2025-Q4
+
+      at checkAndResetIfNewQuarter (services/quarterlyService.js:514:21)
+
+  console.log
+    Resetting quarterly stats for 2025-Q4
+
+      at resetQuarterlyStats (services/quarterlyService.js:269:17)
+
+  console.log
+    Reset quarterly stats for 0 contributors
+
+      at resetQuarterlyStats (services/quarterlyService.js:286:17)
+
+  console.error
+    Gamification error for PR: 1 RequestError [HttpError]: request to https://api.github.com/users/testuser failed, reason: Nock: No match for request {
+      "method": "GET",
+      "url": "https://api.github.com/users/testuser",
+      "headers": {
+        "accept": "application/vnd.github.v3+json",
+        "accept-encoding": "gzip, deflate, br",
+        "authorization": "token test_github_token_123",
+        "user-agent": "octokit-rest.js/20.1.2 octokit-core.js/5.2.2 Node.js/24"
+      }
+    }
+        at /Users/luisrodriguez/Documents/projects/scoreboard projects/github-pr-scoreboard/app/node_modules/@octokit/request/dist-node/index.js:157:11
+        at processTicksAndRejections (node:internal/process/task_queues:105:5)
+        at updateContributor (/Users/luisrodriguez/Documents/projects/scoreboard projects/github-pr-scoreboard/app/services/contributorService.js:107:32)
+        at fetchPullRequests (/Users/luisrodriguez/Documents/projects/scoreboard projects/github-pr-scoreboard/app/services/contributorService.js:270:21)
+        at fetchPRs (/Users/luisrodriguez/Documents/projects/scoreboard projects/github-pr-scoreboard/app/controllers/contributorController.js:21:9) {
+      status: 500,
+      request: {
+        method: 'GET',
+        url: 'https://api.github.com/users/testuser',
+        headers: {
+          accept: 'application/vnd.github.v3+json',
+          'user-agent': 'octokit-rest.js/20.1.2 octokit-core.js/5.2.2 Node.js/24',
+          authorization: 'token [REDACTED]'
+        },
+        request: {
+          fetch: [AsyncFunction: fetch],
+          hook: [Function: bound bound register]
+        }
+      }
+    }
+
+      338 |                 }  // End if (merged)
+      339 |             } catch (gamificationError) {
+    > 340 |                 console.error('Gamification error for PR:', pr.number, gamificationError);
+          |                         ^
+      341 |                 // Don't fail the whole process if gamification fails
+      342 |             }
+      343 |
+
+      at fetchPullRequests (services/contributorService.js:340:25)
+      at fetchPRs (controllers/contributorController.js:21:9)
+
+  console.error
+    Error fetching pull requests RequestError [HttpError]: request to https://api.github.com/repos/TestOrg/test-repo/pulls/1/reviews?per_page=100 failed, reason: Nock: No match for request {
+      "method": "GET",
+      "url": "https://api.github.com/repos/TestOrg/test-repo/pulls/1/reviews?per_page=100",
+      "headers": {
+        "accept": "application/vnd.github.v3+json",
+        "accept-encoding": "gzip, deflate, br",
+        "authorization": "token test_github_token_123",
+        "user-agent": "octokit-rest.js/20.1.2 octokit-core.js/5.2.2 Node.js/24"
+      }
+    }
+        at /Users/luisrodriguez/Documents/projects/scoreboard projects/github-pr-scoreboard/app/node_modules/@octokit/request/dist-node/index.js:157:11
+        at processTicksAndRejections (node:internal/process/task_queues:105:5)
+        at fetchPullRequests (/Users/luisrodriguez/Documents/projects/scoreboard projects/github-pr-scoreboard/app/services/contributorService.js:344:39)
+        at fetchPRs (/Users/luisrodriguez/Documents/projects/scoreboard projects/github-pr-scoreboard/app/controllers/contributorController.js:21:9) {
+      status: 500,
+      request: {
+        method: 'GET',
+        url: 'https://api.github.com/repos/TestOrg/test-repo/pulls/1/reviews?per_page=100',
+        headers: {
+          accept: 'application/vnd.github.v3+json',
+          'user-agent': 'octokit-rest.js/20.1.2 octokit-core.js/5.2.2 Node.js/24',
+          authorization: 'token [REDACTED]'
+        },
+        request: {
+          fetch: [AsyncFunction: fetch],
+          hook: [Function: bound bound register]
+        }
+      }
+    }
+
+      470 |         await updateLastFetchDate(new Date()); // Update the last fetch date
+      471 |     } catch (err) {
+    > 472 |         console.error('Error fetching pull requests', err); // Log any errors
+          |                 ^
+      473 |     }
+      474 | };
+      475 |
+
+      at fetchPullRequests (services/contributorService.js:472:17)
+      at fetchPRs (controllers/contributorController.js:21:9)
+
+  console.log
+    🎉 Congratulations @newuser, you've earned the 1st PR badge! 🎉
+    
+    ![Badge](https://test.example.com/images/1st_pr_badge.png)
+
+      at awardBadges (services/contributorService.js:548:25)
+
+  console.log
+    🎉 Congratulations @productive, you've earned 1 Bill(s)! 🎉
+    
+    ![Bill](https://test.example.com/images/1_bill_57X27.png)
+
+      at awardBillsAndVonettes (services/contributorService.js:953:25)
+
+FAIL __tests__/integration/api.test.js
+  API Integration Tests
+    GET /api/top-contributors
+      ✓ should return top contributors successfully (45 ms)
+      ✓ should return empty array when no contributors exist (11 ms)
+    GET /api/top-reviewers
+      ✓ should return top reviewers successfully (11 ms)
+    GET /api/top-contributors-date-range
+      ✓ should return contributors within date range (15 ms)
+      ✓ should return error when range parameter is missing (7 ms)
+    POST /api/admin/login
+      ✕ should return JWT token for valid credentials (13 ms)
+      ✓ should return 401 for invalid credentials (12 ms)
+      ✓ should return 400 for missing credentials (10 ms)
+    GET /api/initialize-database
+      ✕ should initialize database with valid token (196 ms)
+      ✓ should return 401 without authentication token (18 ms)
+      ✓ should return 403 with invalid token (18 ms)
+    GET /api/fetch-pull-requests
+      ✓ should fetch pull requests with valid token (55 ms)
+      ✓ should return 401 without authentication (22 ms)
+    GET /api/award-badges
+      ✓ should award badges with valid token (34 ms)
+    GET /api/award-bills-vonettes
+      ✓ should award bills with valid token (31 ms)
+    GET /api/admin/contributors
+      ✕ should return all contributors for admin (33 ms)
+    GET /api/badges
+      ✓ should return list of available badges (19 ms)
+    GET /api/auth/status
+      ✕ should return authentication status (20 ms)
+
+  ● API Integration Tests › POST /api/admin/login › should return JWT token for valid credentials
+
+    JsonWebTokenError: invalid signature
+
+      144 |       
+      145 |       // Verify the token is valid
+    > 146 |       const decoded = jwt.verify(response.body.token, process.env.JWT_SECRET);
+          |                           ^
+      147 |       expect(decoded.username).toBe('testadmin');
+      148 |     });
+      149 |
+
+      at node_modules/jsonwebtoken/verify.js:171:19
+      at getSecret (node_modules/jsonwebtoken/verify.js:97:14)
+      at Object.<anonymous>.module.exports [as verify] (node_modules/jsonwebtoken/verify.js:101:10)
+      at Object.<anonymous> (__tests__/integration/api.test.js:146:27)
+
+  ● API Integration Tests › GET /api/initialize-database › should initialize database with valid token
+
+    expected 200 "OK", got 500 "Internal Server Error"
+
+      178 |         .get('/api/initialize-database')
+      179 |         .set('Authorization', `Bearer ${authToken}`)
+    > 180 |         .expect(200);
+          |          ^
+      181 |
+      182 |       expect(response.text).toBe('Database initialized successfully.');
+      183 |     });
+
+      at Object.<anonymous> (__tests__/integration/api.test.js:180:10)
+      ----
+      at Test._assertStatus (node_modules/supertest/lib/test.js:252:14)
+      at node_modules/supertest/lib/test.js:308:13
+      at Test._assertFunction (node_modules/supertest/lib/test.js:285:13)
+      at Test.assert (node_modules/supertest/lib/test.js:164:23)
+      at Server.localAssert (node_modules/supertest/lib/test.js:120:14)
+
+  ● API Integration Tests › GET /api/admin/contributors › should return all contributors for admin
+
+    expect(received).toHaveLength(expected)
+
+    Expected length: 2
+    Received length: 0
+    Received array:  []
+
+      298 |         .expect(200);
+      299 |
+    > 300 |       expect(response.body).toHaveLength(2);
+          |                             ^
+      301 |       expect(response.body[0].username).toBeDefined();
+      302 |       expect(response.body[1].username).toBeDefined();
+      303 |     });
+
+      at Object.<anonymous> (__tests__/integration/api.test.js:300:29)
+
+  ● API Integration Tests › GET /api/auth/status › should return authentication status
+
+    expected 200 "OK", got 500 "Internal Server Error"
+
+      320 |       const response = await request(app)
+      321 |         .get('/api/auth/status')
+    > 322 |         .expect(200);
+          |          ^
+      323 |
+      324 |       expect(response.body.isAuthenticated).toBe(false);
+      325 |     });
+
+      at Object.<anonymous> (__tests__/integration/api.test.js:322:10)
+      ----
+      at Test._assertStatus (node_modules/supertest/lib/test.js:252:14)
+      at node_modules/supertest/lib/test.js:308:13
+      at Test._assertFunction (node_modules/supertest/lib/test.js:285:13)
+      at Test.assert (node_modules/supertest/lib/test.js:164:23)
+      at Server.localAssert (node_modules/supertest/lib/test.js:120:14)
+
+(node:90326) NOTE: The AWS SDK for JavaScript (v2) is in maintenance mode.
+ SDK releases are limited to address critical bug fixes and security issues only.
+
+Please migrate your code to use AWS SDK for JavaScript (v3).
+For more information, check the blog post at https://a.co/cUPnyil
+  console.error
+    Error initializing database RequestError [HttpError]: Bad credentials - https://docs.github.com/rest
+        at /Users/luisrodriguez/Documents/projects/scoreboard projects/github-pr-scoreboard/app/node_modules/@octokit/request/dist-node/index.js:125:21
+        at processTicksAndRejections (node:internal/process/task_queues:105:5)
+        at initializeDatabase (/Users/luisrodriguez/Documents/projects/scoreboard projects/github-pr-scoreboard/app/services/contributorService.js:40:31)
+        at Object.<anonymous> (/Users/luisrodriguez/Documents/projects/scoreboard projects/github-pr-scoreboard/app/__tests__/unit/contributorService.test.js:27:22) {
+      status: 401,
+      response: {
+        url: 'https://api.github.com/rate_limit',
+        status: 401,
+        headers: {
+          'access-control-allow-origin': '*',
+          'access-control-expose-headers': 'ETag, Link, Location, Retry-After, X-GitHub-OTP, X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Used, X-RateLimit-Resource, X-RateLimit-Reset, X-OAuth-Scopes, X-Accepted-OAuth-Scopes, X-Poll-Interval, X-GitHub-Media-Type, X-GitHub-SSO, X-GitHub-Request-Id, Deprecation, Sunset',
+          connection: 'close',
+          'content-security-policy': "default-src 'none'",
+          'content-type': 'application/json; charset=utf-8',
+          date: 'Tue, 21 Oct 2025 16:07:59 GMT',
+          'referrer-policy': 'origin-when-cross-origin, strict-origin-when-cross-origin',
+          server: 'github.com',
+          'strict-transport-security': 'max-age=31536000; includeSubdomains; preload',
+          vary: 'Accept-Encoding, Accept, X-Requested-With',
+          'x-content-type-options': 'nosniff',
+          'x-frame-options': 'deny',
+          'x-github-media-type': 'github.v3; format=json',
+          'x-github-request-id': 'DC8A:26375:B462BA:2F987F6:68F7AFDF',
+          'x-xss-protection': '0'
+        },
+        data: {
+          message: 'Bad credentials',
+          documentation_url: 'https://docs.github.com/rest',
+          status: '401'
+        }
+      },
+      request: {
+        method: 'GET',
+        url: 'https://api.github.com/rate_limit',
+        headers: {
+          accept: 'application/vnd.github.v3+json',
+          'user-agent': 'octokit-rest.js/20.1.2 octokit-core.js/5.2.2 Node.js/24',
+          authorization: 'token [REDACTED]'
+        },
+        request: {
+          fetch: [AsyncFunction: fetch],
+          hook: [Function: bound bound register]
+        }
+      }
+    }
+
+       95 |         return 'Database initialized successfully.';
+       96 |     } catch (err) {
+    >  97 |         console.error('Error initializing database', err);
+          |                 ^
+       98 |         throw err;
+       99 |     }
+      100 | };
+
+      at initializeDatabase (services/contributorService.js:97:17)
+      at Object.<anonymous> (__tests__/unit/contributorService.test.js:27:22)
+
+  console.warn
+    Deprecation: [@octokit/request-error] `error.code` is deprecated, use `error.status`.
+        at RequestError.get (/Users/luisrodriguez/Documents/projects/scoreboard projects/github-pr-scoreboard/app/node_modules/@octokit/request-error/dist-node/index.js:70:11)
+        at isAssertionError (/Users/luisrodriguez/Documents/projects/scoreboard projects/github-pr-scoreboard/app/node_modules/jest-circus/build/formatNodeAssertErrors.js:179:13)
+        at /Users/luisrodriguez/Documents/projects/scoreboard projects/github-pr-scoreboard/app/node_modules/jest-circus/build/formatNodeAssertErrors.js:58:14
+        at Array.map (<anonymous>)
+        at formatNodeAssertErrors (/Users/luisrodriguez/Documents/projects/scoreboard projects/github-pr-scoreboard/app/node_modules/jest-circus/build/formatNodeAssertErrors.js:39:43)
+        at dispatch (/Users/luisrodriguez/Documents/projects/scoreboard projects/github-pr-scoreboard/app/node_modules/jest-circus/build/state.js:67:11)
+        at _runTest (/Users/luisrodriguez/Documents/projects/scoreboard projects/github-pr-scoreboard/app/node_modules/jest-circus/build/run.js:264:3)
+        at _runTestsForDescribeBlock (/Users/luisrodriguez/Documents/projects/scoreboard projects/github-pr-scoreboard/app/node_modules/jest-circus/build/run.js:126:9)
+        at _runTestsForDescribeBlock (/Users/luisrodriguez/Documents/projects/scoreboard projects/github-pr-scoreboard/app/node_modules/jest-circus/build/run.js:121:9)
+        at _runTestsForDescribeBlock (/Users/luisrodriguez/Documents/projects/scoreboard projects/github-pr-scoreboard/app/node_modules/jest-circus/build/run.js:121:9)
+        at run (/Users/luisrodriguez/Documents/projects/scoreboard projects/github-pr-scoreboard/app/node_modules/jest-circus/build/run.js:71:3)
+        at runAndTransformResultsToJestFormat (/Users/luisrodriguez/Documents/projects/scoreboard projects/github-pr-scoreboard/app/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)
+        at jestAdapter (/Users/luisrodriguez/Documents/projects/scoreboard projects/github-pr-scoreboard/app/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
+        at runTestInternal (/Users/luisrodriguez/Documents/projects/scoreboard projects/github-pr-scoreboard/app/node_modules/jest-runner/build/runTest.js:367:16)
+        at runTest (/Users/luisrodriguez/Documents/projects/scoreboard projects/github-pr-scoreboard/app/node_modules/jest-runner/build/runTest.js:444:34)
+
+      at node_modules/@octokit/request-error/dist-node/index.js:38:69
+      at f (node_modules/once/once.js:25:25)
+      at RequestError.get (node_modules/@octokit/request-error/dist-node/index.js:69:9)
+          at Array.map (<anonymous>)
+
+  console.log
+    🎉 Congratulations @newuser, you've earned the 1st PR badge! 🎉
+    
+    ![Badge](https://test.example.com/images/1st_pr_badge.png)
+
+      at awardBadges (services/contributorService.js:548:25)
+
+  console.log
+    🎉 Congratulations @experienced, you've earned the 10 PR badge! 🎉
+    
+    ![Badge](https://test.example.com/images/10_prs_badge.png)
+
+      at awardBadges (services/contributorService.js:548:25)
+
+  console.log
+    🎉 Congratulations @reviewer, you've earned the 1st Review badge! 🎉
+    
+    ![Badge](https://test.example.com/images/1st_review_badge.png)
+
+      at awardBadges (services/contributorService.js:548:25)
+
+  console.log
+    🎉 Congratulations @existing, you've earned the 1st Review badge! 🎉
+    
+    ![Badge](https://test.example.com/images/1st_review_badge.png)
+
+      at awardBadges (services/contributorService.js:548:25)
+
+  console.log
+    🎉 Congratulations @productive, you've earned 1 Bill(s)! 🎉
+    
+    ![Bill](https://test.example.com/images/1_bill_57X27.png)
+
+      at awardBillsAndVonettes (services/contributorService.js:953:25)
+
+  console.log
+    🎉 Congratulations @reviewer, you've earned 1 Bill(s)! 🎉
+    
+    ![Bill](https://test.example.com/images/1_bill_57X27.png)
+
+      at awardBillsAndVonettes (services/contributorService.js:953:25)
+
+  console.log
+    🎉 Congratulations @superstar, you've earned 5 Vonette(s)! 🎉
+    
+    ![Vonette](https://test.example.com/images/5_vonett_57_25.png)
+
+      at awardBillsAndVonettes (services/contributorService.js:953:25)
+
+  console.log
+    🎉 Congratulations @consistent, you've earned 1 Bill(s)! 🎉
+    
+    ![Bill](https://test.example.com/images/1_bill_57X27.png)
+
+      at awardBillsAndVonettes (services/contributorService.js:953:25)
+
+FAIL __tests__/unit/contributorService.test.js
+  ContributorService
+    initializeDatabase
+      ✕ should initialize database successfully (195 ms)
+    getTopContributors
+      ✓ should return top contributors sorted by PR count (29 ms)
+      ✓ should exclude bot users from results (24 ms)
+    getTopReviewers
+      ✓ should return top reviewers sorted by review count (25 ms)
+    awardBadges
+      ✓ should award 1st PR badge to new contributors (30 ms)
+      ✓ should award 10 PR badge to contributors with 10+ PRs (21 ms)
+      ✓ should award review badges to reviewers (26 ms)
+      ✓ should not award duplicate badges (23 ms)
+      ✓ should skip bot users when awarding badges (22 ms)
+    awardBillsAndVonettes
+      ✓ should award Bill for 10+ PRs (31 ms)
+      ✓ should award Bill for 10+ reviews (28 ms)
+      ✓ should award Vonette for 500+ PRs (28 ms)
+      ✓ should award incremental Bills based on total contributions (30 ms)
+      ✓ should not award bills to already-awarded contributors (21 ms)
+      ✓ should skip bot users when awarding bills (19 ms)
+
+  ● ContributorService › initializeDatabase › should initialize database successfully
+
+    HttpError: Bad credentials - https://docs.github.com/rest
+
+      38 |         while (hasMorePages) {
+      39 |             // Check rate limit
+    > 40 |             const rateLimit = await octokit.rateLimit.get();
+         |                               ^
+      41 |             const remainingRequests = rateLimit.data.rate.remaining;
+      42 |             const resetTime = rateLimit.data.rate.reset * 1000; // Convert to milliseconds
+      43 |
+
+      at node_modules/@octokit/request/dist-node/index.js:125:21
+      at initializeDatabase (services/contributorService.js:40:31)
+      at Object.<anonymous> (__tests__/unit/contributorService.test.js:27:22)
+
+(node:90326) NOTE: The AWS SDK for JavaScript (v2) is in maintenance mode.
+ SDK releases are limited to address critical bug fixes and security issues only.
+
+Please migrate your code to use AWS SDK for JavaScript (v3).
+For more information, check the blog post at https://a.co/cUPnyil
+  console.log
+    🎉 Congratulations @newcomer, you've earned the 1st PR badge! 🎉
+    
+    ![Badge](https://test.example.com/images/1st_pr_badge.png)
+
+      at awardBadges (services/contributorService.js:548:25)
+
+  console.log
+    🎉 Congratulations @user_10, you've earned the 10 PR badge! 🎉
+    
+    ![Badge](https://test.example.com/images/10_prs_badge.png)
+
+      at awardBadges (services/contributorService.js:548:25)
+
+  console.log
+    🎉 Congratulations @user_50, you've earned the 50 PR badge! 🎉
+    
+    ![Badge](https://test.example.com/images/50_prs_badge.png)
+
+      at awardBadges (services/contributorService.js:548:25)
+
+  console.log
+    🎉 Congratulations @user_100, you've earned the 100 PR badge! 🎉
+    
+    ![Badge](https://test.example.com/images/100_prs_badge.png)
+
+      at awardBadges (services/contributorService.js:548:25)
+
+  console.log
+    🎉 Congratulations @user_500, you've earned the 500 PR badge! 🎉
+    
+    ![Badge](https://test.example.com/images/500_prs_badge.png)
+
+      at awardBadges (services/contributorService.js:548:25)
+
+  console.log
+    🎉 Congratulations @user_1000, you've earned the 1000 PR badge! 🎉
+    
+    ![Badge](https://test.example.com/images/1000_prs_badge.png)
+
+      at awardBadges (services/contributorService.js:548:25)
+
+  console.log
+    🎉 Congratulations @jumper, you've earned the 1st PR badge! 🎉
+    
+    ![Badge](https://test.example.com/images/1st_pr_badge.png)
+
+      at awardBadges (services/contributorService.js:548:25)
+
+  console.log
+    🎉 Congratulations @reviewer_1, you've earned the 1st Review badge! 🎉
+    
+    ![Badge](https://test.example.com/images/1st_review_badge.png)
+
+      at awardBadges (services/contributorService.js:548:25)
+
+  console.log
+    🎉 Congratulations @reviewer_10, you've earned the 10 Reviews badge! 🎉
+    
+    ![Badge](https://test.example.com/images/10_reviews_badge.png)
+
+      at awardBadges (services/contributorService.js:548:25)
+
+  console.log
+    🎉 Congratulations @reviewer_50, you've earned the 50 Reviews badge! 🎉
+    
+    ![Badge](https://test.example.com/images/50_reviews_badge.png)
+
+      at awardBadges (services/contributorService.js:548:25)
+
+  console.log
+    🎉 Congratulations @reviewer_100, you've earned the 100 Reviews badge! 🎉
+    
+    ![Badge](https://test.example.com/images/100_reviews_badge.png)
+
+      at awardBadges (services/contributorService.js:548:25)
+
+  console.log
+    🎉 Congratulations @reviewer_500, you've earned the 500 Reviews badge! 🎉
+    
+    ![Badge](https://test.example.com/images/500_reviews_badge.png)
+
+      at awardBadges (services/contributorService.js:548:25)
+
+  console.log
+    🎉 Congratulations @reviewer_1000, you've earned the 1000 Reviews badge! 🎉
+    
+    ![Badge](https://test.example.com/images/1000_reviews_badge.png)
+
+      at awardBadges (services/contributorService.js:548:25)
+
+  console.log
+    🎉 Congratulations @active_contributor, you've earned the 1st PR badge! 🎉
+    
+    ![Badge](https://test.example.com/images/1st_pr_badge.png)
+
+      at awardBadges (services/contributorService.js:548:25)
+
+  console.log
+    🎉 Congratulations @active_contributor, you've earned the 1st Review badge! 🎉
+    
+    ![Badge](https://test.example.com/images/1st_review_badge.png)
+
+      at awardBadges (services/contributorService.js:548:25)
+
+  console.log
+    🎉 Congratulations @persistent_user, you've earned the 1st PR badge! 🎉
+    
+    ![Badge](https://test.example.com/images/1st_pr_badge.png)
+
+      at awardBadges (services/contributorService.js:548:25)
+
+  console.log
+    🎉 Congratulations @persistent_user, you've earned the 10 PR badge! 🎉
+    
+    ![Badge](https://test.example.com/images/10_prs_badge.png)
+
+      at awardBadges (services/contributorService.js:548:25)
+
+  console.log
+    🎉 Congratulations @ten_pr_user, you've earned 1 Bill(s)! 🎉
+    
+    ![Bill](https://test.example.com/images/1_bill_57X27.png)
+
+      at awardBillsAndVonettes (services/contributorService.js:953:25)
+
+  console.log
+    🎉 Congratulations @ten_review_user, you've earned 1 Bill(s)! 🎉
+    
+    ![Bill](https://test.example.com/images/1_bill_57X27.png)
+
+      at awardBillsAndVonettes (services/contributorService.js:953:25)
+
+  console.log
+    🎉 Congratulations @superstar_pr, you've earned 5 Vonette(s)! 🎉
+    
+    ![Vonette](https://test.example.com/images/5_vonett_57_25.png)
+
+      at awardBillsAndVonettes (services/contributorService.js:953:25)
+
+  console.log
+    🎉 Congratulations @superstar_reviewer, you've earned 5 Vonette(s)! 🎉
+    
+    ![Vonette](https://test.example.com/images/5_vonett_57_25.png)
+
+      at awardBillsAndVonettes (services/contributorService.js:953:25)
+
+  console.log
+    🎉 Congratulations @consistent_contributor, you've earned 1 Bill(s)! 🎉
+    
+    ![Bill](https://test.example.com/images/1_bill_57X27.png)
+
+      at awardBillsAndVonettes (services/contributorService.js:953:25)
+
+  console.log
+    🎉 Congratulations @super_contributor, you've earned 1 Bill(s)! 🎉
+    
+    ![Bill](https://test.example.com/images/1_bill_57X27.png)
+
+      at awardBillsAndVonettes (services/contributorService.js:953:25)
+
+  console.log
+    🎉 Congratulations @super_contributor, you've earned 2 Bill(s)! 🎉
+    
+    ![Bill](https://test.example.com/images/1_bill_57X27.png)
+
+      at awardBillsAndVonettes (services/contributorService.js:953:25)
+
+  console.log
+    🎉 Congratulations @complex_case, you've earned 5 Vonette(s)! 🎉
+    
+    ![Vonette](https://test.example.com/images/5_vonett_57_25.png)
+
+      at awardBillsAndVonettes (services/contributorService.js:953:25)
+
+  console.log
+    🎉 Congratulations @vonette_user, you've earned 5 Vonette(s)! 🎉
+    
+    ![Vonette](https://test.example.com/images/5_vonett_57_25.png)
+
+      at awardBillsAndVonettes (services/contributorService.js:953:25)
+
+PASS __tests__/unit/badgeAndBillLogic.test.js
+  Badge and Bill Awarding Logic
+    Badge Awarding Logic
+      PR Badges
+        ✓ should award 1st PR badge for first contribution (63 ms)
+        ✓ should award milestone PR badges at correct thresholds (48 ms)
+        ✓ should not award higher tier badges without prerequisite badges (15 ms)
+      Review Badges
+        ✓ should award review badges at correct thresholds (39 ms)
+        ✓ should award both PR and review badges to active contributors (12 ms)
+      Badge Persistence
+        ✓ should save awarded badges to the database (14 ms)
+    Bill and Vonette Awarding Logic
+      Initial Milestone Awards
+        ✓ should award Bill for reaching 10 PRs (11 ms)
+        ✓ should award Bill for reaching 10 reviews (11 ms)
+        ✓ should award Vonette for reaching 500 PRs (12 ms)
+        ✓ should award Vonette for reaching 500 reviews (11 ms)
+      Incremental Bill Awards
+        ✓ should award incremental Bills for every 100 total contributions (11 ms)
+        ✓ should award multiple incremental Bills if needed (13 ms)
+        ✓ should not award bills if no new milestones reached (8 ms)
+      Complex Scenarios
+        ✓ should handle both milestone and incremental awards correctly (11 ms)
+        ✓ should prioritize Vonette over incremental Bills in display (12 ms)
+      Edge Cases
+        ✓ should handle users with zero contributions (9 ms)
+        ✓ should handle users who already have all possible milestone awards (8 ms)
+        ✓ should skip bot users (8 ms)
+
+  console.info
+    [2025-10-21T16:08:00.030Z] INFO: Streak started { username: 'newcomer' }
+
+      at Logger._log (utils/logger.js:56:29)
+
+  console.info
+    [2025-10-21T16:08:00.047Z] INFO: Streak continued { username: 'consistent', currentStreak: 6 }
+
+      at Logger._log (utils/logger.js:56:29)
+
+  console.info
+    [2025-10-21T16:08:00.061Z] INFO: Streak broken { username: 'broken', oldStreak: 10, newStreak: 1 }
+
+      at Logger._log (utils/logger.js:56:29)
+
+  console.info
+    [2025-10-21T16:08:00.069Z] INFO: Streak continued { username: 'recordBreaker', currentStreak: 21 }
+
+      at Logger._log (utils/logger.js:56:29)
+
+  console.info
+    [2025-10-21T16:08:00.076Z] INFO: Streak badge awarded { username: 'weekWarrior', badge: '7-day streak' }
+
+      at Logger._log (utils/logger.js:56:29)
+
+  console.info
+    [2025-10-21T16:08:00.084Z] INFO: Streak badge awarded { username: 'monthlyMaster', badge: '30-day streak' }
+
+      at Logger._log (utils/logger.js:56:29)
+
+  console.info
+    [2025-10-21T16:08:00.090Z] INFO: Streak badge awarded { username: 'quarterChamp', badge: '90-day streak' }
+
+      at Logger._log (utils/logger.js:56:29)
+
+  console.info
+    [2025-10-21T16:08:00.097Z] INFO: Streak badge awarded { username: 'yearHero', badge: '365-day streak' }
+
+      at Logger._log (utils/logger.js:56:29)
+
+  console.info
+    [2025-10-21T16:08:00.104Z] INFO: Streak badge awarded { username: 'multiBadge', badge: '7-day streak' }
+
+      at Logger._log (utils/logger.js:56:29)
+
+  console.info
+    [2025-10-21T16:08:00.104Z] INFO: Streak badge awarded { username: 'multiBadge', badge: '30-day streak' }
+
+      at Logger._log (utils/logger.js:56:29)
+
+  console.info
+    [2025-10-21T16:08:00.104Z] INFO: Streak badge awarded { username: 'multiBadge', badge: '90-day streak' }
+
+      at Logger._log (utils/logger.js:56:29)
+
+  console.info
+    [2025-10-21T16:08:00.121Z] INFO: Streak reset { username: 'resetUser' }
+
+      at Logger._log (utils/logger.js:56:29)
+
+  console.info
+    [2025-10-21T16:08:00.176Z] INFO: Streak continued { username: 'dateEdge', currentStreak: 2 }
+
+      at Logger._log (utils/logger.js:56:29)
+
+FAIL __tests__/unit/streakService.test.js
+  StreakService
+    updateStreak
+      ✓ should start a new streak for first contribution (32 ms)
+      ✓ should increment streak for consecutive day contribution (9 ms)
+      ✓ should not change streak for same-day contribution (6 ms)
+      ✓ should reset streak when contribution gap is more than 1 day (8 ms)
+      ✓ should update longest streak when current exceeds it (7 ms)
+    checkStreakBadges
+      ✓ should award Week Warrior badge for 7-day streak (8 ms)
+      ✓ should award Monthly Master badge for 30-day streak (7 ms)
+      ✓ should award Quarter Champion badge for 90-day streak (6 ms)
+      ✓ should award Year-Long Hero badge for 365-day streak (6 ms)
+      ✓ should award multiple badges at once if eligible (7 ms)
+      ✓ should not award badges already earned (5 ms)
+      ✓ should return empty array for streak below first threshold (5 ms)
+    resetStreak
+      ✓ should reset streak to zero (6 ms)
+    getStreakStats
+      ✓ should return streak statistics for existing user (6 ms)
+      ✓ should return default stats for non-existent user (5 ms)
+    getStreakLeaderboard
+      ✓ should return top contributors by current streak (7 ms)
+      ✓ should use longest streak as tiebreaker (6 ms)
+      ✓ should return top 10 by default (8 ms)
+      ✓ should return selected fields only (6 ms)
+      ✓ should return empty array when no contributors exist (5 ms)
+    Edge Cases
+      ✕ should handle contributor save errors gracefully (5 ms)
+      ✓ should handle date edge cases correctly (6 ms)
+
+  ● StreakService › Edge Cases › should handle contributor save errors gracefully
+
+    expect(received).rejects.toThrow()
+
+    Received promise resolved instead of rejected
+    Resolved to value: {"currentStreak": 5, "streakBroken": false, "streakContinued": false}
+
+      430 |             contributor.username = null; // Invalid username
+      431 |
+    > 432 |             await expect(updateStreak(contributor, new Date())).rejects.toThrow();
+          |                   ^
+      433 |         });
+      434 |
+      435 |         it('should handle date edge cases correctly', async () => {
+
+      at expect (node_modules/expect/build/index.js:113:15)
+      at Object.<anonymous> (__tests__/unit/streakService.test.js:432:19)
+
+(node:90326) NOTE: The AWS SDK for JavaScript (v2) is in maintenance mode.
+ SDK releases are limited to address critical bug fixes and security issues only.
+
+Please migrate your code to use AWS SDK for JavaScript (v3).
+For more information, check the blog post at https://a.co/cUPnyil
+(node:90326) NOTE: The AWS SDK for JavaScript (v2) is in maintenance mode.
+ SDK releases are limited to address critical bug fixes and security issues only.
+
+Please migrate your code to use AWS SDK for JavaScript (v3).
+For more information, check the blog post at https://a.co/cUPnyil
+(node:90326) NOTE: The AWS SDK for JavaScript (v2) is in maintenance mode.
+ SDK releases are limited to address critical bug fixes and security issues only.
+
+Please migrate your code to use AWS SDK for JavaScript (v3).
+For more information, check the blog post at https://a.co/cUPnyil
+  console.log
+    Duplicate fix complete: {
+      contributorsFixed: 0,
+      prCountAdjustments: 0,
+      reviewCountAdjustments: 0,
+      duplicatePRsRemoved: 0,
+      duplicateReviewsRemoved: 0
+    }
+
+      at fixDuplicates (services/contributorService.js:1425:17)
+
+  console.log
+    Duplicate fix complete: {
+      contributorsFixed: 0,
+      prCountAdjustments: 0,
+      reviewCountAdjustments: 0,
+      duplicatePRsRemoved: 0,
+      duplicateReviewsRemoved: 0
+    }
+
+      at fixDuplicates (services/contributorService.js:1425:17)
+
+PASS __tests__/unit/duplicateDetection.test.js
+  Duplicate Detection and Repair
+    checkForDuplicates
+      ✓ should detect duplicate PR entries within contributor (66 ms)
+      ✓ should detect duplicate review entries within contributor (12 ms)
+      ✓ should report no duplicates for clean database (11 ms)
+      ✓ should handle contributor with no duplicates (9 ms)
+    fixDuplicates
+      ✓ should remove duplicate PR entries (11 ms)
+      ✓ should return zero stats for empty database (6 ms)
+
+  console.log
+    Created default quarter configuration (calendar)
+
+      at getQuarterConfig (services/quarterlyService.js:21:17)
+
+  console.log
+    Resetting quarterly stats for 2025-Q4
+
+      at resetQuarterlyStats (services/quarterlyService.js:269:17)
+
+  console.log
+    Reset quarterly stats for 2 contributors
+
+      at resetQuarterlyStats (services/quarterlyService.js:286:17)
+
+  console.log
+    Archiving winners for 2025-Q1
+
+      at archiveQuarterWinners (services/quarterlyService.js:169:17)
+
+  console.log
+    Archived 2025-Q1 winner: champion with 275 points
+
+      at archiveQuarterWinners (services/quarterlyService.js:251:17)
+
+  console.log
+    New quarter detected: 2025-Q1 → 2025-Q4
+
+      at checkAndResetIfNewQuarter (services/quarterlyService.js:526:21)
+
+  console.log
+    Archiving winners for 2025-Q1
+
+      at archiveQuarterWinners (services/quarterlyService.js:169:17)
+
+  console.log
+    Archived 2025-Q1 winner: testuser with 100 points
+
+      at archiveQuarterWinners (services/quarterlyService.js:251:17)
+
+  console.log
+    Resetting quarterly stats for 2025-Q4
+
+      at resetQuarterlyStats (services/quarterlyService.js:269:17)
+
+  console.log
+    Reset quarterly stats for 1 contributors
+
+      at resetQuarterlyStats (services/quarterlyService.js:286:17)
+
+PASS __tests__/unit/quarterlyService.test.js
+  QuarterlyService
+    getQuarterConfig
+      ✓ should return existing quarter configuration (53 ms)
+      ✓ should create default config if none exists (14 ms)
+    getCurrentQuarter
+      ✓ should return current quarter string (13 ms)
+      ✓ should calculate quarter based on fiscal year config (10 ms)
+    getQuarterDateRange
+      ✓ should return date range for quarter (8 ms)
+      ✓ should handle quarter spanning year boundary (8 ms)
+    getAllTimeLeaderboard
+      ✓ should return contributors sorted by total points (22 ms)
+      ✓ should respect limit parameter (12 ms)
+    getQuarterlyLeaderboard
+      ✓ should return contributors sorted by quarterly points (13 ms)
+    getHallOfFame
+      ✓ should return archived quarterly winners (10 ms)
+      ✓ should respect limit parameter (9 ms)
+    resetQuarterlyStats
+      ✓ should reset quarterly stats for all contributors (14 ms)
+    archiveQuarterWinners
+      ✓ should archive top contributors to Hall of Fame (14 ms)
+    checkAndResetIfNewQuarter
+      ✓ should not cause errors when executed (14 ms)
+
+FAIL __tests__/unit/challengeService.test.js
+  ● Test suite failed to run
+
+    SyntaxError: missing ) after argument list
+
+      at Runtime.loadEsmModule (node_modules/jest-runtime/build/index.js:516:20)
+
+Test Suites: 6 failed, 2 skipped, 3 passed, 9 of 11 total
+Tests:       21 failed, 27 skipped, 110 passed, 158 total
+Snapshots:   0 total
+Time:        245.502 s
+Ran all test suites.
+Jest did not exit one second after the test run has completed.
+
+'This usually means that there are asynchronous operations that weren't stopped in your tests. Consider running Jest with `--detectOpenHandles` to troubleshoot this issue.

@@ -13,22 +13,44 @@ npm start
 
 ### Docker Development
 ```bash
-# Build and run with Docker Compose (includes MongoDB and Mongo Express)
+# Build and run with Docker Compose (includes PostgreSQL)
 docker-compose up --build
 
 # Access points:
 # - Application: http://localhost:3000
-# - Mongo Express (DB admin): http://localhost:8081 (admin/admin)
+# - PostgreSQL: localhost:5432 (scoreboard/scoreboard)
 ```
 
-**Important:** Docker Compose uses the `github-scoreboard` database name (configured in `docker-compose.yml` via `MONGO_URI`). All scripts and services must connect to `mongodb://localhost:27017/github-scoreboard` to access the production data.
+**Important:** Docker Compose uses the `github_scoreboard` database name (configured in `docker-compose.yml` via `DATABASE_URL`). All scripts and services connect to `postgresql://scoreboard:scoreboard@localhost:5432/github_scoreboard` for the production data.
 
 ### Environment Setup
 - Copy `.env.example` to `.env` in app directory and populate with actual values:
   - `GITHUB_TOKEN`: GitHub personal access token
-  - `MONGO_URI`: MongoDB connection string
+  - `DATABASE_URL`: PostgreSQL connection string
   - `NODE_ENV`: 'development' or 'production'
-  - AWS credentials for production (DynamoDB)
+
+### Prisma Commands
+```bash
+cd app
+
+# Apply migrations to database
+npx prisma migrate deploy
+
+# Create new migration (development)
+npx prisma migrate dev --name migration_name
+
+# Open Prisma Studio (database GUI)
+npx prisma studio
+
+# Pull schema from existing database
+npx prisma db pull
+
+# Generate Prisma Client after schema changes
+npx prisma generate
+
+# Reset database (WARNING: deletes all data)
+npx prisma migrate reset
+```
 
 ## ⚠️ CRITICAL SECURITY REQUIREMENTS
 
@@ -47,23 +69,25 @@ docker-compose up --build
 
 ### Technology Stack
 - **Backend**: Express.js with ES modules
-- **Database**: MongoDB (development) / DynamoDB (production)
+- **Database**: PostgreSQL (via Neon cloud PostgreSQL or local Docker)
+- **ORM**: Prisma ORM for type-safe database access
 - **GitHub Integration**: Octokit REST API
 - **Task Scheduling**: node-cron for daily PR fetching and weekly challenge generation
 - **Real-time Communication**: Socket.IO for live updates
 - **Frontend**: EJS templates with vanilla JavaScript and modern CSS design system
 - **Authentication**: GitHub OAuth via Passport.js
-- **Testing**: Jest with ES modules support
+- **Testing**: Jest with ES modules support and PostgreSQL test database
 
 ### Database Architecture
-The application uses a dual database approach:
-- **Development**: MongoDB via Mongoose
-- **Production**: AWS DynamoDB
-- Database client abstraction in `app/config/db-config.js`
+- **Database**: PostgreSQL 15 (Alpine) via Docker for local development
+- **Production**: Neon PostgreSQL (serverless PostgreSQL)
+- **ORM**: Prisma with auto-generated TypeScript types
+- **Schema**: Defined in `app/prisma/schema.prisma`
+- **Migrations**: Version-controlled migrations in `app/prisma/migrations/`
 
 ### Core Data Models
 
-**Contributor Schema** (`app/models/contributor.js`):
+**Contributor Model** (`app/prisma/schema.prisma`):
 - Username, PR/review counts, avatar URL
 - Badge tracking flags for milestones (1, 10, 50, 100, 500, 1000)
 - Time-series contribution and review arrays
@@ -148,7 +172,7 @@ The application uses a dual database approach:
 ### Security Features
 - Helmet for security headers
 - Rate limiting with express-rate-limit
-- MongoDB sanitization
+- Prisma parameterized queries (SQL injection prevention)
 - CORS configuration
 - JWT authentication for admin functions
 - CSP with nonce for inline scripts
@@ -172,7 +196,7 @@ app/
 │   ├── adminController.js
 │   └── authController.js
 ├── middleware/               # Authentication and error handling
-├── models/                   # Mongoose schemas
+├── models/                   # Legacy (empty - migrated to Prisma)
 │   ├── contributor.js        # Updated with gamification fields
 │   └── challenge.js          # NEW
 ├── routes/                   # API route definitions
@@ -226,11 +250,14 @@ app/
 - Automatic reconnection handling
 
 #### **NEW: Gamification System**
-- **Streak Tracking:**
-  - Daily contribution streak monitoring
+- **Workweek Streak Tracking:**
+  - Tracks **both PR merges and code reviews** as contributions
+  - **Business day streaks** (Mon-Fri) - weekend gaps don't break streaks
+  - Allows Friday → Monday without breaking (weekend gap is valid)
+  - Breaks only when missing weekdays (e.g., Thursday → Tuesday skipping Friday)
   - Streak badges: Week Warrior (7d), Monthly Master (30d), Quarter Champion (90d), Year-Long Hero (365d)
-  - Streak leaderboard
-  - Streak broken notifications
+  - Streak leaderboard with real-time updates
+  - Smart notifications for milestones and breaks
 
 - **Points System:**
   - Base points for PRs and reviews
@@ -278,7 +305,7 @@ app/
   - Quarter start month customization (1-12)
   - Live quarter preview with current quarter and date range
   - Admin UI positioned between Notification Settings and Data Overview
-  - Persistent configuration stored in MongoDB
+  - Persistent configuration stored in PostgreSQL (QuarterSettings table)
 
 - **Quarterly Tracking:**
   - Automatic quarterly stats tracking per contributor
@@ -549,7 +576,7 @@ Defined in `app/config/points-config.js`:
 
 ### Required
 - `GITHUB_TOKEN` - GitHub personal access token with repo access
-- `MONGO_URI` - MongoDB connection string
+- `DATABASE_URL` - PostgreSQL connection string (local or Neon)
 - `SESSION_SECRET` - Secret for session encryption
 - `NODE_ENV` - 'development' or 'production'
 
@@ -558,11 +585,6 @@ Defined in `app/config/points-config.js`:
 - `GITHUB_CLIENT_ID` - For GitHub OAuth
 - `GITHUB_CLIENT_SECRET` - For GitHub OAuth
 - `GITHUB_CALLBACK_URL` - OAuth callback URL
-
-### AWS (Production Only)
-- `AWS_REGION` - AWS region for DynamoDB
-- `AWS_ACCESS_KEY_ID` - AWS access key
-- `AWS_SECRET_ACCESS_KEY` - AWS secret key
 
 ---
 
@@ -575,14 +597,16 @@ Defined in `app/config/points-config.js`:
 - Check browser console for connection errors
 
 ### Database Connection Issues
-- Verify MongoDB is running (`docker-compose ps`)
-- Check `MONGO_URI` environment variable
-- Verify network connectivity
-- Check logs: `docker-compose logs mongodb`
+- Verify PostgreSQL is running (`docker ps` - look for `postgres_scoreboard`)
+- Check `DATABASE_URL` environment variable
+- Ensure Docker container is healthy: `docker-compose ps`
+- Check logs: `docker-compose logs postgres`
+- Verify schema migrations applied: `npx prisma migrate deploy`
 
 ### Test Failures
 - Ensure `NODE_ENV=test` is set
-- Clear test database: `await Contributor.deleteMany({})`
+- Verify test database initialized: `npx prisma migrate deploy` (with test DATABASE_URL)
+- Clear test database: `await prisma.contributor.deleteMany({})`
 - Check for open handles: `npm test -- --detectOpenHandles`
 - Verify ES modules support: `node --experimental-vm-modules`
 
@@ -596,10 +620,20 @@ Defined in `app/config/points-config.js`:
 
 ## Performance Tips
 
-### Database Optimization
-- Ensure indexes on: `username`, `currentStreak`, `totalPoints`, `challenge.status`
+### Database Optimization (Prisma)
+- Indexes defined in schema: `username`, `currentStreak`, `totalPoints`
 - Use `.select()` to limit returned fields
-- Use `.lean()` for read-only queries (faster)
+- Use `orderBy` and `take` for efficient queries
+- Connection pooling configured via `DATABASE_URL` parameters
+- Example:
+  ```javascript
+  const contributors = await prisma.contributor.findMany({
+      select: { username: true, prCount: true }, // Only fetch needed fields
+      where: { prCount: { gte: 10 } },
+      orderBy: { prCount: 'desc' },
+      take: 10 // Limit results
+  });
+  ```
 
 ### WebSocket Optimization
 - Use rooms for targeted broadcasts

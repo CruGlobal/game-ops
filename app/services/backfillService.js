@@ -1,7 +1,12 @@
 import { Octokit } from '@octokit/rest';
-import Contributor from '../models/contributor.js';
+import { prisma } from '../lib/prisma.js';
 import { getSocketIO } from '../utils/socketEmitter.js';
 import logger from '../utils/logger.js';
+import { awardPoints, calculatePoints } from './pointsService.js';
+import { POINT_REASONS, POINT_VALUES } from '../config/points-config.js';
+import { updateQuarterlyStats, recomputeHallOfFameAll, recomputeCurrentQuarterStats } from './quarterlyService.js';
+import { checkAndAwardAchievements } from './achievementService.js';
+import { updateStreak, checkStreakBadges } from './streakService.js';
 
 const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
 const repoOwner = process.env.REPO_OWNER || 'CruGlobal';
@@ -11,11 +16,14 @@ const repoName = process.env.REPO_NAME || 'android';
 let backfillState = {
     isRunning: false,
     shouldStop: false,
+    verboseLogging: false,
     progress: {
         status: 'idle',
         totalPRs: 0,
         processedPRs: 0,
         processedReviews: 0,
+        newPRsAdded: 0,
+        newReviewsAdded: 0,
         currentPR: null,
         rateLimit: 5000,
         rateLimitReset: null,
@@ -109,6 +117,10 @@ function emitBackfillProgress() {
         ? Math.floor((progress.processedPRs / progress.totalPRs) * 100)
         : 0;
 
+    // Add new items tracking
+    progress.newPRsAdded = backfillState.newPRsAdded;
+    progress.newReviewsAdded = backfillState.newReviewsAdded;
+
     io.to('scoreboard-updates').emit('backfill-progress', progress);
 }
 
@@ -121,47 +133,111 @@ async function processPR(pr) {
         let prAdded = 0;
         let reviewsAdded = 0;
 
-        // Find or create contributor
-        let contributor = await Contributor.findOne({ username });
+        // Find or create contributor (include achievements to prevent duplicates)
+        let contributor = await prisma.contributor.findUnique({
+            where: { username },
+            include: {
+                processedPRs: {
+                    where: { prNumber: BigInt(pr.number) }
+                },
+                achievements: true
+            }
+        });
+
         if (!contributor) {
-            contributor = new Contributor({
-                username,
-                avatarUrl: pr.user.avatar_url,
-                prCount: 0,
-                reviewCount: 0,
-                contributions: [],
-                reviews: [],
-                processedPRs: [],
-                processedReviews: []
+            contributor = await prisma.contributor.create({
+                data: {
+                    username,
+                    avatarUrl: pr.user.avatar_url,
+                    prCount: 0,
+                    reviewCount: 0
+                }
             });
         }
 
         // Check if PR already processed (duplicate prevention for PR)
-        const prAlreadyProcessed = contributor.processedPRs?.some(p => p.prNumber === pr.number);
-
-        if (!prAlreadyProcessed) {
-            // Add PR to contributions
-            contributor.prCount += 1;
-            contributor.contributions.push({
-                date: pr.merged_at,
-                merged: true
-            });
-
-            // Track in processedPRs
-            if (!contributor.processedPRs) {
-                contributor.processedPRs = [];
+        const existingPR = await prisma.processedPR.findUnique({
+            where: {
+                contributorId_prNumber_action: {
+                    contributorId: contributor.id,
+                    prNumber: BigInt(pr.number),
+                    action: 'authored'
+                }
             }
-            contributor.processedPRs.push({
-                prNumber: pr.number,
-                prTitle: pr.title,
-                processedDate: pr.merged_at,
-                action: 'authored'
+        });
+
+        if (!existingPR) {
+            // Extract date for contribution tracking
+            const mergedDate = new Date(pr.merged_at);
+            const dateOnly = new Date(mergedDate.getFullYear(), mergedDate.getMonth(), mergedDate.getDate());
+
+            // Update contributor with new PR
+            await prisma.contributor.update({
+                where: { username },
+                data: {
+                    prCount: { increment: 1 },
+                    processedPRs: {
+                        create: {
+                            prNumber: BigInt(pr.number),
+                            prTitle: pr.title,
+                            processedDate: mergedDate,
+                            action: 'authored'
+                        }
+                    }
+                }
             });
+
+            // Find or create contribution record for this date
+            const existingContribution = await prisma.contribution.findFirst({
+                where: {
+                    contributorId: contributor.id,
+                    date: dateOnly
+                }
+            });
+
+            if (existingContribution) {
+                await prisma.contribution.update({
+                    where: { id: existingContribution.id },
+                    data: {
+                        count: { increment: 1 },
+                        merged: true
+                    }
+                });
+            } else {
+                await prisma.contribution.create({
+                    data: {
+                        contributorId: contributor.id,
+                        date: dateOnly,
+                        count: 1,
+                        merged: true
+                    }
+                });
+            }
+
+            // Calculate and award points for the merged PR using labels/streak logic
+            const pointsData = calculatePoints(pr, contributor);
+            await awardPoints(contributor, pointsData.points, POINT_REASONS.PR_MERGED, pr.number, mergedDate);
+
+            // Update quarterly stats (count PR and points) if within current quarter
+            await updateQuarterlyStats(username, { prs: 1, points: pointsData.points }, mergedDate);
+
+            // Update streak for PRs (with workweek-aware logic)
+            await updateStreak(contributor, mergedDate);
+            await checkStreakBadges(contributor);
+
+            // Check and award achievements
+            await checkAndAwardAchievements(contributor);
 
             prAdded = 1;
             logger.debug(`Added PR #${pr.number} for ${username}`);
+            if (backfillState.verboseLogging) {
+                logger.info(`✅ [BACKFILL] Added NEW PR #${pr.number} by ${username} - "${pr.title}" - Points awarded!`);
+            }
         } else {
             logger.debug(`PR #${pr.number} already processed for ${username}, but checking reviews...`);
+            if (backfillState.verboseLogging) {
+                logger.info(`⏭️  [BACKFILL] Skipped PR #${pr.number} (duplicate) - checking reviews`);
+            }
         }
 
         // ALWAYS fetch and process reviews, even if PR was already processed
@@ -177,53 +253,121 @@ async function processPR(pr) {
                 if (review.state === 'APPROVED' || review.state === 'COMMENTED') {
                     const reviewerUsername = review.user.login;
 
-                    let reviewer = await Contributor.findOne({ username: reviewerUsername });
+                    // Check if review already processed using the composite unique key
+                    const reviewer = await prisma.contributor.findUnique({
+                        where: { username: reviewerUsername }
+                    });
+
                     if (!reviewer) {
-                        reviewer = new Contributor({
-                            username: reviewerUsername,
-                            avatarUrl: review.user.avatar_url,
-                            prCount: 0,
-                            reviewCount: 0,
-                            reviews: [],
-                            processedReviews: []
+                        // Create new reviewer if doesn't exist
+                        await prisma.contributor.create({
+                            data: {
+                                username: reviewerUsername,
+                                avatarUrl: review.user.avatar_url,
+                                prCount: 0,
+                                reviewCount: 0
+                            }
                         });
                     }
 
-                    // Check if review already processed
-                    const reviewAlreadyProcessed = reviewer.processedReviews?.some(r => r.reviewId === review.id);
-                    if (!reviewAlreadyProcessed) {
-                        reviewer.reviewCount += 1;
-
-                        // Add to reviews array (matches schema: date + count)
-                        reviewer.reviews.push({
-                            date: review.submitted_at,
-                            count: 1
-                        });
-
-                        // Track in processedReviews for duplicate prevention
-                        if (!reviewer.processedReviews) {
-                            reviewer.processedReviews = [];
+                    // Now get the reviewer with ID (include achievements to prevent duplicates)
+                    const reviewerRecord = await prisma.contributor.findUnique({
+                        where: { username: reviewerUsername },
+                        include: {
+                            achievements: true
                         }
-                        reviewer.processedReviews.push({
-                            reviewId: review.id,
-                            prNumber: pr.number,
-                            processedDate: review.submitted_at
+                    });
+
+                    // Check if this specific review was already processed
+                    const existingReview = await prisma.processedReview.findUnique({
+                        where: {
+                            contributorId_prNumber_reviewId: {
+                                contributorId: reviewerRecord.id,
+                                prNumber: BigInt(pr.number),
+                                reviewId: BigInt(review.id)
+                            }
+                        }
+                    });
+
+                    if (!existingReview) {
+                        // Extract date for review tracking
+                        const submittedDate = new Date(review.submitted_at);
+                        const dateOnly = new Date(submittedDate.getFullYear(), submittedDate.getMonth(), submittedDate.getDate());
+
+                        // Add review
+                        await prisma.contributor.update({
+                            where: { username: reviewerUsername },
+                            data: {
+                                reviewCount: { increment: 1 },
+                                processedReviews: {
+                                    create: {
+                                        reviewId: BigInt(review.id),
+                                        prNumber: BigInt(pr.number),
+                                        processedDate: submittedDate
+                                    }
+                                }
+                            }
                         });
 
-                        await reviewer.save();
-                        reviewsAdded++;
+                        // Find or create review record for this date
+                        const existingReviewDay = await prisma.review.findFirst({
+                            where: {
+                                contributorId: reviewerRecord.id,
+                                date: dateOnly
+                            }
+                        });
 
+                        if (existingReviewDay) {
+                            await prisma.review.update({
+                                where: { id: existingReviewDay.id },
+                                data: {
+                                    count: { increment: 1 }
+                                }
+                            });
+                        } else {
+                            await prisma.review.create({
+                                data: {
+                                    contributorId: reviewerRecord.id,
+                                    date: dateOnly,
+                                    count: 1
+                                }
+                            });
+                        }
+
+                        // Award points for the review using PR number for traceability
+                        const reviewDate = new Date(review.submitted_at);
+                        await awardPoints(
+                            reviewerRecord,
+                            POINT_VALUES.review,
+                            POINT_REASONS.REVIEW_COMPLETED,
+                            pr.number,
+                            submittedDate
+                        );
+
+                        // Update quarterly stats for review (count + points)
+                        await updateQuarterlyStats(reviewerUsername, { reviews: 1, points: POINT_VALUES.review }, reviewDate);
+
+                        // Update streak for reviews (with workweek-aware logic)
+                        await updateStreak(reviewerRecord, submittedDate);
+                        await checkStreakBadges(reviewerRecord);
+
+                        // Check and award achievements
+                        await checkAndAwardAchievements(reviewerRecord);
+
+                        reviewsAdded++;
                         logger.debug(`Added review by ${reviewerUsername} on PR #${pr.number}`);
+                        if (backfillState.verboseLogging) {
+                            logger.info(`✅ [BACKFILL] Added NEW review by ${reviewerUsername} on PR #${pr.number} - Points awarded!`);
+                        }
+                    } else {
+                        if (backfillState.verboseLogging) {
+                            logger.info(`⏭️  [BACKFILL] Skipped review by ${reviewerUsername} on PR #${pr.number} (duplicate)`);
+                        }
                     }
                 }
             }
         } catch (reviewError) {
             logger.error(`Error fetching reviews for PR #${pr.number}:`, reviewError.message);
-        }
-
-        // Save contributor if PR was added
-        if (prAdded > 0) {
-            await contributor.save();
         }
 
         return { prAdded, reviewsAdded, skipped: prAdded === 0 && reviewsAdded === 0 };
@@ -239,14 +383,18 @@ async function processPR(pr) {
  * @param {String} startDate - ISO date string
  * @param {String} endDate - ISO date string
  * @param {Boolean} checkRateLimits - Whether to respect rate limits
+ * @param {Boolean} verboseLogging - Whether to enable verbose debug logging
  */
-export async function startBackfill(startDate, endDate, checkRateLimits = true) {
+export async function startBackfill(startDate, endDate, checkRateLimits = true, verboseLogging = false) {
     if (backfillState.isRunning) {
         return { success: false, message: 'Backfill is already running' };
     }
 
     backfillState.isRunning = true;
     backfillState.shouldStop = false;
+    backfillState.verboseLogging = verboseLogging;
+    backfillState.newPRsAdded = 0;
+    backfillState.newReviewsAdded = 0;
     backfillState.progress = {
         status: 'Initializing...',
         totalPRs: 0,
@@ -259,7 +407,7 @@ export async function startBackfill(startDate, endDate, checkRateLimits = true) 
         endTime: null
     };
 
-    logger.info(`Starting backfill from ${startDate} to ${endDate}`);
+    logger.info(`Starting backfill from ${startDate} to ${endDate}${verboseLogging ? ' (VERBOSE LOGGING ENABLED)' : ''}`);
 
     try {
         // Check initial rate limit
@@ -395,26 +543,59 @@ export async function startBackfill(startDate, endDate, checkRateLimits = true) 
             page++;
         }
 
-        // Complete
+    // Complete PR/review import
         backfillState.progress.endTime = Date.now();
-        backfillState.progress.status = backfillState.shouldStop ? 'Stopped' : 'Completed';
+    backfillState.progress.status = backfillState.shouldStop ? 'Stopped' : 'Recomputing leaderboards...';
         backfillState.isRunning = false;
 
         emitBackfillProgress();
 
         const duration = Math.floor((backfillState.progress.endTime - backfillState.progress.startTime) / 1000);
 
-        logger.info(`Backfill ${backfillState.progress.status.toLowerCase()}. Found ${totalPRsFound} PRs. Added ${totalPRsProcessed} new PRs (${totalPRsFound - totalPRsProcessed} were duplicates). Added ${totalReviewsProcessed} reviews. Duration: ${duration}s`);
+        // If not stopped, recompute quarterly stats and Hall of Fame as a finalization step
+        let hofSummary = '';
+        if (!backfillState.shouldStop) {
+            try {
+                // Recompute current quarter leaderboard stats from fresh point history
+                const qRes = await recomputeCurrentQuarterStats();
+                logger.info(`Recomputed current quarter stats for ${qRes.quarter}: updated=${qRes.updated}, skippedNoActivity=${qRes.skippedNoActivity}`);
+
+                // Recompute Hall of Fame across all quarters (robust fallback logic inside)
+                backfillState.progress.status = 'Recomputing Hall of Fame...';
+                emitBackfillProgress();
+                const hofRes = await recomputeHallOfFameAll();
+                const updatedCount = (hofRes.updatedQuarters || []).length;
+                hofSummary = ` Recomputed Hall of Fame for ${updatedCount} quarter(s).`;
+                logger.info(`Recomputed Hall of Fame for ${updatedCount} quarter(s).`);
+            } catch (recomputeErr) {
+                logger.error('Error recomputing leaderboards after backfill:', recomputeErr);
+                hofSummary = ' (HoF recompute encountered an error; you can retry from Admin UI).';
+            }
+            backfillState.progress.status = 'Completed';
+            emitBackfillProgress();
+        }
+
+        const statusMessage = backfillState.shouldStop ? 'stopped' : 'completed';
+        const detailedMessage = `Backfill ${statusMessage}. Found ${totalPRsFound} PRs in date range. ` +
+            `${totalPRsProcessed > 0 ? `Added ${totalPRsProcessed} new PRs. ` : 'All PRs already in database. '}` +
+            `${totalReviewsProcessed > 0 ? `Added ${totalReviewsProcessed} new reviews. ` : 'All reviews already in database. '}` +
+            `${totalPRsFound - totalPRsProcessed > 0 ? `Skipped ${totalPRsFound - totalPRsProcessed} duplicate PRs. ` : ''}` +
+            `Duration: ${duration}s` + hofSummary;
+
+        logger.info(detailedMessage);
 
         return {
             success: true,
-            message: `Backfill ${backfillState.progress.status.toLowerCase()}`,
+            message: `Backfill ${statusMessage}${totalPRsProcessed === 0 && totalReviewsProcessed === 0 ? ' - All data already imported' : ''}`,
             stats: {
                 totalPRsFound: totalPRsFound,
                 newPRs: totalPRsProcessed,
                 duplicatePRs: totalPRsFound - totalPRsProcessed,
                 totalReviews: totalReviewsProcessed,
-                duration: `${Math.floor(duration / 60)}m ${duration % 60}s`
+                duration: `${Math.floor(duration / 60)}m ${duration % 60}s`,
+                message: totalPRsProcessed === 0 && totalReviewsProcessed === 0
+                    ? 'No new data found - all PRs and reviews in this date range are already in the database'
+                    : `Successfully imported ${totalPRsProcessed} PRs and ${totalReviewsProcessed} reviews`
             }
         };
 

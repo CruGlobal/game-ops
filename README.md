@@ -30,11 +30,13 @@ A gamified GitHub Pull Request tracking and leaderboard system with real-time up
 - **Auto-reconnection** - Handles network interruptions gracefully
 
 ### 🎮 Gamification System
-- **🔥 Streak Tracking**
-  - Daily contribution streak monitoring
+- **🔥 Workweek Streak Tracking**
+  - Tracks both **PR merges and code reviews** as contributions
+  - **Business day streaks** (Mon-Fri) - weekends don't break streaks!
+  - Streak continues across weekends (Friday → Monday = streak maintained)
   - Streak badges: Week Warrior (7d), Monthly Master (30d), Quarter Champion (90d), Year-Long Hero (365d)
-  - Streak leaderboard
-  - Streak continuation/break notifications
+  - Streak leaderboard with real-time updates
+  - Smart notifications for streak milestones and breaks
 
 - **⭐ Points System**
   - Base points for PRs (10pts) and reviews (5pts)
@@ -78,7 +80,7 @@ A gamified GitHub Pull Request tracking and leaderboard system with real-time up
 
 ### Prerequisites
 - Node.js >= 18.0.0
-- MongoDB (or Docker)
+- PostgreSQL database (local or Neon)
 - GitHub Personal Access Token with repo access
 
 ### Installation
@@ -89,7 +91,24 @@ git clone https://github.com/yourusername/github-pr-scoreboard.git
 cd github-pr-scoreboard
 ```
 
-2. **Set up environment variables**
+2. **Set up PostgreSQL database**
+
+**Option A: Local PostgreSQL**
+```bash
+# Install PostgreSQL (macOS)
+brew install postgresql@15
+brew services start postgresql@15
+
+# Create database
+createdb github_scoreboard
+```
+
+**Option B: Neon (Cloud PostgreSQL - Recommended)**
+- Sign up at [neon.tech](https://neon.tech)
+- Create a new project
+- Copy the connection string
+
+3. **Set up environment variables**
 ```bash
 cd app
 cp .env.example .env
@@ -97,18 +116,39 @@ cp .env.example .env
 
 Edit `.env` and add your credentials:
 ```env
+# GitHub API
 GITHUB_TOKEN=your_github_token_here
-MONGO_URI=mongodb://localhost:27017/scoreboard
+
+# PostgreSQL Database (use one)
+DATABASE_URL=postgresql://user:password@localhost:5432/github_scoreboard
+# OR for Neon:
+DATABASE_URL=postgresql://user:password@your-project.neon.tech/github_scoreboard?sslmode=require
+
+# Session & App Config
 SESSION_SECRET=your_random_secret_here
 NODE_ENV=development
+PORT=3000
+
+# Optional: Enable Prisma query logging for debugging
+PRISMA_LOGGING=true
+LOG_LEVEL=debug
 ```
 
-3. **Install dependencies**
+4. **Install dependencies and initialize database**
 ```bash
 npm install
+
+# Run Prisma migrations to set up database schema
+npx prisma migrate deploy
+
+# Generate Prisma Client
+npx prisma generate
+
+# (Optional) Seed initial data
+npm run seed
 ```
 
-4. **Start the application**
+5. **Start the application**
 ```bash
 npm start
 ```
@@ -118,12 +158,33 @@ The app will be available at `http://localhost:3000`
 ### Docker Setup (Recommended)
 
 ```bash
-# Build and run with Docker Compose (includes MongoDB and Mongo Express)
+# Build and run with Docker Compose (includes PostgreSQL)
 docker-compose up --build
 
 # Access points:
 # - Application: http://localhost:3000
-# - Mongo Express (DB admin): http://localhost:8081 (admin/admin)
+# - PostgreSQL: localhost:5432 (use pgAdmin or similar)
+```
+
+### Database Management
+
+**Prisma Studio** - Visual database browser:
+```bash
+cd app
+npx prisma studio
+# Opens at http://localhost:5555
+```
+
+**Migrations**:
+```bash
+# Create a new migration after schema changes
+npx prisma migrate dev --name description_of_changes
+
+# Apply migrations in production
+npx prisma migrate deploy
+
+# Reset database (development only - WARNING: deletes all data)
+npx prisma migrate reset
 ```
 
 ---
@@ -174,7 +235,7 @@ docker-compose up --build
 
 ### Technology Stack
 - **Backend**: Express.js with ES modules
-- **Database**: MongoDB (development) / DynamoDB (production)
+- **Database**: PostgreSQL (Neon) with Prisma ORM
 - **Real-time**: Socket.IO for WebSocket communication
 - **GitHub**: Octokit REST API for PR/review data
 - **Scheduling**: node-cron for automated tasks
@@ -187,8 +248,9 @@ docker-compose up --build
 app/
 ├── scoreboard.js         # Server entry point with Socket.IO
 ├── controllers/          # Request handlers
-├── services/             # Business logic (contributor, streak, challenge)
-├── models/              # Mongoose schemas (Contributor, Challenge)
+├── services/             # Business logic (contributor, streak, challenge, achievement)
+├── lib/                 # Prisma client singleton with logging
+├── prisma/              # Prisma schema and migrations
 ├── routes/              # API endpoints
 ├── utils/               # Utilities (socketEmitter, logger)
 ├── views/               # EJS templates
@@ -196,32 +258,49 @@ app/
 └── __tests__/           # Unit and integration tests
 ```
 
-### Database Models
+### Database Models (Prisma Schema)
 
 **Contributor:**
-- Basic info: username, PR/review counts, avatar
-- Badges: milestone tracking flags
-- Streaks: current, longest, last contribution date
-- Points: total, history with timestamps
-- Challenges: active and completed lists
+- Basic info: username, githubId, avatar, bio
+- Statistics: prCount, reviewCount, points, currentStreak, longestStreak
+- Badges: milestone tracking flags (bill/vonette awards)
+- Relations: One-to-many with Contribution, Badge, Achievement
+- Quarterly tracking: quarterlyPRs, quarterlyReviews, quarterlyPoints
+
+**Contribution:**
+- Tracking: type (PR/REVIEW), date, url, repository, title
+- Metadata: labels[], size, isBugFix, isFeature
+- Points: calculated points for each contribution
+- Relation: Many-to-one with Contributor
+
+**Badge:**
+- Badge info: name, type, description, imageUrl
+- Award tracking: contributorId, awardedAt
+- Relation: Many-to-one with Contributor
+
+**Achievement:**
+- Achievement data: name, description, icon, category
+- Progress: currentValue, targetValue, isCompleted
+- Metadata: completedAt, pointsAwarded
+- Relation: Many-to-one with Contributor
 
 **Challenge:**
-- Metadata: title, description, type, target
-- Status: active, expired, completed
-- Participants: username, progress, completion status
-- Rewards: point values based on difficulty
+- Metadata: title, description, type, target, difficulty
+- Status: active, expiresAt
+- Points: reward points based on difficulty
+- Participants: JSON array with progress tracking
+- Timestamps: createdAt, updatedAt
 
 **QuarterSettings:**
 - System type: calendar, fiscal, academic, custom
 - Configuration: Q1 start month (1-12)
-- Helper methods: quarter calculation utilities
 - Singleton pattern for single configuration
 
 **QuarterlyWinner:**
-- Quarter identification: "YYYY-QX" format
-- Winner details: username, avatar, quarterly stats
+- Quarter identification: quarterKey (YYYY-QX format)
+- Winner details: username, avatar, quarterlyStats
 - Top 3 contributors: rank, username, stats
-- Metadata: total participants, archived date
+- Metadata: totalParticipants, archivedAt
 
 ---
 
@@ -231,7 +310,7 @@ app/
 
 **Required:**
 - `GITHUB_TOKEN` - GitHub PAT with repo access
-- `MONGO_URI` - MongoDB connection string
+- `DATABASE_URL` - PostgreSQL connection string
 - `SESSION_SECRET` - Session encryption key
 - `NODE_ENV` - 'development' or 'production'
 
@@ -240,11 +319,20 @@ app/
 - `GITHUB_CLIENT_ID` - OAuth app ID
 - `GITHUB_CLIENT_SECRET` - OAuth app secret
 - `GITHUB_CALLBACK_URL` - OAuth callback
+- `PRISMA_LOGGING` - Enable detailed query logging ('true'/'false')
+- `LOG_LEVEL` - Application log level (error/warn/info/debug)
 
-**AWS (Production):**
-- `AWS_REGION` - AWS region
-- `AWS_ACCESS_KEY_ID` - AWS access key
-- `AWS_SECRET_ACCESS_KEY` - AWS secret
+**Database Connection String Format:**
+```env
+# Local PostgreSQL
+DATABASE_URL=postgresql://username:password@localhost:5432/database_name
+
+# Neon (recommended for production)
+DATABASE_URL=postgresql://username:password@ep-xxx-xxx.region.neon.tech/database_name?sslmode=require
+
+# Connection pool tuning (optional)
+DATABASE_URL=postgresql://user:pass@host:5432/db?connection_limit=20&pool_timeout=20
+```
 
 ### Points Configuration
 
@@ -340,22 +428,32 @@ npm run test:coverage   # With coverage report
 ```
 
 ### Test Coverage
-- **Unit Tests:** 51 test cases
-  - Streak service (24 tests)
-  - Challenge service (27 tests)
-- **Integration Tests:** 18 test cases
-  - WebSocket communication
-  - API endpoints
-- **Coverage:** 75-80% for gamification features
+- **Unit Tests:** 157 passing
+  - Contributor service (badge awards, points)
+  - Streak service (24 tests - tracking, badges, notifications)
+  - Challenge service (27 tests - creation, joining, progress)
+  - Quarterly service (leaderboards, resets, archiving)
+  - Badge service (awards, milestones)
+  - Achievement service (tracking, awarding)
+  - Duplicate detection (6 tests - PR/review deduplication)
+- **Integration Tests:** 37 test cases
+  - API endpoints (18 tests)
+  - WebSocket communication (19 tests)
+- **Coverage:** ~80% for core features
 
 ### Writing Tests
 ```javascript
-import { createTestContributor } from '../setup.js';
+import { PrismaClient } from '@prisma/client';
+const prisma = new PrismaClient();
+
+afterEach(async () => {
+  await prisma.contributor.deleteMany();
+});
 
 it('should award streak badge', async () => {
-  const contributor = await Contributor.create(
-    createTestContributor({ username: 'test', currentStreak: 7 })
-  );
+  const contributor = await prisma.contributor.create({
+    data: { username: 'test', currentStreak: 7 }
+  });
   const badges = await checkStreakBadges(contributor);
   expect(badges).toHaveLength(1);
   expect(badges[0].name).toBe('Week Warrior');
@@ -430,8 +528,10 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 🙏 Acknowledgments
 
 - **GitHub API** - For providing comprehensive PR and review data
+- **Prisma** - For powerful and type-safe database access
+- **PostgreSQL** - For reliable relational data storage
+- **Neon** - For serverless PostgreSQL hosting
 - **Socket.IO** - For real-time communication
-- **MongoDB** - For flexible data storage
 - **Express.js** - For robust server framework
 - **Jest** - For comprehensive testing
 
@@ -448,12 +548,14 @@ For questions, issues, or feature requests:
 
 ## 🔗 Links
 
-- **Documentation**: [CLAUDE.md](CLAUDE.md) - Detailed architecture guide
-- **Implementation Plan**: [DoNotCommit/IMPLEMENTATION_PLAN.md](DoNotCommit/IMPLEMENTATION_PLAN.md)
-- **Phase Summaries**: [DoNotCommit/](DoNotCommit/) - Detailed phase-by-phase summaries
+- **Architecture Guide**: [CLAUDE.md](CLAUDE.md) - Detailed architecture and implementation details
+- **Prisma Monitoring**: [docs/PRISMA_MONITORING.md](docs/PRISMA_MONITORING.md) - Database monitoring and optimization
+- **API Documentation**: [docs/API.md](docs/API.md) - Complete API reference
+- **Deployment Guide**: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) - Production deployment instructions
+- **Phase Summaries**: [DoNotCommit/](DoNotCommit/) - Detailed development phase summaries
 
 ---
 
 **Built with ❤️ by Luis Rodriguez and Claude Code**
 
-Last Updated: October 2025
+Last Updated: January 2025 - Migrated to Prisma/PostgreSQL (Neon)

@@ -40,15 +40,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const loadContributors = async () => {
         try {
-            const storedToken = getToken();
-            if (!storedToken) {
-                throw new Error('No token found');
-            }
+            // Use session-based authentication (cookie) instead of Bearer token
             const response = await fetch('/api/admin/contributors', {
                 method: 'GET',
-                headers: {
-                    'Authorization': `Bearer ${storedToken}`
-                }
+                credentials: 'same-origin' // Include cookies for session auth
             });
             if (response.ok) {
                 const contributors = await response.json();
@@ -160,15 +155,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     resetAllButton.addEventListener('click', async () => {
         try {
-            const storedToken = getToken();
-            if (!storedToken) {
-                throw new Error('No token found');
-            }
             const response = await fetch('/api/admin/reset-all', {
                 method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${storedToken}`
-                }
+                credentials: 'same-origin' // Include cookies for session auth
             });
             if (response.ok) {
                 alert('All contributors reset successfully');
@@ -185,16 +174,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (e.target.classList.contains('reset-contributor')) {
             const username = e.target.dataset.username;
             try {
-                const storedToken = getToken();
-                if (!storedToken) {
-                    throw new Error('No token found');
-                }
                 const response = await fetch(`/api/admin/reset-contributor`, {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${storedToken}`
+                        'Content-Type': 'application/json'
                     },
+                    credentials: 'same-origin', // Include cookies for session auth
                     body: JSON.stringify({ username })
                 });
                 if (response.ok) {

@@ -45,7 +45,7 @@ Get all contributors sorted by PR count.
 {
   "contributors": [
     {
-      "_id": "507f1f77bcf86cd799439011",
+      "id": "clnx8y7z0000008l6a1b2c3d4",
       "username": "johndoe",
       "avatarUrl": "https://avatars.githubusercontent.com/u/123456",
       "prCount": 156,
@@ -57,7 +57,7 @@ Get all contributors sorted by PR count.
         {
           "badge": "100 PR badge",
           "date": "2025-09-15T10:30:00.000Z",
-          "_id": "507f1f77bcf86cd799439012"
+          "id": "clnx8y7z0000108l6e5f6g7h8"
         }
       ],
       "totalBillsAwarded": 15
@@ -210,7 +210,7 @@ Get all active challenges.
 {
   "challenges": [
     {
-      "_id": "507f1f77bcf86cd799439013",
+      "id": "clnx8y7z0000208l6i9j0k1l2",
       "title": "Sprint Master",
       "description": "Merge 5 PRs this week",
       "type": "pr-merge",
@@ -252,7 +252,7 @@ Get detailed information for a specific challenge.
 **Response:**
 ```json
 {
-  "_id": "507f1f77bcf86cd799439013",
+  "id": "clnx8y7z0000208l6i9j0k1l2",
   "title": "Sprint Master",
   "description": "Merge 5 PRs this week",
   "type": "pr-merge",
@@ -305,7 +305,7 @@ Join an active challenge.
 {
   "message": "Successfully joined challenge",
   "challenge": {
-    "_id": "507f1f77bcf86cd799439013",
+    "id": "clnx8y7z0000208l6i9j0k1l2",
     "title": "Sprint Master",
     "target": 5,
     "reward": 250
@@ -329,7 +329,7 @@ Join an active challenge.
 ```bash
 curl -X POST http://localhost:3000/api/challenges/join \
   -H "Content-Type: application/json" \
-  -d '{"username":"johndoe","challengeId":"507f1f77bcf86cd799439013"}'
+  -d '{"username":"johndoe","challengeId":"clnx8y7z0000208l6i9j0k1l2"}'
 ```
 
 ---
@@ -347,7 +347,7 @@ Get the leaderboard for a specific challenge.
 **Response:**
 ```json
 {
-  "challengeId": "507f1f77bcf86cd799439013",
+  "challengeId": "clnx8y7z0000208l6i9j0k1l2",
   "title": "Sprint Master",
   "target": 5,
   "leaderboard": [
@@ -388,7 +388,7 @@ Get all challenges (active and completed) for a specific user.
   "activeChallenges": [
     {
       "challengeId": {
-        "_id": "507f1f77bcf86cd799439013",
+        "id": "clnx8y7z0000208l6i9j0k1l2",
         "title": "Sprint Master",
         "type": "pr-merge",
         "target": 5,
@@ -403,7 +403,7 @@ Get all challenges (active and completed) for a specific user.
   "completedChallenges": [
     {
       "challengeId": {
-        "_id": "507f1f77bcf86cd799439014",
+        "id": "clnx8y7z0000308l6m3n4o5p6",
         "title": "Review Champion",
         "type": "review",
         "reward": 200
@@ -424,6 +424,8 @@ curl http://localhost:3000/api/challenges/user/johndoe
 ---
 
 ## Streak Endpoints
+
+**Note**: Streaks track consecutive **business days** (Mon-Fri) where a contributor either merges a PR or completes a code review. Weekend gaps are allowed and don't break streaks.
 
 ### GET /api/streaks/leaderboard
 
@@ -579,7 +581,7 @@ Manually generate weekly challenges.
   "message": "Weekly challenges generated",
   "challenges": [
     {
-      "_id": "507f1f77bcf86cd799439015",
+      "id": "clnx8y7z0000408l6q7r8s9t0",
       "title": "Sprint Master",
       "type": "pr-merge",
       "target": 5,
@@ -830,7 +832,7 @@ const joinResult = await fetch('http://localhost:3000/api/challenges/join', {
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({
     username: 'johndoe',
-    challengeId: challenges.challenges[0]._id
+    challengeId: challenges.challenges[0].id
   })
 }).then(res => res.json());
 

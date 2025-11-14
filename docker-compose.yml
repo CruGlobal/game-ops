@@ -1,4 +1,5 @@
 # docker-compose.yml
+# PostgreSQL-based deployment configuration
 services:
   app:
     build:
@@ -7,34 +8,52 @@ services:
     ports:
       - "3000:3000"
     environment:
-      MONGO_URI: mongodb://mongo:27017/github-scoreboard
+      DATABASE_URL: postgresql://scoreboard:scoreboard@postgres:5432/github_scoreboard
+      NODE_ENV: production
       ADMIN_PASSWORD: admin
     env_file:
       - .env
     depends_on:
-      - mongo
+      postgres:
+        condition: service_healthy
+    command: sh -c "npx prisma migrate deploy && npm start"
 
-  mongo:
-    image: mongo:6.0
-    container_name: mongodb
+  postgres:
+    image: postgres:15-alpine
+    container_name: postgres_scoreboard
     restart: always
     ports:
-      - "27017:27017"
-    volumes:
-      - mongo_data:/data/db
-
-  mongo-express:
-    image: mongo-express:1.0.0
-    container_name: mongo-express
-    restart: always
-    ports:
-      - "8081:8081"
+      - "5432:5432"
     environment:
-      ME_CONFIG_MONGODB_SERVER: mongo
-      ME_CONFIG_MONGODB_PORT: 27017
-      ME_CONFIG_BASICAUTH_USERNAME: admin
-      ME_CONFIG_BASICAUTH_PASSWORD: admin
+      POSTGRES_USER: scoreboard
+      POSTGRES_PASSWORD: scoreboard
+      POSTGRES_DB: github_scoreboard
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U scoreboard"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Optional: pgAdmin for database management
+  # Uncomment to enable pgAdmin web interface
+  # pgadmin:
+  #   image: dpage/pgadmin4:latest
+  #   container_name: pgadmin
+  #   restart: always
+  #   ports:
+  #     - "5050:80"
+  #   environment:
+  #     PGADMIN_DEFAULT_EMAIL: admin@admin.com
+  #     PGADMIN_DEFAULT_PASSWORD: admin
+  #   volumes:
+  #     - pgadmin_data:/var/lib/pgadmin
+  #   depends_on:
+  #     - postgres
 
 volumes:
-  mongo_data:
+  postgres_data:
     driver: local
+  # pgadmin_data:
+  #   driver: local

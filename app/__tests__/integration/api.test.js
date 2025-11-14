@@ -1,8 +1,8 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from '@jest/globals';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from '@jest/globals';
 import request from 'supertest';
 import express from 'express';
 import contributorRoutes from '../../routes/contributorRoutes.js';
-import Contributor from '../../models/contributor.js';
+import { prisma } from '../../lib/prisma.js';
 import { createTestContributor, mockGitHubApi } from '../setup.js';
 import jwt from 'jsonwebtoken';
 
@@ -31,17 +31,33 @@ describe('API Integration Tests', () => {
 
   beforeEach(async () => {
     // Clean up database before each test
-    await Contributor.deleteMany({});
+    await prisma.processedPR.deleteMany({});
+    await prisma.processedReview.deleteMany({});
+    await prisma.contributor.deleteMany({});
+  });
+
+  afterEach(async () => {
+    // Clean up after each test
+    await prisma.processedPR.deleteMany({});
+    await prisma.processedReview.deleteMany({});
+    await prisma.contributor.deleteMany({});
+  });
+
+  afterAll(async () => {
+    // Disconnect Prisma to allow Jest to exit
+    await prisma.$disconnect();
   });
 
   describe('GET /api/top-contributors', () => {
     it('should return top contributors successfully', async () => {
       // Create test data
-      await Contributor.create([
-        createTestContributor({ username: 'user1', prCount: 10 }),
-        createTestContributor({ username: 'user2', prCount: 15 }),
-        createTestContributor({ username: 'bot[bot]', prCount: 20 }) // Should be filtered out
-      ]);
+      await prisma.contributor.createMany({
+        data: [
+          createTestContributor({ username: 'user1', prCount: BigInt(10) }),
+          createTestContributor({ username: 'user2', prCount: BigInt(15) }),
+          createTestContributor({ username: 'bot[bot]', prCount: BigInt(20) }) // Should be filtered out
+        ]
+      });
 
       const response = await request(app)
         .get('/api/top-contributors')
@@ -65,10 +81,12 @@ describe('API Integration Tests', () => {
 
   describe('GET /api/top-reviewers', () => {
     it('should return top reviewers successfully', async () => {
-      await Contributor.create([
-        createTestContributor({ username: 'reviewer1', reviewCount: 5 }),
-        createTestContributor({ username: 'reviewer2', reviewCount: 10 })
-      ]);
+      await prisma.contributor.createMany({
+        data: [
+          createTestContributor({ username: 'reviewer1', reviewCount: BigInt(5) }),
+          createTestContributor({ username: 'reviewer2', reviewCount: BigInt(10) })
+        ]
+      });
 
       const response = await request(app)
         .get('/api/top-reviewers')
@@ -82,23 +100,30 @@ describe('API Integration Tests', () => {
 
   describe('GET /api/top-contributors-date-range', () => {
     it('should return contributors within date range', async () => {
+      // Use dates relative to now to ensure they're within the range
+      const now = new Date();
+      const fiveDaysAgo = new Date(now);
+      fiveDaysAgo.setDate(now.getDate() - 5);
+      const tenDaysAgo = new Date(now);
+      tenDaysAgo.setDate(now.getDate() - 10);
+
       const contributor = createTestContributor({
         username: 'activeuser',
         contributions: [
           {
-            date: new Date('2025-01-15'),
+            date: fiveDaysAgo,
             count: 2,
             merged: true
           },
           {
-            date: new Date('2024-12-15'),
+            date: tenDaysAgo,
             count: 1,
             merged: true
           }
         ]
       });
 
-      await Contributor.create(contributor);
+      await prisma.contributor.create({ data: contributor });
 
       const response = await request(app)
         .get('/api/top-contributors-date-range?range=30')
@@ -106,6 +131,7 @@ describe('API Integration Tests', () => {
 
       expect(response.body.contributors).toHaveLength(1);
       expect(response.body.contributors[0].username).toBe('activeuser');
+      expect(response.body.contributors[0].totalPrCount).toBe(3); // 2 + 1
     });
 
     it('should return error when range parameter is missing', async () => {
@@ -227,13 +253,13 @@ describe('API Integration Tests', () => {
   describe('GET /api/award-badges', () => {
     it('should award badges with valid token', async () => {
       // Create test contributor
-      await Contributor.create(
-        createTestContributor({ 
+      await prisma.contributor.create({
+        data: createTestContributor({ 
           username: 'newuser', 
-          prCount: 1, 
+          prCount: BigInt(1), 
           badges: [] 
         })
-      );
+      });
 
       const response = await request(app)
         .get('/api/award-badges')
@@ -249,14 +275,14 @@ describe('API Integration Tests', () => {
 
   describe('GET /api/award-bills-vonettes', () => {
     it('should award bills with valid token', async () => {
-      await Contributor.create(
-        createTestContributor({ 
+      await prisma.contributor.create({
+        data: createTestContributor({ 
           username: 'productive', 
-          prCount: 10,
-          totalBillsAwarded: 0,
+          prCount: BigInt(10),
+          totalBillsAwarded: BigInt(0),
           first10PrsAwarded: false
         })
-      );
+      });
 
       const response = await request(app)
         .get('/api/award-bills-vonettes')
@@ -272,10 +298,12 @@ describe('API Integration Tests', () => {
 
   describe('GET /api/admin/contributors', () => {
     it('should return all contributors for admin', async () => {
-      await Contributor.create([
-        createTestContributor({ username: 'user1' }),
-        createTestContributor({ username: 'user2' })
-      ]);
+      await prisma.contributor.createMany({
+        data: [
+          createTestContributor({ username: 'user1' }),
+          createTestContributor({ username: 'user2' })
+        ]
+      });
 
       const response = await request(app)
         .get('/api/admin/contributors')

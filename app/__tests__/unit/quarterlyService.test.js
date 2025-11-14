@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from '@jest/globals';
+import { describe, it, expect, beforeEach, afterEach, afterAll } from '@jest/globals';
 import {
     getQuarterConfig,
     getCurrentQuarter,
@@ -10,24 +10,31 @@ import {
     archiveQuarterWinners,
     checkAndResetIfNewQuarter
 } from '../../services/quarterlyService.js';
-import Contributor from '../../models/contributor.js';
-import QuarterSettings from '../../models/quarterSettings.js';
-import QuarterlyWinner from '../../models/quarterlyWinner.js';
-import { createTestContributor } from '../setup.js';
+import { prisma, createTestContributor } from '../setup.js';
 
 describe('QuarterlyService', () => {
     beforeEach(async () => {
-        await Contributor.deleteMany({});
-        await QuarterSettings.deleteMany({});
-        await QuarterlyWinner.deleteMany({});
+        // Clean up in correct order (no foreign key constraints here)
+        await prisma.quarterlyWinner.deleteMany({});
+        await prisma.quarterSettings.deleteMany({});
+        await prisma.contributor.deleteMany({});
+    });
+
+    afterEach(async () => {
+        // Also cleanup after each test to prevent data leaks
+        await prisma.quarterlyWinner.deleteMany({});
+        await prisma.quarterSettings.deleteMany({});
+        await prisma.contributor.deleteMany({});
     });
 
     describe('getQuarterConfig', () => {
         it('should return existing quarter configuration', async () => {
-            await QuarterSettings.create({
-                _id: 'quarter-config',
-                systemType: 'fiscal-us',
-                q1StartMonth: 10
+            await prisma.quarterSettings.create({
+                data: {
+                    id: 'quarter-config',
+                    systemType: 'fiscal-us',
+                    q1StartMonth: 10
+                }
             });
 
             const config = await getQuarterConfig();
@@ -48,10 +55,12 @@ describe('QuarterlyService', () => {
 
     describe('getCurrentQuarter', () => {
         it('should return current quarter string', async () => {
-            await QuarterSettings.create({
-                _id: 'quarter-config',
-                systemType: 'calendar',
-                q1StartMonth: 1
+            await prisma.quarterSettings.create({
+                data: {
+                    id: 'quarter-config',
+                    systemType: 'calendar',
+                    q1StartMonth: 1
+                }
             });
 
             const quarter = await getCurrentQuarter();
@@ -61,10 +70,12 @@ describe('QuarterlyService', () => {
         });
 
         it('should calculate quarter based on fiscal year config', async () => {
-            await QuarterSettings.create({
-                _id: 'quarter-config',
-                systemType: 'fiscal-us',
-                q1StartMonth: 10
+            await prisma.quarterSettings.create({
+                data: {
+                    id: 'quarter-config',
+                    systemType: 'fiscal-us',
+                    q1StartMonth: 10
+                }
             });
 
             const quarter = await getCurrentQuarter();
@@ -75,10 +86,12 @@ describe('QuarterlyService', () => {
 
     describe('getQuarterDateRange', () => {
         it('should return date range for quarter', async () => {
-            await QuarterSettings.create({
-                _id: 'quarter-config',
-                systemType: 'calendar',
-                q1StartMonth: 1
+            await prisma.quarterSettings.create({
+                data: {
+                    id: 'quarter-config',
+                    systemType: 'calendar',
+                    q1StartMonth: 1
+                }
             });
 
             const range = await getQuarterDateRange('2025-Q1');
@@ -89,10 +102,12 @@ describe('QuarterlyService', () => {
         });
 
         it('should handle quarter spanning year boundary', async () => {
-            await QuarterSettings.create({
-                _id: 'quarter-config',
-                systemType: 'fiscal-us',
-                q1StartMonth: 10
+            await prisma.quarterSettings.create({
+                data: {
+                    id: 'quarter-config',
+                    systemType: 'fiscal-us',
+                    q1StartMonth: 10
+                }
             });
 
             const range = await getQuarterDateRange('2025-Q1');
@@ -104,26 +119,28 @@ describe('QuarterlyService', () => {
 
     describe('getAllTimeLeaderboard', () => {
         it('should return contributors sorted by total points', async () => {
-            await Contributor.create([
-                createTestContributor({
-                    username: 'top',
-                    totalPoints: 1000,
-                    prCount: 80,
-                    reviewCount: 40
-                }),
-                createTestContributor({
-                    username: 'middle',
-                    totalPoints: 500,
-                    prCount: 40,
-                    reviewCount: 20
-                }),
-                createTestContributor({
-                    username: 'bottom',
-                    totalPoints: 100,
-                    prCount: 8,
-                    reviewCount: 4
-                })
-            ]);
+            await prisma.contributor.createMany({
+                data: [
+                    createTestContributor({
+                        username: 'top',
+                        totalPoints: 1000,
+                        prCount: 80,
+                        reviewCount: 40
+                    }),
+                    createTestContributor({
+                        username: 'middle',
+                        totalPoints: 500,
+                        prCount: 40,
+                        reviewCount: 20
+                    }),
+                    createTestContributor({
+                        username: 'bottom',
+                        totalPoints: 100,
+                        prCount: 8,
+                        reviewCount: 4
+                    })
+                ]
+            });
 
             const leaderboard = await getAllTimeLeaderboard(50);
 
@@ -143,7 +160,9 @@ describe('QuarterlyService', () => {
                     })
                 );
             }
-            await Contributor.create(contributors);
+            await prisma.contributor.createMany({
+                data: contributors
+            });
 
             const leaderboard = await getAllTimeLeaderboard(5);
 
@@ -153,38 +172,42 @@ describe('QuarterlyService', () => {
 
     describe('getQuarterlyLeaderboard', () => {
         it('should return contributors sorted by quarterly points', async () => {
-            await QuarterSettings.create({
-                _id: 'quarter-config',
-                systemType: 'calendar',
-                q1StartMonth: 1
+            await prisma.quarterSettings.create({
+                data: {
+                    id: 'quarter-config',
+                    systemType: 'calendar',
+                    q1StartMonth: 1
+                }
             });
 
             // Get current quarter to ensure data matches
             const currentQ = await getCurrentQuarter();
 
-            await Contributor.create([
-                createTestContributor({
-                    username: 'user1',
-                    quarterlyStats: {
-                        currentQuarter: currentQ,
-                        pointsThisQuarter: 500
-                    }
-                }),
-                createTestContributor({
-                    username: 'user2',
-                    quarterlyStats: {
-                        currentQuarter: currentQ,
-                        pointsThisQuarter: 300
-                    }
-                }),
-                createTestContributor({
-                    username: 'user3',
-                    quarterlyStats: {
-                        currentQuarter: currentQ,
-                        pointsThisQuarter: 100
-                    }
-                })
-            ]);
+            await prisma.contributor.createMany({
+                data: [
+                    createTestContributor({
+                        username: 'user1',
+                        quarterlyStats: {
+                            currentQuarter: currentQ,
+                            pointsThisQuarter: 500
+                        }
+                    }),
+                    createTestContributor({
+                        username: 'user2',
+                        quarterlyStats: {
+                            currentQuarter: currentQ,
+                            pointsThisQuarter: 300
+                        }
+                    }),
+                    createTestContributor({
+                        username: 'user3',
+                        quarterlyStats: {
+                            currentQuarter: currentQ,
+                            pointsThisQuarter: 100
+                        }
+                    })
+                ]
+            });
 
             const leaderboard = await getQuarterlyLeaderboard();
 
@@ -197,34 +220,36 @@ describe('QuarterlyService', () => {
 
     describe('getHallOfFame', () => {
         it('should return archived quarterly winners', async () => {
-            await QuarterlyWinner.create([
-                {
-                    quarter: '2025-Q1',
-                    year: 2025,
-                    quarterNumber: 1,
-                    quarterStart: new Date('2025-01-01'),
-                    quarterEnd: new Date('2025-03-31'),
-                    winner: {
-                        username: 'champion1',
-                        pointsThisQuarter: 500
+            await prisma.quarterlyWinner.createMany({
+                data: [
+                    {
+                        quarter: '2025-Q1',
+                        year: 2025,
+                        quarterNumber: 1,
+                        quarterStart: new Date('2025-01-01'),
+                        quarterEnd: new Date('2025-03-31'),
+                        winner: {
+                            username: 'champion1',
+                            pointsThisQuarter: 500
+                        },
+                        top3: [],
+                        totalParticipants: 20
                     },
-                    top3: [],
-                    totalParticipants: 20
-                },
-                {
-                    quarter: '2024-Q4',
-                    year: 2024,
-                    quarterNumber: 4,
-                    quarterStart: new Date('2024-10-01'),
-                    quarterEnd: new Date('2024-12-31'),
-                    winner: {
-                        username: 'champion2',
-                        pointsThisQuarter: 450
-                    },
-                    top3: [],
-                    totalParticipants: 18
-                }
-            ]);
+                    {
+                        quarter: '2024-Q4',
+                        year: 2024,
+                        quarterNumber: 4,
+                        quarterStart: new Date('2024-10-01'),
+                        quarterEnd: new Date('2024-12-31'),
+                        winner: {
+                            username: 'champion2',
+                            pointsThisQuarter: 450
+                        },
+                        top3: [],
+                        totalParticipants: 18
+                    }
+                ]
+            });
 
             const hallOfFame = await getHallOfFame(20);
 
@@ -249,7 +274,9 @@ describe('QuarterlyService', () => {
                     totalParticipants: 10
                 });
             }
-            await QuarterlyWinner.create(winners);
+            await prisma.quarterlyWinner.createMany({
+                data: winners
+            });
 
             const hallOfFame = await getHallOfFame(5);
 
@@ -259,93 +286,103 @@ describe('QuarterlyService', () => {
 
     describe('resetQuarterlyStats', () => {
         it('should reset quarterly stats for all contributors', async () => {
-            await QuarterSettings.create({
-                _id: 'quarter-config',
-                systemType: 'calendar',
-                q1StartMonth: 1
+            await prisma.quarterSettings.create({
+                data: {
+                    id: 'quarter-config',
+                    systemType: 'calendar',
+                    q1StartMonth: 1
+                }
             });
 
-            await Contributor.create([
-                createTestContributor({
-                    username: 'user1',
-                    prCount: 100,
-                    quarterlyStats: {
-                        currentQuarter: '2024-Q4',
-                        prsThisQuarter: 10,
-                        reviewsThisQuarter: 5,
-                        pointsThisQuarter: 125
-                    }
-                }),
-                createTestContributor({
-                    username: 'user2',
-                    prCount: 50,
-                    quarterlyStats: {
-                        currentQuarter: '2024-Q4',
-                        prsThisQuarter: 5,
-                        reviewsThisQuarter: 3,
-                        pointsThisQuarter: 65
-                    }
-                })
-            ]);
+            await prisma.contributor.createMany({
+                data: [
+                    createTestContributor({
+                        username: 'user1',
+                        prCount: 100,
+                        quarterlyStats: {
+                            currentQuarter: '2024-Q4',
+                            prsThisQuarter: 10,
+                            reviewsThisQuarter: 5,
+                            pointsThisQuarter: 125
+                        }
+                    }),
+                    createTestContributor({
+                        username: 'user2',
+                        prCount: 50,
+                        quarterlyStats: {
+                            currentQuarter: '2024-Q4',
+                            prsThisQuarter: 5,
+                            reviewsThisQuarter: 3,
+                            pointsThisQuarter: 65
+                        }
+                    })
+                ]
+            });
 
             await resetQuarterlyStats();
 
-            const users = await Contributor.find({});
+            const users = await prisma.contributor.findMany({});
             users.forEach(user => {
                 expect(user.quarterlyStats.prsThisQuarter).toBe(0);
                 expect(user.quarterlyStats.reviewsThisQuarter).toBe(0);
                 expect(user.quarterlyStats.pointsThisQuarter).toBe(0);
                 // All-time stats should be preserved
-                expect(user.prCount).toBeGreaterThan(0);
+                expect(Number(user.prCount)).toBeGreaterThan(0);
             });
         });
     });
 
     describe('archiveQuarterWinners', () => {
         it('should archive top contributors to Hall of Fame', async () => {
-            await QuarterSettings.create({
-                _id: 'quarter-config',
-                systemType: 'calendar',
-                q1StartMonth: 1
+            await prisma.quarterSettings.create({
+                data: {
+                    id: 'quarter-config',
+                    systemType: 'calendar',
+                    q1StartMonth: 1
+                }
             });
 
             // Create contributors with quarterly stats
-            await Contributor.create([
-                createTestContributor({
-                    username: 'champion',
-                    avatarUrl: 'https://github.com/champion.png',
-                    quarterlyStats: {
-                        currentQuarter: '2025-Q1',
-                        prsThisQuarter: 20,
-                        reviewsThisQuarter: 15,
-                        pointsThisQuarter: 275
-                    }
-                }),
-                createTestContributor({
-                    username: 'second',
-                    avatarUrl: 'https://github.com/second.png',
-                    quarterlyStats: {
-                        currentQuarter: '2025-Q1',
-                        prsThisQuarter: 15,
-                        reviewsThisQuarter: 10,
-                        pointsThisQuarter: 200
-                    }
-                }),
-                createTestContributor({
-                    username: 'third',
-                    avatarUrl: 'https://github.com/third.png',
-                    quarterlyStats: {
-                        currentQuarter: '2025-Q1',
-                        prsThisQuarter: 10,
-                        reviewsThisQuarter: 8,
-                        pointsThisQuarter: 140
-                    }
-                })
-            ]);
+            await prisma.contributor.createMany({
+                data: [
+                    createTestContributor({
+                        username: 'champion',
+                        avatarUrl: 'https://github.com/champion.png',
+                        quarterlyStats: {
+                            currentQuarter: '2025-Q1',
+                            prsThisQuarter: 20,
+                            reviewsThisQuarter: 15,
+                            pointsThisQuarter: 275
+                        }
+                    }),
+                    createTestContributor({
+                        username: 'second',
+                        avatarUrl: 'https://github.com/second.png',
+                        quarterlyStats: {
+                            currentQuarter: '2025-Q1',
+                            prsThisQuarter: 15,
+                            reviewsThisQuarter: 10,
+                            pointsThisQuarter: 200
+                        }
+                    }),
+                    createTestContributor({
+                        username: 'third',
+                        avatarUrl: 'https://github.com/third.png',
+                        quarterlyStats: {
+                            currentQuarter: '2025-Q1',
+                            prsThisQuarter: 10,
+                            reviewsThisQuarter: 8,
+                            pointsThisQuarter: 140
+                        }
+                    })
+                ]
+            });
 
             await archiveQuarterWinners('2025-Q1');
 
-            const winner = await QuarterlyWinner.findOne({ quarter: '2025-Q1' });
+            const winner = await prisma.quarterlyWinner.findUnique({ 
+                where: { quarter: '2025-Q1' }
+            });
 
             expect(winner).toBeDefined();
             expect(winner.winner.username).toBe('champion');
@@ -358,24 +395,38 @@ describe('QuarterlyService', () => {
 
     describe('checkAndResetIfNewQuarter', () => {
         it('should not cause errors when executed', async () => {
-            await QuarterSettings.create({
-                _id: 'quarter-config',
-                systemType: 'calendar',
-                q1StartMonth: 1
+            await prisma.quarterSettings.create({
+                data: {
+                    id: 'quarter-config',
+                    systemType: 'calendar',
+                    q1StartMonth: 1
+                }
             });
 
-            await Contributor.create(
-                createTestContributor({
+            await prisma.contributor.create({
+                data: createTestContributor({
                     username: 'testuser',
                     quarterlyStats: {
                         currentQuarter: '2025-Q1',
                         pointsThisQuarter: 100
                     }
                 })
-            );
+            });
 
             // This should run without errors
             await expect(checkAndResetIfNewQuarter()).resolves.toBeDefined();
         });
+    });
+
+    afterEach(async () => {
+        // Clean up after tests
+        await prisma.quarterlyWinner.deleteMany({});
+        await prisma.quarterSettings.deleteMany({});
+        await prisma.contributor.deleteMany({});
+    });
+
+    afterAll(async () => {
+        // Disconnect Prisma to allow Jest to exit
+        await prisma.$disconnect();
     });
 });

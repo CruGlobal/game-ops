@@ -2,7 +2,6 @@ import express from 'express';
 import dotenv from 'dotenv';
 import rateLimit from 'express-rate-limit';
 import helmet from 'helmet';
-import mongoSanitize from 'express-mongo-sanitize';
 import cors from 'cors';
 import cron from 'node-cron';
 import path from 'path';
@@ -26,6 +25,7 @@ import { ensureAuthenticated } from './middleware/ensureAuthenticated.js';
 import { socketConfig, SOCKET_EVENTS } from './config/websocket-config.js';
 import { setSocketIO } from './utils/socketEmitter.js';
 import testRoutes from './routes/testRoutes.js';
+import { ensureAppSettingsTable, getCronEnabled } from './lib/appSettings.js';
 
 
 dotenv.config();
@@ -50,19 +50,22 @@ app.use(helmet({
         }
     }
 }));
-app.use(mongoSanitize());
 app.use(cors());
 
-app.use((req, res, next) => {
-    res.setHeader('Cross-Origin-Embedder-Policy', 'require-corp');
-    res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
-    if (req.url.includes('github.com')) {
-        res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-    } else {
-        res.setHeader('Cross-Origin-Resource-Policy', 'same-site');
-    }
-    next();
-});
+// Only enable COEP/COOP when needed (e.g., production or explicitly enabled)
+if (process.env.NODE_ENV === 'production' || process.env.ENABLE_COEP === 'true') {
+    app.use((req, res, next) => {
+        res.setHeader('Cross-Origin-Embedder-Policy', 'require-corp');
+        res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
+        // CORP applies to our resources; using conservative default
+        if (req.url.includes('github.com')) {
+            res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+        } else {
+            res.setHeader('Cross-Origin-Resource-Policy', 'same-site');
+        }
+        next();
+    });
+}
 
 // Rate limiting - environment-aware configuration
 const limiter = rateLimit({
@@ -206,9 +209,33 @@ if (process.env.NODE_ENV !== 'production') {
 }
 
 //Schedule tasks to be run on the server
+async function shouldRunCron(taskName) {
+    try {
+        const enabled = await getCronEnabled();
+        if (!enabled) {
+            logger.info(`Cron disabled; skipping task: ${taskName}`);
+        }
+        return enabled;
+    } catch (e) {
+        logger.warn(`Cron status check failed for ${taskName}: ${e.message}. Defaulting to disabled.`);
+        return false;
+    }
+}
+
+// Ensure settings table exists early
+ensureAppSettingsTable()
+    .then(async () => {
+        const enabled = await getCronEnabled();
+        logger.info(`Cron system initialized. Enabled: ${enabled ? 'YES' : 'NO (default)'}`);
+    })
+    .catch(err => {
+        logger.error('Failed to initialize app settings table', { error: err.message });
+    });
+
 cron.schedule('0 * * * *', async () => {
     logger.info('Running hourly task to fetch PRs and reviews');
     try {
+        if (!(await shouldRunCron('fetchPRsCron'))) return;
         const result = await fetchPRsCron();
         logger.info('Data fetched successfully', { result });
     } catch (error) {
@@ -219,6 +246,7 @@ cron.schedule('0 * * * *', async () => {
 cron.schedule('0 * * * *', async () => {
     logger.info('Running hourly task to award badges');
     try {
+        if (!(await shouldRunCron('awardContributorBadgesCron'))) return;
         const result = await awardContributorBadgesCron();
         logger.info('Badges awarded successfully', { badgesCount: result?.length || 0 });
     } catch (error) {
@@ -229,6 +257,7 @@ cron.schedule('0 * * * *', async () => {
 cron.schedule('0 0 * * *', async () => {
     logger.info('Running daily task to award Bills and Vonettes');
     try {
+        if (!(await shouldRunCron('awardBillsAndVonettes'))) return;
         const results = await awardBillsAndVonettes();
         logger.info('Bills and Vonettes awarded successfully', { billsCount: results?.length || 0, results });
     } catch (error) {
@@ -242,6 +271,7 @@ cron.schedule('0 0 * * *', async () => {
 cron.schedule('0 0 * * 1', async () => {
     logger.info('Running weekly task to generate challenges');
     try {
+        if (!(await shouldRunCron('generateWeeklyChallenges'))) return;
         const challenges = await generateWeeklyChallenges();
         logger.info('Weekly challenges generated', { count: challenges.length });
     } catch (error) {
@@ -253,6 +283,7 @@ cron.schedule('0 0 * * 1', async () => {
 cron.schedule('0 0 * * *', async () => {
     logger.info('Running daily task to check expired challenges');
     try {
+        if (!(await shouldRunCron('checkExpiredChallenges'))) return;
         const count = await checkExpiredChallenges();
         logger.info('Expired challenges checked', { updatedCount: count });
     } catch (error) {
@@ -264,6 +295,7 @@ cron.schedule('0 0 * * *', async () => {
 cron.schedule('0 0 * * *', async () => {
     logger.info('Running daily task to check quarterly reset');
     try {
+        if (!(await shouldRunCron('checkAndResetIfNewQuarter'))) return;
         const result = await checkAndResetIfNewQuarter();
         if (result.quarterChanged) {
             logger.info('Quarterly stats reset completed', {

@@ -1,0 +1,240 @@
+# docker-compose.neon.yml
+# Updated Docker Compose for Migration from MongoDB to Neon (PostgreSQL)
+# This file supports both MongoDB (during migration) and PostgreSQL side-by-side
+
+version: '3.8'
+
+services:
+  # ============================================
+  # APPLICATION SERVICE
+  # ============================================
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: github-scoreboard-app
+    ports:
+      - "3000:3000"
+    environment:
+      # Database selection
+      DB_TYPE: postgres  # Switch to 'mongo' for rollback
+      NODE_ENV: development
+      
+      # PostgreSQL/Neon connection
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/github_scoreboard
+      DB_POOL_MIN: 2
+      DB_POOL_MAX: 10
+      
+      # MongoDB (legacy - keep during migration)
+      MONGO_URI: mongodb://mongo:27017/github-scoreboard
+      
+      # Application settings
+      PORT: 3000
+      ADMIN_PASSWORD: admin
+      
+      # Session
+      SESSION_SECRET: ${SESSION_SECRET:-change-me-in-production}
+      
+    env_file:
+      - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mongo:
+        condition: service_started
+    volumes:
+      - ./app:/app
+      - /app/node_modules
+    restart: unless-stopped
+    networks:
+      - app-network
+
+  # ============================================
+  # POSTGRESQL (Local Neon-compatible setup)
+  # ============================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: neon-local
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: github_scoreboard
+      # Performance tuning
+      POSTGRES_MAX_CONNECTIONS: 200
+      POSTGRES_SHARED_BUFFERS: 256MB
+      POSTGRES_EFFECTIVE_CACHE_SIZE: 1GB
+      POSTGRES_WORK_MEM: 8MB
+      # Enable logging for development
+      POSTGRES_LOG_STATEMENT: all
+      POSTGRES_LOG_DURATION: on
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-postgres.sql:/docker-entrypoint-initdb.d/01-init.sql
+      - ./scripts/postgres-config.conf:/etc/postgresql/postgresql.conf
+    command: >
+      postgres
+      -c max_connections=200
+      -c shared_buffers=256MB
+      -c effective_cache_size=1GB
+      -c maintenance_work_mem=64MB
+      -c checkpoint_completion_target=0.9
+      -c wal_buffers=16MB
+      -c default_statistics_target=100
+      -c random_page_cost=1.1
+      -c effective_io_concurrency=200
+      -c work_mem=8MB
+      -c min_wal_size=1GB
+      -c max_wal_size=4GB
+      -c logging_collector=on
+      -c log_destination=stderr
+      -c log_directory=/var/lib/postgresql/data/log
+      -c log_filename=postgresql-%Y-%m-%d_%H%M%S.log
+      -c log_statement=all
+      -c log_duration=on
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app-network
+
+  # ============================================
+  # PGADMIN (PostgreSQL Management UI)
+  # ============================================
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: pgadmin
+    restart: unless-stopped
+    ports:
+      - "5050:80"
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@admin.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: 'False'
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+      - ./scripts/pgadmin-servers.json:/pgadmin4/servers.json
+    depends_on:
+      - postgres
+    networks:
+      - app-network
+
+  # ============================================
+  # MONGODB (Legacy - Keep during migration)
+  # ============================================
+  mongo:
+    image: mongo:6.0
+    container_name: mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_DATABASE: github-scoreboard
+    volumes:
+      - mongo_data:/data/db
+      - ./scripts/init-mongo.js:/docker-entrypoint-initdb.d/init.js:ro
+    networks:
+      - app-network
+
+  # ============================================
+  # MONGO EXPRESS (MongoDB Management UI)
+  # ============================================
+  mongo-express:
+    image: mongo-express:1.0.0
+    container_name: mongo-express
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    environment:
+      ME_CONFIG_MONGODB_SERVER: mongo
+      ME_CONFIG_MONGODB_PORT: 27017
+      ME_CONFIG_MONGODB_ENABLE_ADMIN: 'true'
+      ME_CONFIG_BASICAUTH_USERNAME: admin
+      ME_CONFIG_BASICAUTH_PASSWORD: admin
+    depends_on:
+      - mongo
+    networks:
+      - app-network
+
+  # ============================================
+  # REDIS (Optional - for caching/sessions)
+  # ============================================
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --requirepass redis_password
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - app-network
+
+# ============================================
+# VOLUMES
+# ============================================
+volumes:
+  postgres_data:
+    driver: local
+    name: github-scoreboard-postgres
+  pgadmin_data:
+    driver: local
+    name: github-scoreboard-pgadmin
+  mongo_data:
+    external: true
+    name: github-pr-scoreboard_mongo_data
+  redis_data:
+    driver: local
+    name: github-scoreboard-redis
+
+# ============================================
+# NETWORKS
+# ============================================
+networks:
+  app-network:
+    driver: bridge
+    name: github-scoreboard-network
+
+# ============================================
+# USAGE INSTRUCTIONS
+# ============================================
+# 
+# Start all services:
+#   docker-compose -f docker-compose.neon.yml up -d
+#
+# Start only PostgreSQL stack:
+#   docker-compose -f docker-compose.neon.yml up -d postgres pgadmin app
+#
+# View logs:
+#   docker-compose -f docker-compose.neon.yml logs -f app
+#
+# Stop all services:
+#   docker-compose -f docker-compose.neon.yml down
+#
+# Remove volumes (DANGER - deletes data):
+#   docker-compose -f docker-compose.neon.yml down -v
+#
+# Access points:
+#   - Application: http://localhost:3000
+#   - PgAdmin: http://localhost:5050 (admin@admin.com / admin)
+#   - Mongo Express: http://localhost:8081 (admin / admin)
+#   - PostgreSQL: localhost:5432 (postgres / postgres)
+#   - MongoDB: localhost:27017
+#   - Redis: localhost:6379
+#
+# Run migrations:
+#   docker-compose -f docker-compose.neon.yml exec app npm run migrate
+#
+# Run Prisma Studio (DB GUI):
+#   docker-compose -f docker-compose.neon.yml exec app npx prisma studio

@@ -1,0 +1,157 @@
+// Test Schema for SQLite in-memory database
+// This is a simplified version of the main schema for testing
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/client-test"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("TEST_DATABASE_URL")
+}
+
+model Contributor {
+  id                       String   @id @default(uuid())
+  username                 String   @unique
+  prCount                  Int      @default(0)
+  reviewCount              Int      @default(0)
+  avatarUrl                String?
+  totalPoints              Int      @default(0)
+  quarterlyPoints          Int      @default(0)
+  lastQuarterReset         String?
+  badges                   String   @default("[]") // JSON string array
+  totalBillsAwarded        Int      @default(0)
+  totalVonettesAwarded     Int      @default(0)
+  billsThisQuarter         Int      @default(0)
+  vonettesThisQuarter      Int      @default(0)
+  firstPrAwarded           Boolean  @default(false)
+  firstReviewAwarded       Boolean  @default(false)
+  first10PrsAwarded        Boolean  @default(false)
+  first10ReviewsAwarded    Boolean  @default(false)
+  first50PrsAwarded        Boolean  @default(false)
+  first50ReviewsAwarded    Boolean  @default(false)
+  first100PrsAwarded       Boolean  @default(false)
+  first100ReviewsAwarded   Boolean  @default(false)
+  first500PrsAwarded       Boolean  @default(false)
+  first500ReviewsAwarded   Boolean  @default(false)
+  first1000PrsAwarded      Boolean  @default(false)
+  first1000ReviewsAwarded  Boolean  @default(false)
+  contributions            String   @default("[]") // JSON string array
+  reviews                  String   @default("[]") // JSON string array
+  achievements             String   @default("[]") // JSON string array
+  streakData               String?  // JSON string
+  metadata                 String   @default("{}") // JSON string
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  pointsHistory            PointHistory[]
+  processedPRs             ProcessedPR[]
+  processedReviews         ProcessedReview[]
+  challengeParticipants    ChallengeParticipant[]
+}
+
+model PointHistory {
+  id            String      @id @default(uuid())
+  contributorId String
+  contributor   Contributor @relation(fields: [contributorId], references: [id], onDelete: Cascade)
+  points        Int
+  type          String
+  description   String
+  awardedAt     DateTime    @default(now())
+
+  @@index([contributorId])
+  @@index([awardedAt])
+}
+
+model ProcessedPR {
+  id            String      @id @default(uuid())
+  prId          Int
+  prNumber      Int
+  contributorId String
+  contributor   Contributor @relation(fields: [contributorId], references: [id], onDelete: Cascade)
+  mergedAt      DateTime
+  createdAt     DateTime    @default(now())
+
+  @@unique([contributorId, prId])
+  @@index([contributorId])
+}
+
+model ProcessedReview {
+  id            String      @id @default(uuid())
+  reviewId      Int
+  prNumber      Int
+  contributorId String
+  contributor   Contributor @relation(fields: [contributorId], references: [id], onDelete: Cascade)
+  submittedAt   DateTime
+  createdAt     DateTime    @default(now())
+
+  @@unique([contributorId, reviewId])
+  @@index([contributorId])
+}
+
+model QuarterSettings {
+  id           String   @id @default("quarter-config")
+  systemType   String   @default("calendar")
+  q1StartMonth Int      @default(1)
+  updatedAt    DateTime @updatedAt
+}
+
+model QuarterlyWinner {
+  id            String   @id @default(uuid())
+  quarter       String
+  username      String
+  prCount       Int
+  reviewCount   Int
+  totalPoints   Int
+  avatarUrl     String?
+  archivedAt    DateTime @default(now())
+
+  @@unique([quarter, username])
+  @@index([quarter])
+}
+
+model Challenge {
+  id                String   @id @default(uuid())
+  title             String
+  description       String
+  type              String
+  target            Int
+  startDate         DateTime
+  endDate           DateTime
+  active            Boolean  @default(true)
+  participants      String   @default("[]") // JSON string array
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  challengeParticipants ChallengeParticipant[]
+
+  @@index([active])
+  @@index([endDate])
+}
+
+model ChallengeParticipant {
+  id           String      @id @default(uuid())
+  challengeId  String
+  challenge    Challenge   @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  username     String
+  contributor  Contributor @relation(fields: [username], references: [username], onDelete: Cascade)
+  progress     Int         @default(0)
+  completed    Boolean     @default(false)
+  completedAt  DateTime?
+  joinedAt     DateTime    @default(now())
+
+  @@unique([challengeId, username])
+  @@index([challengeId])
+  @@index([username])
+}
+
+model Streak {
+  id                 String   @id @default(uuid())
+  username           String   @unique
+  currentStreak      Int      @default(0)
+  longestStreak      Int      @default(0)
+  lastContributionDate DateTime?
+  streakBadges       String   @default("[]") // JSON string array
+  updatedAt          DateTime @updatedAt
+}

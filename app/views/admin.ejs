@@ -54,6 +54,27 @@
                 <button id="reset-notifications" class="secondary-button">Reset to Defaults</button>
             </div>
 
+            <!-- Cron Controls Section -->
+            <div class="card">
+                <h2>⏱️ Cron Controls</h2>
+                <p class="settings-description">Enable or pause all scheduled background jobs (PR fetch, badges, challenges, quarter checks). Disabled by default.</p>
+
+                <div class="settings-controls">
+                    <div class="setting-item">
+                        <label class="toggle-label">
+                            <input type="checkbox" id="cron-toggle" class="toggle-checkbox">
+                            <span class="toggle-slider"></span>
+                            <span class="toggle-text">Enable Cron Jobs</span>
+                        </label>
+                        <p class="setting-hint">When off, all scheduled jobs will be skipped. This does not stop manual actions or admin-triggered tasks.</p>
+                    </div>
+                </div>
+
+                <div style="margin-top: .5rem; color: var(--text-muted)">
+                    Status: <strong id="cron-status-text">Loading...</strong>
+                </div>
+            </div>
+
             <!-- Quarter Configuration Section -->
             <div class="card">
                 <h2>📅 Quarter Configuration</h2>
@@ -101,9 +122,36 @@
                         </div>
                     </div>
 
+                    <!-- Feature Flags -->
+                    <div style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border-color, #dee2e6);">
+                        <h3 style="margin-bottom: 1rem;">⚙️ Feature Settings</h3>
+                        
+                        <div class="form-group" style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem;">
+                            <input type="checkbox" id="enable-achievement-comments" class="form-check-input" style="width: 20px; height: 20px; margin: 0; cursor: pointer;">
+                            <label for="enable-achievement-comments" style="margin: 0; cursor: pointer; user-select: none;">
+                                <strong>Enable Achievement Comments on GitHub PRs</strong>
+                                <p style="margin: 0.25rem 0 0 0; color: var(--text-muted, #6c757d); font-size: 0.875rem;">
+                                    When enabled, the system will post congratulatory comments on GitHub PRs when users unlock achievements.
+                                    <br><strong>⚠️ Disable for testing environments to avoid spamming your repository.</strong>
+                                </p>
+                            </label>
+                        </div>
+
+                        <div class="form-group" style="display: flex; align-items: center; gap: 0.75rem;">
+                            <input type="checkbox" id="enable-bills-comments" class="form-check-input" style="width: 20px; height: 20px; margin: 0; cursor: pointer;">
+                            <label for="enable-bills-comments" style="margin: 0; cursor: pointer; user-select: none;">
+                                <strong>Enable Bills/Vonettes Comments on GitHub PRs</strong>
+                                <p style="margin: 0.25rem 0 0 0; color: var(--text-muted, #6c757d); font-size: 0.875rem;">
+                                    When enabled, the system will post congratulatory comments on GitHub PRs when users earn bills or vonettes.
+                                    <br><strong>⚠️ Disable for testing environments to avoid spamming your repository.</strong>
+                                </p>
+                            </label>
+                        </div>
+                    </div>
+
                     <!-- Save Button -->
                     <button id="save-quarter-config" class="btn btn-primary" style="margin-top: 1rem;">
-                        <span>💾 Save Quarter Configuration</span>
+                        <span>💾 Save Configuration</span>
                     </button>
 
                     <!-- Warning about resets -->
@@ -202,6 +250,14 @@
                         <small class="form-hint">Automatically pause when approaching rate limits</small>
                     </div>
 
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="backfill-verbose-logging" />
+                            Enable Verbose Logging (Debug Mode)
+                        </label>
+                        <small class="form-hint">Show detailed activity in server logs for troubleshooting. Logs every PR/review processed.</small>
+                    </div>
+
                     <div class="button-group">
                         <button id="start-backfill" class="btn btn-primary">
                             <span>▶️ Start Backfill</span>
@@ -246,6 +302,48 @@
                 </div>
             </div>
 
+            <!-- Leaderboards Maintenance -->
+            <div class="card">
+                <h2>🏆 Leaderboards Maintenance</h2>
+                <p class="settings-description">Recompute leaderboards from point history if you've performed a large backfill or changed configuration.</p>
+
+                <div class="action-buttons">
+                    <button id="recompute-current-quarter" class="btn btn-primary">
+                        <span>� Recompute This Quarter Leaderboard</span>
+                    </button>
+                </div>
+
+                <div class="form-group" style="margin-top: 1rem;">
+                    <label for="recompute-hof-quarter">Quarter (e.g., 2025-Q3)</label>
+                    <input type="text" id="recompute-hof-quarter" class="form-control" placeholder="YYYY-QN" />
+                    <small class="form-hint">Leave empty to use current quarter.</small>
+                </div>
+                <div class="action-buttons">
+                    <button id="recompute-hof" class="btn btn-secondary">
+                        <span>🏅 Recompute Hall of Fame (Quarter)</span>
+                    </button>
+                </div>
+
+                <div class="action-buttons" style="margin-top: 0.75rem;">
+                    <button id="recompute-hof-all" class="btn btn-danger">
+                        <span>🧮 Recompute Hall of Fame (ALL Quarters)</span>
+                    </button>
+                </div>
+
+                <!-- Dev-only quick action and exports -->
+                <div class="action-buttons" style="margin-top: 1rem; gap: .5rem; display: flex; flex-wrap: wrap;">
+                    <button id="dev-recompute-hof-all" class="btn btn-outline" style="display:none;">
+                        <span>⚙️ Dev: Quick Recompute HoF (ALL)</span>
+                    </button>
+                    <button id="export-hof-json" class="btn btn-secondary">
+                        <span>📤 Export Hall of Fame (JSON)</span>
+                    </button>
+                    <button id="export-hof-csv" class="btn btn-secondary">
+                        <span>📤 Export Hall of Fame (CSV)</span>
+                    </button>
+                </div>
+            </div>
+
             <!-- Contributors Management Section -->
             <div class="card">
                 <h2>👥 Contributor Management</h2>
@@ -253,7 +351,7 @@
 
                 <div class="action-buttons">
                     <button id="reset-all" class="btn btn-danger">
-                        <span>🔄 Reset All Contributors</span>
+                        <span>� Reset All Contributors</span>
                     </button>
                 </div>
 
@@ -300,8 +398,39 @@ function showToast(message, type = 'info') {
 <script nonce="lexicostatistics">
 // Data Overview Functionality
 (async function initDataOverview() {
-    // Load PR range info on page load
-    await loadPRRangeInfo();
+    // Auth gate: check if user is authenticated before hitting admin APIs
+    const authBanner = document.getElementById('auth-status');
+    const adminContent = document.getElementById('admin-content');
+    try {
+        const authResp = await fetch('/api/auth/status');
+        const authJson = await authResp.json();
+        if (authJson && authJson.isAuthenticated) {
+            if (authBanner) {
+                authBanner.className = 'auth-status auth-ok';
+                authBanner.textContent = `Signed in${authJson.username ? ' as ' + authJson.username : ''}.`;
+            }
+            if (adminContent) adminContent.style.display = 'block';
+            // Load PR range info on page load (only when authed)
+            await loadPRRangeInfo();
+            await initCronControls();
+        } else {
+            if (authBanner) {
+                authBanner.className = 'auth-status auth-warn';
+                authBanner.innerHTML = `You are not signed in. <a href="/auth/github">Sign in with GitHub</a> to view admin data.`;
+            }
+            if (adminContent) adminContent.style.display = 'none';
+            // Do not proceed with admin API calls when unauthenticated
+            return;
+        }
+    } catch (e) {
+        // If auth check fails, keep content hidden and show a hint
+        if (authBanner) {
+            authBanner.className = 'auth-status auth-error';
+            authBanner.textContent = 'Unable to verify authentication. Please refresh or sign in.';
+        }
+        if (adminContent) adminContent.style.display = 'none';
+        return;
+    }
 
     // Refresh button
     document.getElementById('refresh-stats')?.addEventListener('click', async () => {
@@ -325,6 +454,15 @@ function showToast(message, type = 'info') {
 async function loadPRRangeInfo() {
     try {
         const response = await fetch('/api/admin/pr-range-info');
+        // If not authorized, prompt login and exit early
+        if (response.status === 401) {
+            const authBanner = document.getElementById('auth-status');
+            if (authBanner) {
+                authBanner.className = 'auth-status auth-warn';
+                authBanner.innerHTML = `You are not signed in. <a href="/auth/github">Sign in with GitHub</a> to view admin data.`;
+            }
+            return;
+        }
         const result = await response.json();
 
         if (result.success) {
@@ -592,11 +730,22 @@ async function loadQuarterConfig() {
         const result = await response.json();
 
         if (result.success) {
-            const { config, currentQuarter, quarterDates } = result.data;
+            const { config, currentQuarter, quarterDates } = result;
 
             // Set dropdown values
             document.getElementById('quarter-system').value = config.systemType;
             document.getElementById('q1-start-month').value = config.q1StartMonth;
+
+            // Set feature flags
+            const achievementCommentsCheckbox = document.getElementById('enable-achievement-comments');
+            if (achievementCommentsCheckbox) {
+                achievementCommentsCheckbox.checked = config.enableAchievementComments || false;
+            }
+
+            const billsCommentsCheckbox = document.getElementById('enable-bills-comments');
+            if (billsCommentsCheckbox) {
+                billsCommentsCheckbox.checked = config.enableBillsComments || false;
+            }
 
             // Show custom config if needed
             if (config.systemType === 'custom') {
@@ -621,6 +770,8 @@ async function saveQuarterConfig() {
     const button = document.getElementById('save-quarter-config');
     const systemType = document.getElementById('quarter-system').value;
     const q1StartMonth = parseInt(document.getElementById('q1-start-month').value);
+    const enableAchievementComments = document.getElementById('enable-achievement-comments')?.checked || false;
+    const enableBillsComments = document.getElementById('enable-bills-comments')?.checked || false;
 
     button.disabled = true;
     button.innerHTML = '<span>⏳ Saving...</span>';
@@ -629,32 +780,32 @@ async function saveQuarterConfig() {
         const response = await fetch('/api/admin/quarter-config', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ systemType, q1StartMonth })
+            body: JSON.stringify({ systemType, q1StartMonth, enableAchievementComments, enableBillsComments })
         });
 
         const result = await response.json();
 
         if (result.success) {
             if (typeof showToast === 'function') {
-                let message = 'Quarter configuration saved successfully';
-                if (result.data.quarterChanged) {
-                    message += `. Quarter changed to ${result.data.newQuarter}`;
+                let message = 'Configuration saved successfully';
+                if (result.quarterChanged) {
+                    message += `. Quarter changed to ${result.newQuarter}`;
                 }
                 showToast(message, 'success');
             }
-            await loadQuarterConfig(); // Reload to show updated quarter
+            await loadQuarterConfig(); // Reload to show updated settings
             document.getElementById('quarter-change-warning').style.display = 'none';
         } else {
             throw new Error(result.message);
         }
     } catch (error) {
-        console.error('Error saving quarter config:', error);
+        console.error('Error saving config:', error);
         if (typeof showToast === 'function') {
             showToast('Failed to save configuration', 'error');
         }
     } finally {
         button.disabled = false;
-        button.innerHTML = '<span>💾 Save Quarter Configuration</span>';
+        button.innerHTML = '<span>💾 Save Configuration</span>';
     }
 }
 
@@ -668,6 +819,7 @@ document.getElementById('start-backfill')?.addEventListener('click', async () =>
     const startDate = document.getElementById('backfill-start-date').value;
     const endDate = document.getElementById('backfill-end-date').value;
     const checkRateLimits = document.getElementById('backfill-check-rate-limit').checked;
+    const verboseLogging = document.getElementById('backfill-verbose-logging').checked;
 
     if (!startDate || !endDate) {
         showToast('Please select both start and end dates', 'error');
@@ -683,13 +835,16 @@ document.getElementById('start-backfill')?.addEventListener('click', async () =>
         const response = await fetch('/api/admin/backfill/start', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ startDate, endDate, checkRateLimits })
+            body: JSON.stringify({ startDate, endDate, checkRateLimits, verboseLogging })
         });
 
         const result = await response.json();
 
         if (result.success) {
-            showToast('Backfill started successfully', 'success');
+            const message = verboseLogging 
+                ? 'Backfill started with verbose logging enabled - check server logs for detailed activity' 
+                : 'Backfill started successfully';
+            showToast(message, 'success');
             document.getElementById('start-backfill').style.display = 'none';
             document.getElementById('stop-backfill').style.display = 'inline-block';
             document.getElementById('backfill-progress').style.display = 'block';
@@ -723,62 +878,162 @@ document.getElementById('stop-backfill')?.addEventListener('click', async () => 
     }
 });
 
+// Recompute This Quarter Leaderboard
+document.getElementById('recompute-current-quarter')?.addEventListener('click', async () => {
+    try {
+        const resp = await fetch('/api/admin/leaderboard/recompute/current-quarter', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        const result = await resp.json();
+        if (result.success) {
+            showToast(`Recomputed current quarter for ${result.quarter}. Updated ${result.updated} contributors.`, 'success');
+        } else {
+            showToast(result.message || 'Failed to recompute current quarter', 'error');
+        }
+    } catch (err) {
+        console.error('Error recomputing current quarter:', err);
+        showToast('Failed to recompute current quarter', 'error');
+    }
+});
+
+// Recompute Hall of Fame for quarter
+document.getElementById('recompute-hof')?.addEventListener('click', async () => {
+    try {
+        const quarter = document.getElementById('recompute-hof-quarter')?.value?.trim();
+        const resp = await fetch('/api/admin/leaderboard/recompute/hall-of-fame', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ quarter: quarter || undefined })
+        });
+        const result = await resp.json();
+        if (result.success) {
+            showToast(`Hall of Fame ${result.updated ? 'updated' : 'not updated'} for ${result.quarter}. ${result.message || ''}`.trim(), 'success');
+        } else {
+            showToast(result.message || 'Failed to recompute Hall of Fame', 'error');
+        }
+    } catch (err) {
+        console.error('Error recomputing Hall of Fame:', err);
+        showToast('Failed to recompute Hall of Fame', 'error');
+    }
+});
+
+// Recompute Hall of Fame for ALL quarters
+document.getElementById('recompute-hof-all')?.addEventListener('click', async () => {
+    try {
+        if (!confirm('This will recompute Hall of Fame for ALL quarters based on point history. Continue?')) return;
+        const resp = await fetch('/api/admin/leaderboard/recompute/hall-of-fame/all', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        const result = await resp.json();
+        if (result.success) {
+            const count = (result.updatedQuarters || []).length;
+            showToast(`Recomputed Hall of Fame for ${count} quarter(s).`, 'success');
+        } else {
+            showToast(result.message || 'Failed to recompute Hall of Fame (all)', 'error');
+        }
+    } catch (err) {
+        console.error('Error recomputing Hall of Fame (all):', err);
+        showToast('Failed to recompute Hall of Fame (all)', 'error');
+    }
+});
+
+// Dev-only: show quick HoF recompute if not production
+(async () => {
+    try {
+        const resp = await fetch('/api/health');
+        const j = await resp.json();
+        if (j && j.environment && j.environment !== 'production') {
+            const devBtn = document.getElementById('dev-recompute-hof-all');
+            if (devBtn) devBtn.style.display = 'inline-block';
+        }
+    } catch (e) {
+        // ignore health check errors
+    }
+})();
+
+// Dev quick recompute (ALL)
+document.getElementById('dev-recompute-hof-all')?.addEventListener('click', async () => {
+    try {
+        const resp = await fetch('/api/admin/leaderboard/recompute/hall-of-fame/all', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        const result = await resp.json();
+        if (result.success) {
+            const count = (result.updatedQuarters || []).length;
+            showToast(`Dev: Recomputed Hall of Fame for ${count} quarter(s).`, 'success');
+        } else {
+            showToast(result.message || 'Dev: HoF recompute failed', 'error');
+        }
+    } catch (err) {
+        console.error('Dev HoF recompute error:', err);
+        showToast('Dev: HoF recompute failed', 'error');
+    }
+});
+
+// Export Hall of Fame JSON
+document.getElementById('export-hof-json')?.addEventListener('click', async () => {
+    try {
+        const resp = await fetch('/api/leaderboard/hall-of-fame?limit=500');
+        const j = await resp.json();
+        const data = j.data || [];
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `hall-of-fame-${new Date().toISOString().slice(0,10)}.json`;
+        document.body.appendChild(a);
+        a.click();
+        URL.revokeObjectURL(url);
+        a.remove();
+        showToast('Exported Hall of Fame (JSON)', 'success');
+    } catch (err) {
+        console.error('Export JSON failed:', err);
+        showToast('Failed to export Hall of Fame (JSON)', 'error');
+    }
+});
+
+// Export Hall of Fame CSV
+document.getElementById('export-hof-csv')?.addEventListener('click', async () => {
+    try {
+        const resp = await fetch('/api/leaderboard/hall-of-fame?limit=500');
+        const j = await resp.json();
+        const rows = (j.data || []).map(w => ({
+            quarter: w.quarter,
+            year: w.year,
+            quarterNumber: w.quarterNumber,
+            winner: (w.winner && w.winner.username) || '',
+            winnerPoints: (w.winner && w.winner.pointsThisQuarter) || 0,
+            participants: w.totalParticipants || 0
+        }));
+        const header = ['quarter','year','quarterNumber','winner','winnerPoints','participants'];
+        const csv = [header.join(','), ...rows.map(r => header.map(h => {
+            const val = r[h] ?? '';
+            const s = String(val).replace(/"/g, '""');
+            return /[,"]/.test(s) ? `"${s}"` : s;
+        }).join(','))].join('\n');
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `hall-of-fame-${new Date().toISOString().slice(0,10)}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        URL.revokeObjectURL(url);
+        a.remove();
+        showToast('Exported Hall of Fame (CSV)', 'success');
+    } catch (err) {
+        console.error('Export CSV failed:', err);
+        showToast('Failed to export Hall of Fame (CSV)', 'error');
+    }
+});
 // Listen for backfill progress updates via WebSocket
-if (typeof socket !== 'undefined') {
-    socket.on('backfill-progress', (progress) => {
-        // Update progress bar
-        const progressBar = document.getElementById('backfill-progress-bar');
-        if (progressBar) {
-            progressBar.style.width = `${progress.percentage || 0}%`;
-        }
+// This will be set up after socket.io is loaded and initialized
 
-        // Update stats
-        document.getElementById('backfill-status').textContent = progress.status || 'Running';
-        document.getElementById('backfill-prs-count').textContent = (progress.processedPRs || 0).toLocaleString();
-        document.getElementById('backfill-reviews-count').textContent = (progress.processedReviews || 0).toLocaleString();
-        document.getElementById('backfill-rate-limit').textContent = (progress.rateLimit || 0).toLocaleString();
-        document.getElementById('backfill-eta').textContent = progress.eta || 'Calculating...';
-
-        // If completed or stopped, update UI
-        if (progress.status === 'Completed' || progress.status === 'Stopped' || progress.status === 'Error') {
-            document.getElementById('start-backfill').style.display = 'inline-block';
-            document.getElementById('stop-backfill').style.display = 'none';
-
-            // Show results
-            const resultsDiv = document.getElementById('backfill-results');
-            const resultsContent = document.getElementById('backfill-results-content');
-
-            if (progress.status === 'Completed') {
-                resultsDiv.className = 'alert alert-success';
-                resultsContent.innerHTML = `
-                    <strong>✅ Backfill Completed!</strong><br>
-                    Processed ${progress.processedPRs || 0} PRs and ${progress.processedReviews || 0} reviews.
-                `;
-            } else if (progress.status === 'Stopped') {
-                resultsDiv.className = 'alert alert-warning';
-                resultsContent.innerHTML = `
-                    <strong>⏸️ Backfill Stopped</strong><br>
-                    Processed ${progress.processedPRs || 0} PRs and ${progress.processedReviews || 0} reviews before stopping.
-                `;
-            } else if (progress.status === 'Error') {
-                resultsDiv.className = 'alert alert-danger';
-                resultsContent.innerHTML = `
-                    <strong>❌ Backfill Error</strong><br>
-                    ${progress.error || 'An unknown error occurred'}
-                `;
-            }
-
-            resultsDiv.style.display = 'block';
-
-            // Refresh stats after backfill completes
-            setTimeout(() => {
-                loadPRRangeInfo();
-            }, 1000);
-        }
-    });
-
-    // Check backfill status on page load
-    (async () => {
+// Check backfill status on page load
+(async () => {
         try {
             const response = await fetch('/api/admin/backfill/status');
             const result = await response.json();
@@ -792,9 +1047,10 @@ if (typeof socket !== 'undefined') {
                 // Update with current progress
                 const progress = result.data.progress;
                 if (progress) {
+                    let percentage = 0;
                     const progressBar = document.getElementById('backfill-progress-bar');
                     if (progressBar && progress.totalPRs > 0) {
-                        const percentage = Math.floor((progress.processedPRs / progress.totalPRs) * 100);
+                        percentage = Math.floor((progress.processedPRs / progress.totalPRs) * 100);
                         progressBar.style.width = `${percentage}%`;
                     }
 
@@ -819,7 +1075,149 @@ if (typeof socket !== 'undefined') {
             console.error('Error checking backfill status:', error);
         }
     })();
+</script>
+
+<script nonce="lexicostatistics">
+// Cron controls
+async function initCronControls() {
+    try {
+        const resp = await fetch('/api/admin/cron-status');
+        if (resp.status === 401) return; // not authed
+        const j = await resp.json();
+        const enabled = !!j.enabled;
+        const toggle = document.getElementById('cron-toggle');
+        const status = document.getElementById('cron-status-text');
+        if (toggle) toggle.checked = enabled;
+        if (status) status.textContent = enabled ? 'Enabled' : 'Disabled';
+
+        toggle?.addEventListener('change', async (e) => {
+            const newVal = !!e.target.checked;
+            try {
+                const res2 = await fetch('/api/admin/cron-status', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ enabled: newVal })
+                });
+                const j2 = await res2.json();
+                const ok = j2.success !== false; // default to optimistic
+                const final = ok ? !!j2.enabled : !newVal; // if failed, revert
+                if (!ok) {
+                    if (typeof showToast === 'function') showToast('Failed to update cron status', 'error');
+                } else {
+                    if (typeof showToast === 'function') showToast(`Cron ${final ? 'enabled' : 'disabled'}`, 'success');
+                }
+                if (toggle) toggle.checked = final;
+                if (status) status.textContent = final ? 'Enabled' : 'Disabled';
+            } catch (err) {
+                console.error('Cron toggle failed', err);
+                if (typeof showToast === 'function') showToast('Failed to update cron status', 'error');
+                // revert checkbox
+                if (toggle) toggle.checked = !newVal;
+            }
+        });
+    } catch (err) {
+        console.error('Failed to initialize cron controls', err);
+    }
 }
+</script>
+
+<!-- Socket.IO Client Library -->
+<script src="/socket.io/socket.io.js"></script>
+<script nonce="lexicostatistics">
+    // Initialize Socket.IO connection for real-time updates
+    const socket = io();
+    
+    // Join the scoreboard updates room
+    socket.on('connect', () => {
+        console.log('Connected to WebSocket server');
+        socket.emit('join-room', 'scoreboard-updates');
+    });
+    
+    socket.on('disconnect', () => {
+        console.log('Disconnected from WebSocket server');
+    });
+    
+        // Listen for backfill progress updates
+        socket.on('backfill-progress', (progress) => {
+            console.log('Received backfill progress:', progress);
+        
+            // Update progress bar
+            const progressBar = document.getElementById('backfill-progress-bar');
+            if (progressBar) {
+                progressBar.style.width = `${progress.percentage || 0}%`;
+            }
+
+            // Update stats
+            document.getElementById('backfill-status').textContent = progress.status || 'Running';
+            document.getElementById('backfill-prs-count').textContent = (progress.processedPRs || 0).toLocaleString();
+            document.getElementById('backfill-reviews-count').textContent = (progress.processedReviews || 0).toLocaleString();
+            document.getElementById('backfill-rate-limit').textContent = (progress.rateLimit || 0).toLocaleString();
+            document.getElementById('backfill-eta').textContent = progress.eta || 'Calculating...';
+
+            // Update new items counts if available
+            if (progress.newPRsAdded !== undefined) {
+                const newDataText = `New: ${progress.newPRsAdded} PRs, ${progress.newReviewsAdded || 0} reviews`;
+                document.getElementById('backfill-status').textContent = `${progress.status || 'Running'} - ${newDataText}`;
+            }
+
+            // If completed or stopped, update UI and fetch final stats
+            if (progress.status === 'Completed' || progress.status === 'Stopped' || progress.status === 'Error') {
+                document.getElementById('start-backfill').style.display = 'inline-block';
+                document.getElementById('stop-backfill').style.display = 'none';
+
+                // Fetch detailed results from server
+                fetch('/api/admin/backfill/status')
+                    .then(res => res.json())
+                    .then(statusResult => {
+                        const resultsDiv = document.getElementById('backfill-results');
+                        const resultsContent = document.getElementById('backfill-results-content');
+
+                        if (progress.status === 'Completed') {
+                            const hasNewData = (progress.newPRsAdded || 0) > 0 || (progress.newReviewsAdded || 0) > 0;
+                            resultsDiv.className = hasNewData ? 'alert alert-success' : 'alert alert-info';
+                        
+                            if (hasNewData) {
+                                resultsContent.innerHTML = `
+                                    <strong>✅ Backfill Completed!</strong><br>
+                                    Found ${progress.totalPRs || 0} PRs in date range.<br>
+                                    Added ${progress.newPRsAdded || 0} new PRs and ${progress.newReviewsAdded || 0} new reviews.<br>
+                                    ${(progress.totalPRs || 0) - (progress.newPRsAdded || 0) > 0 ? 
+                                        `Skipped ${(progress.totalPRs || 0) - (progress.newPRsAdded || 0)} PRs (already in database).` : ''}
+                                `;
+                            } else {
+                                resultsContent.innerHTML = `
+                                    <strong>ℹ️ Backfill Completed - No New Data</strong><br>
+                                    Found ${progress.totalPRs || 0} PRs in date range, but all were already in the database.<br>
+                                    All reviews for these PRs are also already imported.<br>
+                                    <em>This is normal if you've already run backfill for this date range or if the cron job has imported recent data.</em>
+                                `;
+                            }
+                        } else if (progress.status === 'Stopped') {
+                            resultsDiv.className = 'alert alert-warning';
+                            resultsContent.innerHTML = `
+                                <strong>⏸️ Backfill Stopped</strong><br>
+                                Processed ${progress.processedPRs || 0} PRs and ${progress.processedReviews || 0} reviews before stopping.
+                            `;
+                        } else if (progress.status === 'Error') {
+                            resultsDiv.className = 'alert alert-danger';
+                            resultsContent.innerHTML = `
+                                <strong>❌ Backfill Error</strong><br>
+                                ${progress.error || 'An unknown error occurred'}
+                            `;
+                        }
+
+                        resultsDiv.style.display = 'block';
+                    })
+                    .catch(err => {
+                        console.error('Error fetching backfill results:', err);
+                    });
+
+                // Refresh stats after backfill completes
+                setTimeout(() => {
+                    loadPRRangeInfo();
+                }, 1000);
+            }
+        });
 </script>
 </body>
 </html>

@@ -1,29 +1,31 @@
 import { beforeAll, afterAll, beforeEach, afterEach } from '@jest/globals';
-import { MongoMemoryServer } from 'mongodb-memory-server';
-import mongoose from 'mongoose';
+import { execSync } from 'child_process';
+import { join } from 'path';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
 import dotenv from 'dotenv';
 import nock from 'nock';
+import { createRequire } from 'module';
+
+// Fix BigInt serialization for Jest worker communication
+// This allows BigInt values to be serialized to JSON in test results
+BigInt.prototype.toJSON = function() {
+  return this.toString();
+};
+
+// Get __dirname equivalent in ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 // Load test environment variables
 dotenv.config({ path: '.env.test' });
 
-let mongoServer;
+let prisma;
 
 // Global test setup
 beforeAll(async () => {
-  // Start in-memory MongoDB instance
-  mongoServer = await MongoMemoryServer.create();
-  const mongoUri = mongoServer.getUri();
-  
-  // Connect to the in-memory database
-  // Only connect if not already connected to avoid "multiple connections" error
-  if (mongoose.connection.readyState === 0) {
-    await mongoose.connect(mongoUri);
-  }
-  
   // Set test environment variables
   process.env.NODE_ENV = 'test';
-  process.env.MONGO_URI = mongoUri;
   process.env.GITHUB_TOKEN = 'test_github_token_123';
   process.env.REPO_OWNER = 'TestOrg';
   process.env.REPO_NAME = 'test-repo';
@@ -36,16 +38,24 @@ beforeAll(async () => {
   process.env.GITHUB_TEAM_SLUG = 'test-team';
   process.env.SESSION_SECRET = 'test_session_secret';
   process.env.DOMAIN = 'https://test.example.com';
+
+  // Import Prisma after env vars are set
+  const { prisma: prismaInstance } = await import('../lib/prisma.js');
+  prisma = prismaInstance;
 });
 
 // Global test teardown
 afterAll(async () => {
-  // Close database connection
-  await mongoose.connection.dropDatabase();
-  await mongoose.connection.close();
-  
-  // Stop the in-memory MongoDB instance
-  await mongoServer.stop();
+  // Disconnect Prisma and wait for connection pool to close
+  if (prisma) {
+    try {
+      await prisma.$disconnect();
+      // Give Prisma time to fully close connections
+      await new Promise(resolve => setTimeout(resolve, 100));
+    } catch (error) {
+      console.error('Error disconnecting Prisma:', error);
+    }
+  }
   
   // Clean up nock
   nock.cleanAll();
@@ -59,17 +69,32 @@ beforeEach(() => {
 });
 
 afterEach(async () => {
-  // Clean up collections between tests
-  const collections = mongoose.connection.collections;
-  
-  for (const key in collections) {
-    const collection = collections[key];
-    await collection.deleteMany({});
+  // Clean up all tables between tests in reverse dependency order
+  if (prisma) {
+    try {
+      await prisma.challengeParticipant.deleteMany({});
+      await prisma.completedChallenge.deleteMany({});
+      await prisma.challenge.deleteMany({});
+      await prisma.processedReview.deleteMany({});
+      await prisma.processedPR.deleteMany({});
+      await prisma.pointHistory.deleteMany({});
+      await prisma.achievement.deleteMany({});
+      await prisma.review.deleteMany({});
+      await prisma.contribution.deleteMany({});
+      await prisma.quarterlyWinner.deleteMany({});
+      await prisma.quarterSettings.deleteMany({});
+      await prisma.contributor.deleteMany({});
+    } catch (error) {
+      console.error('Error cleaning up test data:', error);
+    }
   }
   
   // Clean up nock interceptors
   nock.cleanAll();
 });
+
+// Export prisma instance for tests
+export { prisma };
 
 // Helper function to create GitHub API mocks
 export const mockGitHubApi = {
@@ -125,15 +150,18 @@ export const mockGitHubApi = {
   }
 };
 
-// Helper function to create test contributors
+// Helper function to create test contributors (returns data suitable for Prisma)
 export const createTestContributor = (overrides = {}) => {
   const baseContributor = {
     username: 'testuser',
-    prCount: 5,
-    reviewCount: 3,
+    prCount: BigInt(5),
+    reviewCount: BigInt(3),
     avatarUrl: 'https://github.com/testuser.png',
-    badges: [],
-    totalBillsAwarded: 0,
+    badges: [], // JSON array for PostgreSQL
+    totalBillsAwarded: BigInt(0),
+    totalPoints: BigInt(0),
+    currentStreak: BigInt(0),
+    longestStreak: BigInt(0),
     firstPrAwarded: false,
     firstReviewAwarded: false,
     first10PrsAwarded: false,
@@ -146,13 +174,35 @@ export const createTestContributor = (overrides = {}) => {
     first500ReviewsAwarded: false,
     first1000PrsAwarded: false,
     first1000ReviewsAwarded: false,
-    contributions: [],
-    reviews: [],
+    sevenDayBadge: false,
+    thirtyDayBadge: false,
+    ninetyDayBadge: false,
+    yearLongBadge: false,
     ...overrides
   };
 
+  // Convert numeric fields to BigInt if they aren't already
+  if (typeof baseContributor.prCount === 'number') {
+    baseContributor.prCount = BigInt(baseContributor.prCount);
+  }
+  if (typeof baseContributor.reviewCount === 'number') {
+    baseContributor.reviewCount = BigInt(baseContributor.reviewCount);
+  }
+  if (typeof baseContributor.totalBillsAwarded === 'number') {
+    baseContributor.totalBillsAwarded = BigInt(baseContributor.totalBillsAwarded);
+  }
+  if (typeof baseContributor.totalPoints === 'number') {
+    baseContributor.totalPoints = BigInt(baseContributor.totalPoints);
+  }
+  if (typeof baseContributor.currentStreak === 'number') {
+    baseContributor.currentStreak = BigInt(baseContributor.currentStreak);
+  }
+  if (typeof baseContributor.longestStreak === 'number') {
+    baseContributor.longestStreak = BigInt(baseContributor.longestStreak);
+  }
+
   // Auto-set boolean flags based on badges array
-  if (baseContributor.badges && baseContributor.badges.length > 0) {
+  if (baseContributor.badges && Array.isArray(baseContributor.badges) && baseContributor.badges.length > 0) {
     baseContributor.badges.forEach(badgeObj => {
       const badge = badgeObj.badge || badgeObj;
       if (badge === '1st PR badge') baseContributor.firstPrAwarded = true;
@@ -168,6 +218,29 @@ export const createTestContributor = (overrides = {}) => {
       if (badge === '1000 PR badge') baseContributor.first1000PrsAwarded = true;
       if (badge === '1000 Reviews badge') baseContributor.first1000ReviewsAwarded = true;
     });
+  }
+
+  // Handle contributions - create nested Contribution records if provided
+  if (overrides.contributions && Array.isArray(overrides.contributions)) {
+    baseContributor.contributions = {
+      create: overrides.contributions.map(contrib => ({
+        date: contrib.date instanceof Date ? contrib.date : new Date(contrib.date),
+        count: contrib.count || 0,
+        merged: contrib.merged || false
+      }))
+    };
+    delete overrides.contributions; // Remove from overrides since we've handled it
+  }
+
+  // Handle reviews - create nested Review records if provided
+  if (overrides.reviews && Array.isArray(overrides.reviews)) {
+    baseContributor.reviews = {
+      create: overrides.reviews.map(review => ({
+        date: review.date instanceof Date ? review.date : new Date(review.date),
+        count: review.count || 0
+      }))
+    };
+    delete overrides.reviews; // Remove from overrides since we've handled it
   }
 
   return baseContributor;

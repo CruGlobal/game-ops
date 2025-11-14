@@ -1,10 +1,7 @@
-import { describe, it, expect, beforeEach } from '@jest/globals';
+import { describe, it, expect, beforeEach, afterEach, afterAll } from '@jest/globals';
 import request from 'supertest';
 import express from 'express';
-import mongoose from 'mongoose';
-import Contributor from '../../models/contributor.js';
-import QuarterSettings from '../../models/quarterSettings.js';
-import QuarterlyWinner from '../../models/quarterlyWinner.js';
+import { prisma } from '../../lib/prisma.js';
 import { createTestContributor } from '../setup.js';
 
 // Import routes
@@ -17,40 +14,59 @@ app.use('/api', contributorRoutes);
 
 describe('Quarterly API Endpoints', () => {
     beforeEach(async () => {
-        await Contributor.deleteMany({});
-        await QuarterSettings.deleteMany({});
-        await QuarterlyWinner.deleteMany({});
+        await prisma.processedPR.deleteMany({});
+        await prisma.processedReview.deleteMany({});
+        await prisma.quarterlyWinner.deleteMany({});
+        await prisma.quarterSettings.deleteMany({});
+        await prisma.contributor.deleteMany({});
 
         // Create default quarter config
-        await QuarterSettings.create({
-            _id: 'quarter-config',
-            systemType: 'calendar',
-            q1StartMonth: 1
+        await prisma.quarterSettings.create({
+            data: {
+                id: 'quarter-config',
+                systemType: 'calendar',
+                q1StartMonth: 1
+            }
         });
+    });
+
+    afterEach(async () => {
+        await prisma.processedPR.deleteMany({});
+        await prisma.processedReview.deleteMany({});
+        await prisma.quarterlyWinner.deleteMany({});
+        await prisma.quarterSettings.deleteMany({});
+        await prisma.contributor.deleteMany({});
+    });
+
+    afterAll(async () => {
+        // Disconnect Prisma to allow Jest to exit
+        await prisma.$disconnect();
     });
 
     describe('GET /api/leaderboard/all-time', () => {
         it('should return all-time leaderboard sorted by total points', async () => {
-            await Contributor.create([
-                createTestContributor({
-                    username: 'topuser',
-                    totalPoints: 500,
-                    prCount: 40,
-                    reviewCount: 20
-                }),
-                createTestContributor({
-                    username: 'seconduser',
-                    totalPoints: 300,
-                    prCount: 25,
-                    reviewCount: 10
-                }),
-                createTestContributor({
-                    username: 'thirduser',
-                    totalPoints: 150,
-                    prCount: 10,
-                    reviewCount: 10
-                })
-            ]);
+            await prisma.contributor.createMany({
+                data: [
+                    createTestContributor({
+                        username: 'topuser',
+                        totalPoints: BigInt(500),
+                        prCount: BigInt(40),
+                        reviewCount: BigInt(20)
+                    }),
+                    createTestContributor({
+                        username: 'seconduser',
+                        totalPoints: BigInt(300),
+                        prCount: BigInt(25),
+                        reviewCount: BigInt(10)
+                    }),
+                    createTestContributor({
+                        username: 'thirduser',
+                        totalPoints: BigInt(150),
+                        prCount: BigInt(10),
+                        reviewCount: BigInt(10)
+                    })
+                ]
+            });
 
             const response = await request(app)
                 .get('/api/leaderboard/all-time')
@@ -67,16 +83,18 @@ describe('Quarterly API Endpoints', () => {
         });
 
         it('should include rank in response', async () => {
-            await Contributor.create([
-                createTestContributor({
-                    username: 'first',
-                    totalPoints: 1000
-                }),
-                createTestContributor({
-                    username: 'second',
-                    totalPoints: 500
-                })
-            ]);
+            await prisma.contributor.createMany({
+                data: [
+                    createTestContributor({
+                        username: 'first',
+                        totalPoints: BigInt(1000)
+                    }),
+                    createTestContributor({
+                        username: 'second',
+                        totalPoints: BigInt(500)
+                    })
+                ]
+            });
 
             const response = await request(app)
                 .get('/api/leaderboard/all-time')
@@ -98,44 +116,40 @@ describe('Quarterly API Endpoints', () => {
 
     describe('GET /api/leaderboard/quarterly', () => {
         it('should return current quarter leaderboard sorted by quarterly points', async () => {
-            await Contributor.create([
-                createTestContributor({
-                    username: 'user1',
-                    totalPoints: 1000,
-                    quarterlyStats: {
-                        currentQuarter: '2025-Q1',
-                        prsThisQuarter: 10,
-                        reviewsThisQuarter: 5,
-                        pointsThisQuarter: 125,
-                        quarterStartDate: new Date('2025-01-01'),
-                        quarterEndDate: new Date('2025-03-31')
-                    }
-                }),
-                createTestContributor({
-                    username: 'user2',
-                    totalPoints: 500,
-                    quarterlyStats: {
-                        currentQuarter: '2025-Q1',
-                        prsThisQuarter: 15,
-                        reviewsThisQuarter: 8,
-                        pointsThisQuarter: 190,
-                        quarterStartDate: new Date('2025-01-01'),
-                        quarterEndDate: new Date('2025-03-31')
-                    }
-                }),
-                createTestContributor({
-                    username: 'user3',
-                    totalPoints: 300,
-                    quarterlyStats: {
-                        currentQuarter: '2025-Q1',
-                        prsThisQuarter: 5,
-                        reviewsThisQuarter: 3,
-                        pointsThisQuarter: 65,
-                        quarterStartDate: new Date('2025-01-01'),
-                        quarterEndDate: new Date('2025-03-31')
-                    }
-                })
-            ]);
+            await prisma.contributor.createMany({
+                data: [
+                    createTestContributor({
+                        username: 'user1',
+                        totalPoints: BigInt(1000),
+                        quarterlyStats: {
+                            currentQuarter: '2025-Q4',
+                            pointsThisQuarter: 125,
+                            prsThisQuarter: 40,
+                            reviewsThisQuarter: 20
+                        }
+                    }),
+                    createTestContributor({
+                        username: 'user2',
+                        totalPoints: BigInt(800),
+                        quarterlyStats: {
+                            currentQuarter: '2025-Q4',
+                            pointsThisQuarter: 190,
+                            prsThisQuarter: 25,
+                            reviewsThisQuarter: 10
+                        }
+                    }),
+                    createTestContributor({
+                        username: 'user3',
+                        totalPoints: BigInt(600),
+                        quarterlyStats: {
+                            currentQuarter: '2025-Q4',
+                            pointsThisQuarter: 100,
+                            prsThisQuarter: 10,
+                            reviewsThisQuarter: 5
+                        }
+                    })
+                ]
+            });
 
             const response = await request(app)
                 .get('/api/leaderboard/quarterly')
@@ -153,8 +167,8 @@ describe('Quarterly API Endpoints', () => {
         });
 
         it('should include quarter info in response', async () => {
-            await Contributor.create(
-                createTestContributor({
+            await prisma.contributor.create({
+                data: createTestContributor({
                     username: 'testuser',
                     quarterlyStats: {
                         currentQuarter: '2025-Q1',
@@ -163,7 +177,7 @@ describe('Quarterly API Endpoints', () => {
                         quarterEndDate: new Date('2025-03-31')
                     }
                 })
-            );
+            });
 
             const response = await request(app)
                 .get('/api/leaderboard/quarterly')
@@ -175,24 +189,24 @@ describe('Quarterly API Endpoints', () => {
         });
 
         it('should only include contributors with quarterly points > 0', async () => {
-            await Contributor.create([
-                createTestContributor({
-                    username: 'active',
-                    quarterlyStats: {
-                        currentQuarter: '2025-Q1',
-                        pointsThisQuarter: 50
-                    }
-                }),
-                createTestContributor({
-                    username: 'inactive',
-                    quarterlyStats: {
-                        currentQuarter: '2025-Q1',
-                        pointsThisQuarter: 0
-                    }
-                })
-            ]);
-
-            const response = await request(app)
+            await prisma.contributor.createMany({
+                data: [
+                    createTestContributor({
+                        username: 'active',
+                        quarterlyStats: {
+                            currentQuarter: '2025-Q4',
+                            pointsThisQuarter: 50
+                        }
+                    }),
+                    createTestContributor({
+                        username: 'inactive',
+                        quarterlyStats: {
+                            currentQuarter: '2025-Q4',
+                            pointsThisQuarter: 0
+                        }
+                    })
+                ]
+            });            const response = await request(app)
                 .get('/api/leaderboard/quarterly')
                 .expect(200);
 
@@ -203,11 +217,12 @@ describe('Quarterly API Endpoints', () => {
 
     describe('GET /api/leaderboard/quarterly/:quarter', () => {
         it('should return specific quarter leaderboard from Hall of Fame', async () => {
-            await QuarterlyWinner.create({
-                quarter: '2024-Q4',
-                year: 2024,
-                quarterNumber: 4,
-                quarterStart: new Date('2024-10-01'),
+            await prisma.quarterlyWinner.create({
+                data: {
+                    quarter: '2024-Q4',
+                    year: 2024,
+                    quarterNumber: 4,
+                    quarterStart: new Date('2024-10-01'),
                 quarterEnd: new Date('2024-12-31'),
                 winner: {
                     username: 'champion',
@@ -243,6 +258,7 @@ describe('Quarterly API Endpoints', () => {
                     }
                 ],
                 totalParticipants: 15
+                }
             });
 
             const response = await request(app)
@@ -276,34 +292,35 @@ describe('Quarterly API Endpoints', () => {
 
     describe('GET /api/leaderboard/hall-of-fame', () => {
         it('should return all archived quarterly winners', async () => {
-            await QuarterlyWinner.create([
-                {
-                    quarter: '2025-Q1',
-                    year: 2025,
-                    quarterNumber: 1,
-                    quarterStart: new Date('2025-01-01'),
-                    quarterEnd: new Date('2025-03-31'),
-                    winner: {
-                        username: 'user1',
-                        pointsThisQuarter: 300
+            await prisma.quarterlyWinner.createMany({
+                data: [
+                    {
+                        quarter: '2025-Q1',
+                        year: 2025,
+                        quarterNumber: 1,
+                        quarterStart: new Date('2025-01-01'),
+                        quarterEnd: new Date('2025-03-31'),
+                        winner: {
+                            username: 'user1',
+                            pointsThisQuarter: 300
+                        },
+                        top3: [],
+                        totalParticipants: 10
                     },
-                    top3: [],
-                    totalParticipants: 10
-                },
-                {
-                    quarter: '2024-Q4',
-                    year: 2024,
-                    quarterNumber: 4,
-                    quarterStart: new Date('2024-10-01'),
-                    quarterEnd: new Date('2024-12-31'),
-                    winner: {
-                        username: 'user2',
-                        pointsThisQuarter: 250
+                    {
+                        quarter: '2024-Q4',
+                        year: 2024,
+                        quarterNumber: 4,
+                        quarterStart: new Date('2024-10-01'),
+                        quarterEnd: new Date('2024-12-31'),
+                        winner: {
+                            username: 'user2',
+                            pointsThisQuarter: 250
+                        },
+                        top3: [],
+                        totalParticipants: 12
                     },
-                    top3: [],
-                    totalParticipants: 12
-                },
-                {
+                    {
                     quarter: '2024-Q3',
                     year: 2024,
                     quarterNumber: 3,
@@ -311,12 +328,13 @@ describe('Quarterly API Endpoints', () => {
                     quarterEnd: new Date('2024-09-30'),
                     winner: {
                         username: 'user3',
-                        pointsThisQuarter: 280
+                        pointsThisQuarter: 200
                     },
                     top3: [],
                     totalParticipants: 8
                 }
-            ]);
+                ]
+            });
 
             const response = await request(app)
                 .get('/api/leaderboard/hall-of-fame')
@@ -332,22 +350,24 @@ describe('Quarterly API Endpoints', () => {
         });
 
         it('should include top 3 and participant count', async () => {
-            await QuarterlyWinner.create({
-                quarter: '2025-Q1',
-                year: 2025,
-                quarterNumber: 1,
-                quarterStart: new Date('2025-01-01'),
-                quarterEnd: new Date('2025-03-31'),
-                winner: {
-                    username: 'champion',
-                    pointsThisQuarter: 300
-                },
-                top3: [
-                    { rank: 1, username: 'champion', pointsThisQuarter: 300 },
-                    { rank: 2, username: 'second', pointsThisQuarter: 200 },
-                    { rank: 3, username: 'third', pointsThisQuarter: 150 }
-                ],
-                totalParticipants: 25
+            await prisma.quarterlyWinner.create({
+                data: {
+                    quarter: '2025-Q1',
+                    year: 2025,
+                    quarterNumber: 1,
+                    quarterStart: new Date('2025-01-01'),
+                    quarterEnd: new Date('2025-03-31'),
+                    winner: {
+                        username: 'winner',
+                        pointsThisQuarter: 400
+                    },
+                    top3: [
+                        { rank: 1, username: 'winner', pointsThisQuarter: 400 },
+                        { rank: 2, username: 'second', pointsThisQuarter: 300 },
+                        { rank: 3, username: 'third', pointsThisQuarter: 200 }
+                    ],
+                    totalParticipants: 25
+                }
             });
 
             const response = await request(app)
@@ -370,14 +390,18 @@ describe('Quarterly API Endpoints', () => {
 
     describe('GET /api/admin/quarter-config', () => {
         it('should return current quarter configuration', async () => {
-            await QuarterSettings.findOneAndUpdate(
-                { _id: 'quarter-config' },
-                {
+            await prisma.quarterSettings.upsert({
+                where: { id: 'quarter-config' },
+                update: {
                     systemType: 'fiscal-us',
                     q1StartMonth: 10
                 },
-                { upsert: true }
-            );
+                create: {
+                    id: 'quarter-config',
+                    systemType: 'fiscal-us',
+                    q1StartMonth: 10
+                }
+            });
 
             const response = await request(app)
                 .get('/api/admin/quarter-config')
@@ -390,7 +414,7 @@ describe('Quarterly API Endpoints', () => {
         });
 
         it('should return default config if none exists', async () => {
-            await QuarterSettings.deleteMany({});
+            await prisma.quarterSettings.deleteMany({});
 
             const response = await request(app)
                 .get('/api/admin/quarter-config')
@@ -417,7 +441,9 @@ describe('Quarterly API Endpoints', () => {
             expect(response.body.config.q1StartMonth).toBe(9);
 
             // Verify saved to database
-            const config = await QuarterSettings.findById('quarter-config');
+            const config = await prisma.quarterSettings.findUnique({
+                where: { id: 'quarter-config' }
+            });
             expect(config.systemType).toBe('academic');
             expect(config.q1StartMonth).toBe(9);
         });
@@ -449,23 +475,28 @@ describe('Quarterly API Endpoints', () => {
         });
 
         it('should trigger quarter reset if quarter changed', async () => {
+            // Delete the default config from beforeEach first
+            await prisma.quarterSettings.deleteMany({});
+            
             // Set old config with Q1 in January
-            await QuarterSettings.create({
-                _id: 'quarter-config',
-                systemType: 'calendar',
-                q1StartMonth: 1
+            await prisma.quarterSettings.create({
+                data: {
+                    id: 'quarter-config',
+                    systemType: 'calendar',
+                    q1StartMonth: 1
+                }
             });
 
             // Create contributors with current stats
-            await Contributor.create(
-                createTestContributor({
+            await prisma.contributor.create({
+                data: createTestContributor({
                     username: 'testuser',
                     quarterlyStats: {
                         currentQuarter: '2025-Q1',
-                        pointsThisQuarter: 100
+                        pointsThisQuarter: BigInt(100)
                     }
                 })
-            );
+            });
 
             // Change to fiscal year (Q1 in October)
             const response = await request(app)

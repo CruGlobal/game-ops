@@ -24,15 +24,14 @@ Complete guide for deploying the GitHub PR Scoreboard to various environments.
 ### Required Software
 - **Node.js** >= 18.0.0
 - **npm** >= 9.0.0
-- **MongoDB** >= 5.0 (development) or AWS DynamoDB (production)
+- **PostgreSQL** >= 14.0 (or Neon serverless PostgreSQL)
 - **Docker** >= 20.10 (optional, recommended)
 - **Git** >= 2.30
 
 ### Required Accounts
 - **GitHub Account** with admin access to target repository
 - **GitHub Personal Access Token** with `repo` scope
-- **MongoDB Atlas Account** (for cloud database) or local MongoDB
-- **AWS Account** (optional, for production with DynamoDB)
+- **Neon Account** (recommended for cloud PostgreSQL) or local PostgreSQL
 
 ---
 
@@ -65,7 +64,7 @@ Edit `.env` with your configuration:
 ```env
 # Required Variables
 GITHUB_TOKEN=<your-github-token>
-MONGO_URI=mongodb://localhost:27017/scoreboard
+DATABASE_URL=postgresql://user:password@localhost:5432/scoreboard
 SESSION_SECRET=<generate-random-secret>
 NODE_ENV=development
 
@@ -105,6 +104,14 @@ Use this value for `SESSION_SECRET`.
 ```bash
 cd app
 npm install
+
+# Run Prisma migrations
+npx prisma migrate deploy
+
+# Generate Prisma Client
+npx prisma generate
+
+# Start application
 npm start
 ```
 
@@ -128,8 +135,8 @@ docker-compose down
 
 **Services Available:**
 - **Application:** `http://localhost:3000`
-- **MongoDB:** `mongodb://localhost:27017`
-- **Mongo Express:** `http://localhost:8081` (admin/admin)
+- **PostgreSQL:** `postgresql://localhost:5432`
+- **Prisma Studio:** `http://localhost:5555` (run `npx prisma studio`)
 
 ### Development Mode with Hot Reload
 
@@ -155,7 +162,7 @@ docker run -d \
   --name pr-scoreboard \
   -p 3000:3000 \
   -e GITHUB_TOKEN=<your-token> \
-  -e MONGO_URI=mongodb://host.docker.internal:27017/scoreboard \
+  -e DATABASE_URL=postgresql://user:password@host.docker.internal:5432/scoreboard \
   -e SESSION_SECRET=<your-secret> \
   -e NODE_ENV=production \
   github-pr-scoreboard:latest
@@ -176,16 +183,20 @@ services:
     environment:
       NODE_ENV: production
       GITHUB_TOKEN: ${GITHUB_TOKEN}
-      MONGO_URI: mongodb://mongodb:27017/scoreboard
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/scoreboard
       SESSION_SECRET: ${SESSION_SECRET}
     depends_on:
-      - mongodb
+      - postgres
     restart: unless-stopped
 
-  mongodb:
-    image: mongo:5
+  postgres:
+    image: postgres:14-alpine
+    environment:
+      POSTGRES_DB: scoreboard
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
-      - mongodb_data:/data/db
+      - postgres_data:/var/lib/postgresql/data
     restart: unless-stopped
 
   nginx:
@@ -201,7 +212,7 @@ services:
     restart: unless-stopped
 
 volumes:
-  mongodb_data:
+  postgres_data:
 ```
 
 Deploy:
@@ -377,10 +388,10 @@ heroku login
 heroku create your-app-name
 ```
 
-**3. Add MongoDB Add-on**
+**3. Add PostgreSQL Add-on**
 
 ```bash
-heroku addons:create mongolab:sandbox
+heroku addons:create heroku-postgresql:mini
 ```
 
 **4. Set Environment Variables**
@@ -396,7 +407,7 @@ heroku config:set GITHUB_REPO=your-repo
 **5. Create Procfile**
 
 ```bash
-echo "web: cd app && npm start" > Procfile
+echo "web: cd app && npx prisma migrate deploy && npm start" > Procfile
 ```
 
 **6. Deploy**
@@ -547,69 +558,120 @@ sudo certbot --nginx -d your-domain.com
 
 ## Database Setup
 
-### MongoDB Atlas (Cloud)
+### Neon PostgreSQL (Cloud - Recommended)
 
-**1. Create Account and Cluster**
+**1. Create Account and Database**
 
-- Visit [mongodb.com/cloud/atlas](https://mongodb.com/cloud/atlas)
-- Create free tier cluster
-- Create database user
-- Whitelist IP addresses (0.0.0.0/0 for all IPs in production use your server IP)
+- Visit [neon.tech](https://neon.tech)
+- Create free tier project
+- Create database named `scoreboard`
+- Note the connection string
 
 **2. Get Connection String**
 
 ```
-mongodb+srv://<your-username>:<your-password>@cluster.mongodb.net/scoreboard?retryWrites=true&w=majority
+postgresql://user:password@ep-example-123.us-east-2.aws.neon.tech/scoreboard?sslmode=require
 ```
 
 **3. Update Environment Variable**
 
 ```env
-MONGO_URI=mongodb+srv://<your-username>:<your-password>@cluster.mongodb.net/scoreboard?retryWrites=true&w=majority
+DATABASE_URL=postgresql://user:password@ep-example-123.us-east-2.aws.neon.tech/scoreboard?sslmode=require
 ```
 
-### Local MongoDB
+**4. Run Migrations**
+
+```bash
+cd app
+npx prisma migrate deploy
+```
+
+### Local PostgreSQL
 
 **Docker:**
 
 ```bash
 docker run -d \
-  --name mongodb \
-  -p 27017:27017 \
-  -v mongodb_data:/data/db \
-  mongo:5
+  --name postgres \
+  -p 5432:5432 \
+  -e POSTGRES_DB=scoreboard \
+  -e POSTGRES_USER=postgres \
+  -e POSTGRES_PASSWORD=yourpassword \
+  -v postgres_data:/var/lib/postgresql/data \
+  postgres:14-alpine
 ```
 
 **Native Installation (Ubuntu):**
 
 ```bash
-wget -qO - https://www.mongodb.org/static/pgp/server-5.0.asc | sudo apt-key add -
-echo "deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu focal/mongodb-org/5.0 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-5.0.list
-sudo apt-get update
-sudo apt-get install -y mongodb-org
-sudo systemctl start mongod
-sudo systemctl enable mongod
+# Install PostgreSQL
+sudo apt update
+sudo apt install -y postgresql postgresql-contrib
+
+# Start PostgreSQL
+sudo systemctl start postgresql
+sudo systemctl enable postgresql
+
+# Create database and user
+sudo -u postgres psql
+CREATE DATABASE scoreboard;
+CREATE USER scoreboard_user WITH ENCRYPTED PASSWORD 'yourpassword';
+GRANT ALL PRIVILEGES ON DATABASE scoreboard TO scoreboard_user;
+\q
 ```
 
-### DynamoDB (Production Option)
+**Native Installation (macOS):**
 
-**Update `app/config/db-config.js` to use DynamoDB:**
+```bash
+# Install via Homebrew
+brew install postgresql@14
 
-```javascript
-if (process.env.NODE_ENV === 'production') {
-  // Use DynamoDB
-  const dynamodb = new AWS.DynamoDB.DocumentClient({
-    region: process.env.AWS_REGION
-  });
-}
+# Start PostgreSQL
+brew services start postgresql@14
+
+# Create database
+createdb scoreboard
 ```
 
-**Set AWS credentials:**
+**Set DATABASE_URL:**
 
 ```env
-AWS_REGION=us-east-1
-AWS_ACCESS_KEY_ID=your_access_key
-AWS_SECRET_ACCESS_KEY=your_secret_key
+DATABASE_URL=postgresql://postgres:yourpassword@localhost:5432/scoreboard
+```
+
+**Run Prisma Migrations:**
+
+```bash
+cd app
+npx prisma migrate deploy
+npx prisma generate
+```
+
+### Database Management
+
+**Prisma Studio (Recommended):**
+
+```bash
+cd app
+npx prisma studio
+```
+
+Opens at `http://localhost:5555` - GUI for viewing and editing data.
+
+**psql CLI:**
+
+```bash
+# Connect to database
+psql postgresql://user:password@localhost:5432/scoreboard
+
+# List tables
+\dt
+
+# View schema
+\d+ "Contributor"
+
+# Query data
+SELECT * FROM "Contributor" LIMIT 10;
 ```
 
 ---
@@ -694,17 +756,20 @@ lsof -i :3000
 kill -9 <PID>
 ```
 
-**2. MongoDB Connection Failed**
+**2. PostgreSQL Connection Failed**
 
 ```bash
-# Check MongoDB status
-systemctl status mongod
+# Check PostgreSQL status
+systemctl status postgresql
 
-# View MongoDB logs
-tail -f /var/log/mongodb/mongod.log
+# View PostgreSQL logs
+tail -f /var/log/postgresql/postgresql-14-main.log
 
 # Test connection
-mongosh "mongodb://localhost:27017/scoreboard"
+psql $DATABASE_URL
+
+# Or test with Prisma
+cd app && npx prisma db pull
 ```
 
 **3. WebSocket Connection Issues**
@@ -733,7 +798,7 @@ chmod -R 755 /path/to/app
 - **Application logs:** `/var/log/pr-scoreboard/`
 - **Nginx logs:** `/var/log/nginx/`
 - **PM2 logs:** `~/.pm2/logs/`
-- **MongoDB logs:** `/var/log/mongodb/`
+- **PostgreSQL logs:** `/var/log/postgresql/`
 
 ### Performance Optimization
 
@@ -746,12 +811,31 @@ app.use(compression());
 
 **2. Database Indexing**
 
-```javascript
-// Add indexes to MongoDB
-db.contributors.createIndex({ username: 1 });
-db.contributors.createIndex({ totalPoints: -1 });
-db.contributors.createIndex({ currentStreak: -1 });
-db.challenges.createIndex({ status: 1, endDate: 1 });
+Prisma automatically creates indexes defined in schema.prisma:
+
+```prisma
+model Contributor {
+  id String @id @default(cuid())
+  username String @unique
+  totalPoints BigInt @default(0)
+  currentStreak Int @default(0)
+  
+  @@index([totalPoints(sort: Desc)])
+  @@index([currentStreak(sort: Desc)])
+}
+```
+
+**3. Connection Pooling**
+
+Prisma handles connection pooling automatically. Configure in schema.prisma:
+
+```prisma
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  // Connection pool settings
+  // connection_limit = 10
+}
 ```
 
 **3. Caching**
@@ -777,14 +861,20 @@ app.get('/api/contributors', async (req, res) => {
 
 ### Database Backup
 
-**MongoDB:**
+**PostgreSQL:**
 
 ```bash
 # Backup
-mongodump --uri="mongodb://localhost:27017/scoreboard" --out=/backup/$(date +%Y%m%d)
+pg_dump $DATABASE_URL > /backup/scoreboard_$(date +%Y%m%d).sql
+
+# Or using docker
+docker exec postgres pg_dump -U postgres scoreboard > /backup/scoreboard_$(date +%Y%m%d).sql
 
 # Restore
-mongorestore --uri="mongodb://localhost:27017/scoreboard" /backup/20251015
+psql $DATABASE_URL < /backup/scoreboard_20251015.sql
+
+# Or using docker
+docker exec -i postgres psql -U postgres scoreboard < /backup/scoreboard_20251015.sql
 ```
 
 **Automated Backup Script:**
@@ -794,10 +884,13 @@ mongorestore --uri="mongodb://localhost:27017/scoreboard" /backup/20251015
 BACKUP_DIR="/backups"
 DATE=$(date +%Y%m%d_%H%M%S)
 
-mongodump --uri="$MONGO_URI" --out="$BACKUP_DIR/$DATE"
+pg_dump $DATABASE_URL > "$BACKUP_DIR/scoreboard_$DATE.sql"
+
+# Compress backup
+gzip "$BACKUP_DIR/scoreboard_$DATE.sql"
 
 # Keep only last 7 days
-find $BACKUP_DIR -type d -mtime +7 -exec rm -rf {} \;
+find $BACKUP_DIR -name "*.sql.gz" -type f -mtime +7 -delete
 ```
 
 Add to crontab:
@@ -805,6 +898,13 @@ Add to crontab:
 ```bash
 0 2 * * * /path/to/backup-script.sh
 ```
+
+**Neon Backups:**
+
+Neon provides automatic point-in-time recovery (PITR). Access via Neon dashboard:
+- Automatic backups retained for 7 days (free tier)
+- Restore to any point in time
+- No manual backup scripts needed
 
 ---
 
@@ -856,12 +956,14 @@ jobs:
 - [ ] SESSION_SECRET is randomly generated
 - [ ] HTTPS is enabled with valid SSL certificate
 - [ ] Firewall rules are configured
-- [ ] MongoDB is not publicly accessible
+- [ ] PostgreSQL is not publicly accessible (use SSL/TLS)
+- [ ] DATABASE_URL uses `?sslmode=require` for cloud databases
 - [ ] Rate limiting is enabled
 - [ ] CSP headers are configured
 - [ ] Regular security updates are applied
 - [ ] Logs don't contain sensitive data
 - [ ] GitHub token has minimal required permissions
+- [ ] Prisma is kept up to date for security patches
 
 ---
 

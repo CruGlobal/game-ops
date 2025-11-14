@@ -1,4 +1,4 @@
-import Contributor from '../models/contributor.js';
+import prisma from '../lib/prisma.js';
 import { calculatePRPoints, POINT_VALUES, POINT_REASONS } from '../config/points-config.js';
 import { emitPointsAwarded } from '../utils/socketEmitter.js';
 import logger from '../utils/logger.js';
@@ -39,40 +39,53 @@ export const calculatePoints = (prData, contributor) => {
  * @param {Number} prNumber - PR number (optional)
  * @returns {Object} Updated points data
  */
-export const awardPoints = async (contributor, points, reason, prNumber = null) => {
+export const awardPoints = async (contributor, points, reason, prNumber = null, timestamp = null) => {
     try {
-        // Update total points
-        contributor.totalPoints += points;
-
-        // Add to points history
-        contributor.pointsHistory.push({
-            points,
-            reason,
-            prNumber,
-            timestamp: new Date()
+        // Update contributor with new points
+        const updatedContributor = await prisma.contributor.update({
+            where: { id: contributor.id },
+            data: {
+                totalPoints: {
+                    increment: BigInt(points)
+                },
+                pointsHistory: {
+                    create: {
+                        points: BigInt(points),
+                        reason,
+                        prNumber: prNumber ? BigInt(prNumber) : null,
+                        timestamp: timestamp ? new Date(timestamp) : new Date()
+                    }
+                }
+            },
+            include: {
+                pointsHistory: {
+                    orderBy: { timestamp: 'desc' },
+                    take: 1
+                }
+            }
         });
 
-        await contributor.save();
+        const newTotalPoints = Number(updatedContributor.totalPoints);
 
         // Emit WebSocket event
         emitPointsAwarded({
-            username: contributor.username,
+            username: updatedContributor.username,
             points,
-            totalPoints: contributor.totalPoints,
+            totalPoints: newTotalPoints,
             reason,
             prNumber
         });
 
         logger.info('Points awarded', {
-            username: contributor.username,
+            username: updatedContributor.username,
             points,
-            totalPoints: contributor.totalPoints,
+            totalPoints: newTotalPoints,
             reason
         });
 
         return {
             points,
-            totalPoints: contributor.totalPoints,
+            totalPoints: newTotalPoints,
             reason
         };
     } catch (error) {
@@ -89,14 +102,15 @@ export const awardPoints = async (contributor, points, reason, prNumber = null) 
  * @param {Object} contributor - Contributor document
  * @returns {Object} Updated points data
  */
-export const awardReviewPoints = async (contributor) => {
+export const awardReviewPoints = async (contributor, timestamp = null, prNumber = null) => {
     try {
         const reviewPoints = POINT_VALUES.review;
         return await awardPoints(
             contributor,
             reviewPoints,
             POINT_REASONS.REVIEW_COMPLETED,
-            null
+            prNumber,
+            timestamp
         );
     } catch (error) {
         logger.error('Error awarding review points', {
@@ -114,12 +128,25 @@ export const awardReviewPoints = async (contributor) => {
  */
 export const getPointsLeaderboard = async (limit = 10) => {
     try {
-        const contributors = await Contributor.find()
-            .sort({ totalPoints: -1 })
-            .limit(limit)
-            .select('username avatarUrl totalPoints prCount reviewCount');
+        const contributors = await prisma.contributor.findMany({
+            orderBy: { totalPoints: 'desc' },
+            take: limit,
+            select: {
+                username: true,
+                avatarUrl: true,
+                totalPoints: true,
+                prCount: true,
+                reviewCount: true
+            }
+        });
 
-        return contributors;
+        // Convert BigInt to Number for JSON serialization
+        return contributors.map(c => ({
+            ...c,
+            totalPoints: Number(c.totalPoints),
+            prCount: Number(c.prCount),
+            reviewCount: Number(c.reviewCount)
+        }));
     } catch (error) {
         logger.error('Error getting points leaderboard', {
             error: error.message
@@ -136,22 +163,37 @@ export const getPointsLeaderboard = async (limit = 10) => {
  */
 export const getPointsHistory = async (username, limit = 50) => {
     try {
-        const contributor = await Contributor.findOne({ username })
-            .select('username totalPoints pointsHistory');
+        const contributor = await prisma.contributor.findUnique({
+            where: { username },
+            select: {
+                username: true,
+                totalPoints: true,
+                pointsHistory: {
+                    orderBy: { timestamp: 'desc' },
+                    take: limit,
+                    select: {
+                        points: true,
+                        reason: true,
+                        prNumber: true,
+                        timestamp: true
+                    }
+                }
+            }
+        });
 
         if (!contributor) {
             throw new Error('Contributor not found');
         }
 
-        // Sort by most recent first and limit
-        const history = contributor.pointsHistory
-            .sort((a, b) => b.timestamp - a.timestamp)
-            .slice(0, limit);
-
         return {
             username: contributor.username,
-            totalPoints: contributor.totalPoints,
-            history
+            totalPoints: Number(contributor.totalPoints),
+            history: contributor.pointsHistory.map(h => ({
+                points: Number(h.points),
+                reason: h.reason,
+                prNumber: h.prNumber ? Number(h.prNumber) : null,
+                timestamp: h.timestamp
+            }))
         };
     } catch (error) {
         logger.error('Error getting points history', {
@@ -169,8 +211,19 @@ export const getPointsHistory = async (username, limit = 50) => {
  */
 export const getPointsSummary = async (username) => {
     try {
-        const contributor = await Contributor.findOne({ username })
-            .select('username totalPoints pointsHistory');
+        const contributor = await prisma.contributor.findUnique({
+            where: { username },
+            select: {
+                username: true,
+                totalPoints: true,
+                pointsHistory: {
+                    select: {
+                        points: true,
+                        reason: true
+                    }
+                }
+            }
+        });
 
         if (!contributor) {
             throw new Error('Contributor not found');
@@ -179,15 +232,16 @@ export const getPointsSummary = async (username) => {
         // Calculate points by reason
         const pointsByReason = {};
         contributor.pointsHistory.forEach(entry => {
+            const points = Number(entry.points);
             if (!pointsByReason[entry.reason]) {
                 pointsByReason[entry.reason] = 0;
             }
-            pointsByReason[entry.reason] += entry.points;
+            pointsByReason[entry.reason] += points;
         });
 
         return {
             username: contributor.username,
-            totalPoints: contributor.totalPoints,
+            totalPoints: Number(contributor.totalPoints),
             pointsByReason,
             totalEntries: contributor.pointsHistory.length
         };

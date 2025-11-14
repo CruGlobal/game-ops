@@ -1,4 +1,5 @@
 import logger from '../utils/logger.js';
+import { Prisma } from '@prisma/client';
 
 export const errorHandler = (err, req, res, next) => {
     // Log error with context
@@ -23,11 +24,20 @@ export const errorHandler = (err, req, res, next) => {
         });
     }
 
-    if (err.name === 'MongoError' || err.name === 'MongooseError') {
+    // Handle Prisma errors
+    if (err instanceof Prisma.PrismaClientKnownRequestError) {
         return res.status(503).json({
             success: false,
             message: 'Database error',
             error: isDevelopment ? err.message : 'Service temporarily unavailable'
+        });
+    }
+
+    if (err instanceof Prisma.PrismaClientValidationError) {
+        return res.status(400).json({
+            success: false,
+            message: 'Database validation error',
+            error: isDevelopment ? err.message : 'Invalid database operation'
         });
     }
 
