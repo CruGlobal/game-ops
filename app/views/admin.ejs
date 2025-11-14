@@ -224,6 +224,84 @@
                 </div>
             </div>
 
+            <!-- DevOps Team Management Section -->
+            <div class="card">
+                <h2>👥 DevOps Team Management</h2>
+                <p class="settings-description">Manage DevOps team synchronization from GitHub and leaderboard filtering. Team members are automatically detected from the GitHub <code id="devops-team-slug-display">devops-engineering-team</code> team.</p>
+
+                <!-- Team Info -->
+                <div class="stats-grid" style="margin-bottom: 1.5rem;">
+                    <div class="stat-item">
+                        <span class="stat-label">GitHub Organization</span>
+                        <span class="stat-value" id="github-org">
+                            <span class="loading-spinner">Loading...</span>
+                        </span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Team Members</span>
+                        <span class="stat-value" id="devops-member-count">
+                            <span class="loading-spinner">Loading...</span>
+                        </span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Last Synced</span>
+                        <span class="stat-value" id="last-sync">
+                            <span class="loading-spinner">Loading...</span>
+                        </span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Contributors (Total / DevOps / Non-DevOps)</span>
+                        <span class="stat-value" id="contributor-counts">
+                            <span class="loading-spinner">Loading...</span>
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Toggle Controls -->
+                <div class="settings-controls">
+                    <div class="setting-item">
+                        <label class="toggle-label">
+                            <input type="checkbox" id="devops-sync-toggle" class="toggle-checkbox">
+                            <span class="toggle-slider"></span>
+                            <span class="toggle-text">Automatic Daily Sync</span>
+                        </label>
+                        <p class="setting-hint">When enabled, team members will be synced from GitHub daily at 2 AM UTC</p>
+                    </div>
+
+                    <div class="setting-item">
+                        <label class="toggle-label">
+                            <input type="checkbox" id="devops-filter-toggle" class="toggle-checkbox">
+                            <span class="toggle-slider"></span>
+                            <span class="toggle-text">Exclude DevOps from Leaderboards</span>
+                        </label>
+                        <p class="setting-hint">When enabled, DevOps team members will be excluded from all leaderboards to encourage non-DevOps participation</p>
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="button-group" style="margin-top: 1rem;">
+                    <button id="sync-devops-team" class="btn btn-primary">
+                        <span>🔄 Sync from GitHub Now</span>
+                    </button>
+                    <button id="view-devops-members" class="btn btn-secondary">
+                        <span>👥 View Team Members</span>
+                    </button>
+                </div>
+
+                <!-- Team Members List (hidden by default) -->
+                <div id="devops-members-list" class="alert alert-info" style="display: none; margin-top: 1rem;">
+                    <h3 style="margin-top: 0;">DevOps Team Members</h3>
+                    <div id="devops-members-content" style="margin-top: 0.5rem;">
+                        <span class="loading-spinner">Loading...</span>
+                    </div>
+                </div>
+
+                <!-- Sync Result Display -->
+                <div id="devops-sync-result" class="alert" style="display: none; margin-top: 1rem;">
+                    <div id="devops-sync-content"></div>
+                </div>
+            </div>
+
             <!-- Historical Data Backfill Section -->
             <div class="card">
                 <h2>📦 Historical Data Backfill</h2>
@@ -413,6 +491,7 @@ function showToast(message, type = 'info') {
             // Load PR range info on page load (only when authed)
             await loadPRRangeInfo();
             await initCronControls();
+            await initDevOpsTeamControls();
         } else {
             if (authBanner) {
                 authBanner.className = 'auth-status auth-warn';
@@ -1117,6 +1196,254 @@ async function initCronControls() {
         });
     } catch (err) {
         console.error('Failed to initialize cron controls', err);
+    }
+}
+
+// ===== DevOps Team Management Functions =====
+
+async function initDevOpsTeamControls() {
+    try {
+        // Load initial settings
+        await loadDevOpsTeamSettings();
+
+        // Sync toggle
+        const syncToggle = document.getElementById('devops-sync-toggle');
+        if (syncToggle) {
+            syncToggle.addEventListener('change', async () => {
+                await toggleDevOpsSync(syncToggle.checked);
+            });
+        }
+
+        // Filter toggle
+        const filterToggle = document.getElementById('devops-filter-toggle');
+        if (filterToggle) {
+            filterToggle.addEventListener('change', async () => {
+                await toggleDevOpsFilter(filterToggle.checked);
+            });
+        }
+
+        // Sync button
+        const syncButton = document.getElementById('sync-devops-team');
+        if (syncButton) {
+            syncButton.addEventListener('click', async () => {
+                await syncDevOpsTeam();
+            });
+        }
+
+        // View members button
+        const viewButton = document.getElementById('view-devops-members');
+        if (viewButton) {
+            viewButton.addEventListener('click', () => {
+                toggleDevOpsMembersList();
+            });
+        }
+    } catch (err) {
+        console.error('Failed to initialize DevOps team controls', err);
+    }
+}
+
+async function loadDevOpsTeamSettings() {
+    try {
+        const response = await fetch('/api/admin/devops-team/settings');
+        if (response.status === 401) return;
+
+        const result = await response.json();
+
+        if (result.success) {
+            const { settings, counts } = result;
+
+            // Update org display
+            document.getElementById('github-org').textContent = settings.githubOrg || 'N/A';
+
+            // Update team slug display
+            const slugDisplay = document.getElementById('devops-team-slug-display');
+            if (slugDisplay) {
+                slugDisplay.textContent = settings.teamSlug || 'devops-engineering-team';
+            }
+
+            // Update member count
+            const memberCount = settings.devOpsTeamMembers?.length || 0;
+            document.getElementById('devops-member-count').textContent = memberCount.toLocaleString();
+
+            // Update last sync
+            const lastSync = settings.devOpsTeamLastSync
+                ? new Date(settings.devOpsTeamLastSync).toLocaleString()
+                : 'Never';
+            document.getElementById('last-sync').textContent = lastSync;
+
+            // Update contributor counts
+            const countsText = `${counts.total} / ${counts.devOps} / ${counts.nonDevOps}`;
+            document.getElementById('contributor-counts').textContent = countsText;
+
+            // Update toggle states
+            document.getElementById('devops-sync-toggle').checked = settings.devOpsTeamSyncEnabled || false;
+            document.getElementById('devops-filter-toggle').checked = settings.excludeDevOpsFromLeaderboards || false;
+
+            // Store members for display
+            window.devOpsTeamMembers = settings.devOpsTeamMembers || [];
+        } else {
+            console.error('Failed to load DevOps team settings:', result.message);
+        }
+    } catch (error) {
+        console.error('Error loading DevOps team settings:', error);
+        document.querySelectorAll('#github-org, #devops-member-count, #last-sync, #contributor-counts').forEach(el => {
+            el.textContent = 'Error';
+        });
+    }
+}
+
+async function syncDevOpsTeam() {
+    const button = document.getElementById('sync-devops-team');
+    const resultsDiv = document.getElementById('devops-sync-result');
+    const contentDiv = document.getElementById('devops-sync-content');
+
+    button.disabled = true;
+    button.innerHTML = '<span>⏳ Syncing...</span>';
+    resultsDiv.style.display = 'none';
+
+    try {
+        const response = await fetch('/api/admin/devops-team/sync', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ forceSync: true })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            resultsDiv.className = 'alert alert-success';
+
+            const addedList = result.addedMembers && result.addedMembers.length > 0
+                ? `<li><strong>Added:</strong> ${result.addedMembers.join(', ')}</li>`
+                : '';
+            const removedList = result.removedMembers && result.removedMembers.length > 0
+                ? `<li><strong>Removed:</strong> ${result.removedMembers.join(', ')}</li>`
+                : '';
+
+            contentDiv.innerHTML = `
+                <h3>✅ Sync Completed!</h3>
+                <ul>
+                    <li><strong>Total Members:</strong> ${result.totalMembers}</li>
+                    ${addedList}
+                    ${removedList}
+                </ul>
+                <p><small>Last synced: ${new Date(result.lastSync).toLocaleString()}</small></p>
+            `;
+
+            // Reload settings to update UI
+            setTimeout(() => {
+                loadDevOpsTeamSettings();
+            }, 1000);
+
+            if (typeof showToast === 'function') {
+                showToast(`DevOps team synced: ${result.totalMembers} members`, 'success');
+            }
+        } else {
+            resultsDiv.className = 'alert alert-warning';
+            contentDiv.innerHTML = `
+                <h3>⚠️ ${result.message || 'Sync Skipped'}</h3>
+                <p>${result.message === 'Recently synced (cached)' ? 'Team was synced within the last hour. Use force sync to bypass cache.' : ''}</p>
+            `;
+        }
+
+        resultsDiv.style.display = 'block';
+    } catch (error) {
+        console.error('Error syncing DevOps team:', error);
+        resultsDiv.className = 'alert alert-error';
+        contentDiv.innerHTML = `
+            <h3>❌ Sync Failed</h3>
+            <p>${error.message || 'Failed to sync DevOps team from GitHub. Check console for details.'}</p>
+        `;
+        resultsDiv.style.display = 'block';
+    } finally {
+        button.disabled = false;
+        button.innerHTML = '<span>🔄 Sync from GitHub Now</span>';
+    }
+}
+
+async function toggleDevOpsSync(enabled) {
+    try {
+        const response = await fetch('/api/admin/devops-team/toggle-sync', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ enabled })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            if (typeof showToast === 'function') {
+                showToast(`Auto-sync ${enabled ? 'enabled' : 'disabled'}`, 'success');
+            }
+        } else {
+            console.error('Failed to toggle DevOps sync:', result.message);
+            // Revert toggle
+            document.getElementById('devops-sync-toggle').checked = !enabled;
+        }
+    } catch (error) {
+        console.error('Error toggling DevOps sync:', error);
+        // Revert toggle
+        document.getElementById('devops-sync-toggle').checked = !enabled;
+    }
+}
+
+async function toggleDevOpsFilter(exclude) {
+    try {
+        const response = await fetch('/api/admin/devops-team/toggle-filter', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ exclude })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            if (typeof showToast === 'function') {
+                showToast(result.message || `Filter ${exclude ? 'enabled' : 'disabled'}`, 'success');
+            }
+
+            // Reload contributor counts
+            setTimeout(() => {
+                loadDevOpsTeamSettings();
+            }, 500);
+        } else {
+            console.error('Failed to toggle DevOps filter:', result.message);
+            // Revert toggle
+            document.getElementById('devops-filter-toggle').checked = !exclude;
+        }
+    } catch (error) {
+        console.error('Error toggling DevOps filter:', error);
+        // Revert toggle
+        document.getElementById('devops-filter-toggle').checked = !exclude;
+    }
+}
+
+function toggleDevOpsMembersList() {
+    const list = document.getElementById('devops-members-list');
+    const content = document.getElementById('devops-members-content');
+
+    if (list.style.display === 'none') {
+        // Show list
+        const members = window.devOpsTeamMembers || [];
+        if (members.length > 0) {
+            content.innerHTML = `
+                <ul style="column-count: ${members.length > 10 ? '3' : '2'}; list-style: none; padding-left: 0;">
+                    ${members.map(m => `<li>• @${m}</li>`).join('')}
+                </ul>
+            `;
+        } else {
+            content.innerHTML = '<p><em>No team members cached. Click "Sync from GitHub Now" to fetch team members.</em></p>';
+        }
+        list.style.display = 'block';
+    } else {
+        // Hide list
+        list.style.display = 'none';
     }
 }
 </script>
