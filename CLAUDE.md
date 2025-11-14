@@ -678,6 +678,63 @@ Defined in `app/config/points-config.js`:
 - Check system time (cron uses UTC)
 - Manually trigger: Call `generateWeeklyChallenges()` in admin route
 
+### Badges Not Displaying on Profile Pages
+**Symptom:** Contributor profile pages show "No badges earned yet" despite badges being awarded
+
+**Root Cause:** The `badges` JSON array is empty while badge flags (e.g., `first10PrsAwarded`) are set to `true`. This happens when:
+- Badges were awarded before the badges array tracking was implemented
+- Database was migrated from MongoDB to PostgreSQL without backfilling badges
+- Badge flags exist but the display array was never populated
+
+**Solution:** Run the badge backfill endpoint to populate the badges array from existing badge flags
+
+**Quick Fix:**
+```bash
+# Via curl (requires admin authentication)
+curl -X POST http://localhost:3000/api/admin/backfill-badges \
+  -H "Content-Type: application/json"
+
+# Or via browser console (when logged in as admin)
+fetch('/api/admin/backfill-badges', { method: 'POST' })
+  .then(r => r.json())
+  .then(console.log);
+```
+
+**What It Does:**
+1. Scans all contributors in the database
+2. Reads all 12 badge flags (firstPrAwarded through first1000ReviewsAwarded)
+3. Rebuilds the `badges` array with structure: `{ badge: "name", date: "ISO" }`
+4. Updates each contributor's badges array
+5. Returns count of updated contributors
+
+**Expected Response:**
+```json
+{
+  "success": true,
+  "message": "Backfilled badges for 45 contributors",
+  "updatedCount": 45
+}
+```
+
+**Verification:**
+- Visit any contributor profile page (e.g., `/profile/username`)
+- Badge showcase section should now display earned badges
+- Each badge shows with an image and name
+- Badge count in stats grid should match awarded badges
+
+**Important Notes:**
+- This is a **one-time fix** for historical data
+- New badges awarded after this fix will automatically populate both flags AND array
+- Safe to run multiple times (idempotent operation)
+- Admin authentication required
+- No data loss - only populates empty badges arrays
+
+**Technical Details:**
+- Endpoint: `POST /api/admin/backfill-badges`
+- Controller: `backfillBadgesController` in `app/controllers/adminController.js`
+- Route: `app/routes/contributorRoutes.js`
+- Affects: All contributors with badge flags set but empty badges array
+
 ---
 
 ## Performance Tips
