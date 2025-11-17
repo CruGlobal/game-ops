@@ -95,7 +95,7 @@ function renderChallenges(challenges) {
 function createChallengeCard(challenge) {
     const card = document.createElement('div');
     card.className = 'challenge-card';
-    card.setAttribute('data-challenge-id', challenge._id);
+    card.setAttribute('data-challenge-id', challenge.id);
 
     // Ensure participants array exists
     const participants = challenge.participants || [];
@@ -152,7 +152,7 @@ function createChallengeCard(challenge) {
                     ✓ Joined
                 </button>
             ` : `
-                <button class="challenge-btn" data-challenge-id="${challenge._id}">
+                <button class="challenge-btn" data-challenge-id="${challenge.id}">
                     Join Challenge
                 </button>
             `}
