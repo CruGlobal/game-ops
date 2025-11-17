@@ -764,14 +764,22 @@ export const getTopReviewersDateRange = async (startDate, endDate, page, limit) 
 };
 
 // Get the top contributors based on PR count with gamification data
-export const getTopContributors = async () => {
+export const getTopContributors = async (options = {}) => {
     let contributors;
 
-        // Check if DevOps filter is enabled
+        // Check if DevOps filter is enabled globally
         const settings = await prisma.quarterSettings.findUnique({
             where: { id: 'quarter-config' }
         });
-        const excludeDevOps = settings?.excludeDevOpsFromLeaderboards || false;
+        const globalExcludeDevOps = settings?.excludeDevOpsFromLeaderboards || false;
+
+        // Apply user preference logic
+        let excludeDevOps;
+        if (options.userIsDevOps) {
+            excludeDevOps = !options.userShowDevOps;
+        } else {
+            excludeDevOps = globalExcludeDevOps;
+        }
 
         contributors = await prisma.contributor.findMany({
             where: {
@@ -818,14 +826,22 @@ export const getTopContributors = async () => {
 };
 
 // Get the top reviewers based on review count with gamification data
-export const getTopReviewers = async () => {
+export const getTopReviewers = async (options = {}) => {
     let reviewers;
 
-        // Check if DevOps filter is enabled
+        // Check if DevOps filter is enabled globally
         const settings = await prisma.quarterSettings.findUnique({
             where: { id: 'quarter-config' }
         });
-        const excludeDevOps = settings?.excludeDevOpsFromLeaderboards || false;
+        const globalExcludeDevOps = settings?.excludeDevOpsFromLeaderboards || false;
+
+        // Apply user preference logic
+        let excludeDevOps;
+        if (options.userIsDevOps) {
+            excludeDevOps = !options.userShowDevOps;
+        } else {
+            excludeDevOps = globalExcludeDevOps;
+        }
 
         reviewers = await prisma.contributor.findMany({
             where: {

@@ -9,11 +9,43 @@ let currentQuarterInfo = null;
 let currentTab = 'all-time';
 let currentSort = 'prCount';
 let searchTerm = '';
+let userDevOpsStatus = { isDevOps: false, showDevOpsMembers: true, isAuthenticated: false };
 
 document.addEventListener('DOMContentLoaded', async () => {
+    await checkDevOpsStatus();
     initializeEventListeners();
     await loadLeaderboardData();
 });
+
+/**
+ * Check if current user is in DevOps team
+ */
+async function checkDevOpsStatus() {
+    try {
+        const response = await fetch('/api/user/devops-status');
+        const data = await response.json();
+
+        if (data.success) {
+            userDevOpsStatus = {
+                isDevOps: data.isDevOps || false,
+                showDevOpsMembers: data.showDevOpsMembers !== undefined ? data.showDevOpsMembers : true,
+                isAuthenticated: data.isAuthenticated || false
+            };
+
+            // Show toggle if user is DevOps member
+            if (userDevOpsStatus.isDevOps) {
+                const container = document.getElementById('devops-filter-container');
+                const toggle = document.getElementById('show-devops-toggle');
+                if (container && toggle) {
+                    container.style.display = 'block';
+                    toggle.checked = userDevOpsStatus.showDevOpsMembers;
+                }
+            }
+        }
+    } catch (error) {
+        console.error('Error checking DevOps status:', error);
+    }
+}
 
 function initializeEventListeners() {
     // Hamburger menu
@@ -25,6 +57,16 @@ function initializeEventListeners() {
             const isActive = hamburgerContent.classList.toggle('active');
             hamburgerContent.style.display = isActive ? 'block' : 'none';
             hamburgerButton.setAttribute('aria-expanded', isActive);
+        });
+    }
+
+    // DevOps filter toggle
+    const devopsToggle = document.getElementById('show-devops-toggle');
+    if (devopsToggle) {
+        devopsToggle.addEventListener('change', async (e) => {
+            userDevOpsStatus.showDevOpsMembers = e.target.checked;
+            await saveDevOpsPreference(e.target.checked);
+            await loadLeaderboardData(); // Reload all data with new filter
         });
     }
 
@@ -208,11 +250,36 @@ function updateQuarterInfoDisplay() {
 }
 
 async function fetchData(url) {
-    const response = await fetch(url);
+    const response = await fetch(url, {
+        credentials: 'include' // Include cookies for session management
+    });
     if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
     }
     return response.json();
+}
+
+/**
+ * Save user's DevOps filter preference
+ */
+async function saveDevOpsPreference(showDevOpsMembers) {
+    try {
+        const response = await fetch('/api/user/preferences/show-devops', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            credentials: 'include',
+            body: JSON.stringify({ showDevOpsMembers })
+        });
+
+        const data = await response.json();
+        if (!data.success) {
+            console.error('Failed to save preference:', data.message);
+        }
+    } catch (error) {
+        console.error('Error saving DevOps preference:', error);
+    }
 }
 
 function renderCurrentTab() {

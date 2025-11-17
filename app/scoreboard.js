@@ -23,6 +23,7 @@ import session from 'express-session';
 import passport from './config/passport.js';
 import jwt from 'jsonwebtoken';
 import { ensureAuthenticated } from './middleware/ensureAuthenticated.js';
+import { ensureRepositoryAccess } from './middleware/ensureRepositoryAccess.js';
 import { socketConfig, SOCKET_EVENTS } from './config/websocket-config.js';
 import { setSocketIO } from './utils/socketEmitter.js';
 import testRoutes from './routes/testRoutes.js';
@@ -123,13 +124,15 @@ app.get('/', (req, res) => {
 });
 
 // Route to render the leaderboard.ejs template (new home page)
-app.get('/leaderboard', (req, res) => {
-    res.render('leaderboard');
+// Requires repository access (any org member or collaborator)
+app.get('/leaderboard', ensureRepositoryAccess, (req, res) => {
+    res.render('leaderboard', { user: req.user });
 });
 
 // Route to render the challenges.ejs template
-app.get('/challenges', (req, res) => {
-    res.render('challenges');
+// Requires repository access (any org member or collaborator)
+app.get('/challenges', ensureRepositoryAccess, (req, res) => {
+    res.render('challenges', { user: req.user });
 });
 
 // Route to render individual profile pages
@@ -184,7 +187,17 @@ app.get('/auth/github/callback',
             return res.redirect('/');
         }
         const token = jwt.sign({ username: req.user.username }, process.env.JWT_SECRET, { expiresIn: '1h' });
-        res.redirect(`/admin?token=${token}`);
+
+        // Redirect back to the original page if stored in session, otherwise go to admin
+        const returnTo = req.session.returnTo || '/admin';
+        delete req.session.returnTo; // Clear the stored URL
+
+        // If going to admin, include the token in URL
+        if (returnTo.startsWith('/admin')) {
+            res.redirect(`${returnTo}${returnTo.includes('?') ? '&' : '?'}token=${token}`);
+        } else {
+            res.redirect(returnTo);
+        }
     }
 );
 

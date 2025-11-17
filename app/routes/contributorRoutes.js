@@ -48,6 +48,8 @@ import {
     syncDevOpsTeamController,
     toggleDevOpsTeamSyncController,
     toggleDevOpsLeaderboardFilterController,
+    checkUserDevOpsStatusController,
+    setShowDevOpsPreferenceController,
     backfillBadgesController
 } from '../controllers/adminController.js';
 import { authenticate } from '../middleware/authMiddleware.js';
@@ -117,6 +119,10 @@ router.get('/admin/devops-team/settings', ensureAuthenticated, getDevOpsTeamSett
 router.post('/admin/devops-team/sync', ensureAuthenticated, syncDevOpsTeamController);
 router.post('/admin/devops-team/toggle-sync', ensureAuthenticated, toggleDevOpsTeamSyncController);
 router.post('/admin/devops-team/toggle-filter', ensureAuthenticated, toggleDevOpsLeaderboardFilterController);
+
+// User DevOps Status and Preferences (public - no auth required)
+router.get('/user/devops-status', checkUserDevOpsStatusController);
+router.post('/user/preferences/show-devops', setShowDevOpsPreferenceController);
 
 // Admin recompute endpoints
 router.post('/admin/leaderboard/recompute/current-quarter', ensureAuthenticated, recomputeCurrentQuarterController);
