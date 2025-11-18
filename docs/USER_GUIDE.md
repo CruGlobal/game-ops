@@ -1,6 +1,6 @@
 # User Guide - Gamification Features
 
-Complete guide to using the GitHub PR Scoreboard gamification system.
+Complete guide to using the Game Ops gamification system.
 
 ---
 

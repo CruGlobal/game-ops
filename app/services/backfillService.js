@@ -121,7 +121,7 @@ function emitBackfillProgress() {
     progress.newPRsAdded = backfillState.newPRsAdded;
     progress.newReviewsAdded = backfillState.newReviewsAdded;
 
-    io.to('scoreboard-updates').emit('backfill-progress', progress);
+    io.to('game-ops-updates').emit('backfill-progress', progress);
 }
 
 /**

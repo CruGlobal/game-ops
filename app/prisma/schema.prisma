@@ -199,7 +199,7 @@ model User {
 model PRMetadata {
   id              String    @id @default(cuid())
   repoOwner       String    @default("cru-Luis-Rodriguez") @map("repo_owner")
-  repoName        String    @default("github-pr-scoreboard") @map("repo_name")
+  repoName        String    @default("game-ops") @map("repo_name")
   firstPRFetched  Int?      @map("first_pr_fetched")
   latestPRFetched Int?      @map("latest_pr_fetched")
   totalPRsInDB    Int       @default(0) @map("total_prs_in_db")

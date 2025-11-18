@@ -16,7 +16,7 @@ export const getSocketIO = () => {
 export const emitPRUpdate = (data) => {
     if (!ioInstance) return;
 
-    ioInstance.to('scoreboard-updates').emit(SOCKET_EVENTS.PR_UPDATE, {
+    ioInstance.to('game-ops-updates').emit(SOCKET_EVENTS.PR_UPDATE, {
         username: data.username,
         prCount: data.prCount,
         timestamp: new Date()
@@ -27,7 +27,7 @@ export const emitPRUpdate = (data) => {
 export const emitBadgeAwarded = (data) => {
     if (!ioInstance) return;
 
-    ioInstance.to('scoreboard-updates').emit(SOCKET_EVENTS.BADGE_AWARDED, {
+    ioInstance.to('game-ops-updates').emit(SOCKET_EVENTS.BADGE_AWARDED, {
         username: data.username,
         badgeName: data.badgeName,
         badgeType: data.badgeType,
@@ -39,7 +39,7 @@ export const emitBadgeAwarded = (data) => {
 export const emitLeaderboardUpdate = (data) => {
     if (!ioInstance) return;
 
-    ioInstance.to('scoreboard-updates').emit(SOCKET_EVENTS.LEADERBOARD_UPDATE, {
+    ioInstance.to('game-ops-updates').emit(SOCKET_EVENTS.LEADERBOARD_UPDATE, {
         username: data.username,
         pullRequestCount: data.pullRequestCount,
         reviewCount: data.reviewCount,
@@ -54,7 +54,7 @@ export const emitLeaderboardUpdate = (data) => {
 export const emitReviewUpdate = (data) => {
     if (!ioInstance) return;
 
-    ioInstance.to('scoreboard-updates').emit(SOCKET_EVENTS.REVIEW_UPDATE, {
+    ioInstance.to('game-ops-updates').emit(SOCKET_EVENTS.REVIEW_UPDATE, {
         username: data.username,
         reviewCount: data.reviewCount,
         timestamp: new Date()
@@ -65,7 +65,7 @@ export const emitReviewUpdate = (data) => {
 export const emitContributorActivity = (data) => {
     if (!ioInstance) return;
 
-    ioInstance.to('scoreboard-updates').emit(SOCKET_EVENTS.CONTRIBUTOR_ACTIVITY, {
+    ioInstance.to('game-ops-updates').emit(SOCKET_EVENTS.CONTRIBUTOR_ACTIVITY, {
         username: data.username,
         activityType: data.activityType,
         details: data.details,
@@ -77,7 +77,7 @@ export const emitContributorActivity = (data) => {
 export const emitStreakUpdate = (data) => {
     if (!ioInstance) return;
 
-    ioInstance.to('scoreboard-updates').emit(SOCKET_EVENTS.STREAK_UPDATE, {
+    ioInstance.to('game-ops-updates').emit(SOCKET_EVENTS.STREAK_UPDATE, {
         username: data.username,
         currentStreak: data.currentStreak,
         longestStreak: data.longestStreak,
@@ -89,7 +89,7 @@ export const emitStreakUpdate = (data) => {
 export const emitAchievementUnlocked = (data) => {
     if (!ioInstance) return;
 
-    ioInstance.to('scoreboard-updates').emit(SOCKET_EVENTS.ACHIEVEMENT_UNLOCKED, {
+    ioInstance.to('game-ops-updates').emit(SOCKET_EVENTS.ACHIEVEMENT_UNLOCKED, {
         username: data.username,
         achievementId: data.achievementId,
         achievementName: data.achievementName,
@@ -104,7 +104,7 @@ export const emitAchievementUnlocked = (data) => {
 export const emitPointsAwarded = (data) => {
     if (!ioInstance) return;
 
-    ioInstance.to('scoreboard-updates').emit(SOCKET_EVENTS.POINTS_AWARDED, {
+    ioInstance.to('game-ops-updates').emit(SOCKET_EVENTS.POINTS_AWARDED, {
         username: data.username,
         points: data.points,
         totalPoints: data.totalPoints,
@@ -118,7 +118,7 @@ export const emitPointsAwarded = (data) => {
 export const emitChallengeProgress = (data) => {
     if (!ioInstance) return;
 
-    ioInstance.to('scoreboard-updates').emit(SOCKET_EVENTS.CHALLENGE_PROGRESS, {
+    ioInstance.to('game-ops-updates').emit(SOCKET_EVENTS.CHALLENGE_PROGRESS, {
         username: data.username,
         challengeId: data.challengeId,
         challengeName: data.challengeName,
@@ -133,7 +133,7 @@ export const emitChallengeProgress = (data) => {
 export const emitChallengeCompleted = (data) => {
     if (!ioInstance) return;
 
-    ioInstance.to('scoreboard-updates').emit(SOCKET_EVENTS.CHALLENGE_COMPLETED, {
+    ioInstance.to('game-ops-updates').emit(SOCKET_EVENTS.CHALLENGE_COMPLETED, {
         username: data.username,
         challengeId: data.challengeId,
         challengeName: data.challengeName,

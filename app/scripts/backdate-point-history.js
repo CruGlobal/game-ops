@@ -44,7 +44,7 @@ if (!GH_TOKEN) {
   process.exit(1);
 }
 
-const octokit = new Octokit({ auth: GH_TOKEN, userAgent: 'pr-scoreboard-backdate/1.0' });
+const octokit = new Octokit({ auth: GH_TOKEN, userAgent: 'pr-game-ops-backdate/1.0' });
 
 async function resolveRepo() {
   // 1) CLI flags

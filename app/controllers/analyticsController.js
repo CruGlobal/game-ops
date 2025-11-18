@@ -180,7 +180,7 @@ export const exportAnalytics = async (req, res) => {
 
         // Set headers for CSV download
         res.setHeader('Content-Type', 'text/csv');
-        res.setHeader('Content-Disposition', `attachment; filename="scoreboard-${type}-${new Date().toISOString().split('T')[0]}.csv"`);
+        res.setHeader('Content-Disposition', `attachment; filename="game-ops-${type}-${new Date().toISOString().split('T')[0]}.csv"`);
 
         res.send(csvData);
     } catch (error) {

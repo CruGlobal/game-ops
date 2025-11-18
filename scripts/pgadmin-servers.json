@@ -9,7 +9,7 @@
       "Username": "postgres",
       "Password": "postgres",
       "SSLMode": "prefer",
-      "Comment": "Local development database for GitHub PR Scoreboard"
+      "Comment": "Local development database for Game Ops"
     }
   }
 }

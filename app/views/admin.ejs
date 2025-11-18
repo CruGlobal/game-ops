@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Settings - GitHub PR Scoreboard</title>
+    <title>Settings - Game Ops</title>
     <link rel="stylesheet" href="/modern-design-system.css">
     <link rel="stylesheet" href="/styles.css">
 </head>
@@ -23,7 +23,7 @@
     <main id="main-content">
         <div id="admin-content" style="display:none;">
             <div class="page-description">
-                <p>Manage notification preferences and contributor data for the GitHub PR Scoreboard.</p>
+                <p>Manage notification preferences and contributor data for the Game Ops.</p>
             </div>
 
             <!-- Notification Settings Section -->
@@ -1457,7 +1457,7 @@ function toggleDevOpsMembersList() {
     // Join the scoreboard updates room
     socket.on('connect', () => {
         console.log('Connected to WebSocket server');
-        socket.emit('join-room', 'scoreboard-updates');
+        socket.emit('join-room', 'game-ops-updates');
     });
     
     socket.on('disconnect', () => {

@@ -236,8 +236,8 @@ The following 12 badge types are backfilled:
 
 2. **Verify App Running:**
    ```bash
-   docker logs github-pr-scoreboard-app-1 --tail 20
-   # Look for: "GitHub PR Scoreboard app started"
+   docker logs game-ops-app-1 --tail 20
+   # Look for: "Game Ops app started"
    ```
 
 3. **Run Backfill (One-Time):**

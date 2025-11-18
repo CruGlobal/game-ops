@@ -2,7 +2,7 @@
 // MongoDB initialization script
 // This ensures the database and collections are set up properly
 
-db = db.getSiblingDB('github-scoreboard');
+db = db.getSiblingDB('game-ops');
 
 // Create collections with validation
 db.createCollection('contributors', {

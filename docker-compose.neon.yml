@@ -12,7 +12,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: github-scoreboard-app
+    container_name: game-ops-app
     ports:
       - "3000:3000"
     environment:
@@ -21,12 +21,12 @@ services:
       NODE_ENV: development
       
       # PostgreSQL/Neon connection
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/github_scoreboard
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/game_ops
       DB_POOL_MIN: 2
       DB_POOL_MAX: 10
       
       # MongoDB (legacy - keep during migration)
-      MONGO_URI: mongodb://mongo:27017/github-scoreboard
+      MONGO_URI: mongodb://mongo:27017/game-ops
       
       # Application settings
       PORT: 3000
@@ -134,7 +134,7 @@ services:
     ports:
       - "27017:27017"
     environment:
-      MONGO_INITDB_DATABASE: github-scoreboard
+      MONGO_INITDB_DATABASE: game-ops
     volumes:
       - mongo_data:/data/db
       - ./scripts/init-mongo.js:/docker-entrypoint-initdb.d/init.js:ro
@@ -187,16 +187,16 @@ services:
 volumes:
   postgres_data:
     driver: local
-    name: github-scoreboard-postgres
+    name: game-ops-postgres
   pgadmin_data:
     driver: local
-    name: github-scoreboard-pgadmin
+    name: game-ops-pgadmin
   mongo_data:
-    external: true
-    name: github-pr-scoreboard_mongo_data
+    driver: local
+    name: game-ops-mongo
   redis_data:
     driver: local
-    name: github-scoreboard-redis
+    name: game-ops-redis
 
 # ============================================
 # NETWORKS
@@ -204,7 +204,7 @@ volumes:
 networks:
   app-network:
     driver: bridge
-    name: github-scoreboard-network
+    name: game-ops-network
 
 # ============================================
 # USAGE INSTRUCTIONS
