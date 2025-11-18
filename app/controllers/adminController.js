@@ -17,6 +17,13 @@ import {
     recomputeHallOfFameAll
 } from '../services/quarterlyService.js';
 import { ensureAppSettingsTable, getCronEnabled, setCronEnabled } from '../lib/appSettings.js';
+import {
+    syncDevOpsTeamFromGitHub,
+    getDevOpsTeamSettings,
+    toggleDevOpsLeaderboardFilter,
+    toggleDevOpsTeamSync,
+    getContributorCounts
+} from '../services/devOpsTeamService.js';
 
 // Function to get all contributors
 export const getContributors = async (req, res) => {
@@ -274,7 +281,15 @@ export async function updateQuarterConfigController(req, res) {
 export async function getAllTimeLeaderboardController(req, res) {
     try {
         const limit = parseInt(req.query.limit) || 50;
-        const leaderboard = await getAllTimeLeaderboard(limit);
+
+        // Get user's DevOps status and preference
+        const userIsDevOps = req.user?.isDevOps || false;
+        const userShowDevOps = req.session?.showDevOpsMembers ?? true; // Default: show DevOps
+
+        const leaderboard = await getAllTimeLeaderboard(limit, {
+            userIsDevOps,
+            userShowDevOps
+        });
         const withRank = leaderboard.map((row, idx) => ({ ...row, rank: idx + 1 }));
         res.json({ success: true, data: withRank });
     } catch (error) {
@@ -297,7 +312,15 @@ export async function getQuarterlyLeaderboardController(req, res) {
         const limit = parseInt(req.query.limit) || 50;
         const quarterString = req.params.quarter || await getCurrentQuarter();
         const { start, end } = await getQuarterDateRange(quarterString);
-        const raw = await getQuarterlyLeaderboard(quarterString, limit);
+
+        // Get user's DevOps status and preference
+        const userIsDevOps = req.user?.isDevOps || false;
+        const userShowDevOps = req.session?.showDevOpsMembers ?? true;
+
+        const raw = await getQuarterlyLeaderboard(quarterString, limit, {
+            userIsDevOps,
+            userShowDevOps
+        });
         // Only include contributors with points > 0 and flatten quarterly stats to top level
         const data = raw
             .filter(c => (c.quarterlyStats?.pointsThisQuarter || 0) > 0)
@@ -504,5 +527,285 @@ export async function setCronStatusController(req, res) {
     } catch (error) {
         console.error('Error in setCronStatusController:', error);
         res.status(500).json({ success: false, message: 'Failed to set cron status', error: error.message });
+    }
+}
+
+/**
+ * Get DevOps team settings and cached team members
+ * GET /api/admin/devops-team/settings
+ */
+export async function getDevOpsTeamSettingsController(req, res) {
+    try {
+        const settings = await getDevOpsTeamSettings();
+        const counts = await getContributorCounts();
+
+        res.json({
+            success: true,
+            settings: {
+                ...settings,
+                githubOrg: process.env.GITHUB_ORG || process.env.REPO_OWNER,
+                teamSlug: settings.devOpsTeamSlug
+            },
+            counts
+        });
+    } catch (error) {
+        console.error('Error in getDevOpsTeamSettingsController:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to get DevOps team settings',
+            error: error.message
+        });
+    }
+}
+
+/**
+ * Manually sync DevOps team from GitHub
+ * POST /api/admin/devops-team/sync
+ */
+export async function syncDevOpsTeamController(req, res) {
+    try {
+        const forceSync = req.body?.forceSync === true;
+        const result = await syncDevOpsTeamFromGitHub(forceSync);
+
+        res.json({
+            success: true,
+            ...result
+        });
+    } catch (error) {
+        console.error('Error in syncDevOpsTeamController:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to sync DevOps team from GitHub',
+            error: error.message
+        });
+    }
+}
+
+/**
+ * Toggle DevOps team auto-sync on/off
+ * POST /api/admin/devops-team/toggle-sync
+ * Body: { enabled: boolean }
+ */
+export async function toggleDevOpsTeamSyncController(req, res) {
+    try {
+        const { enabled } = req.body;
+
+        if (typeof enabled !== 'boolean') {
+            return res.status(400).json({
+                success: false,
+                message: 'enabled field must be a boolean'
+            });
+        }
+
+        const result = await toggleDevOpsTeamSync(enabled);
+
+        res.json({
+            success: true,
+            ...result
+        });
+    } catch (error) {
+        console.error('Error in toggleDevOpsTeamSyncController:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to toggle DevOps team sync',
+            error: error.message
+        });
+    }
+}
+
+/**
+ * Toggle DevOps leaderboard filter on/off
+ * POST /api/admin/devops-team/toggle-filter
+ * Body: { exclude: boolean }
+ */
+export async function toggleDevOpsLeaderboardFilterController(req, res) {
+    try {
+        const { exclude } = req.body;
+
+        if (typeof exclude !== 'boolean') {
+            return res.status(400).json({
+                success: false,
+                message: 'exclude field must be a boolean'
+            });
+        }
+
+        const result = await toggleDevOpsLeaderboardFilter(exclude);
+
+        res.json({
+            success: true,
+            ...result,
+            message: `DevOps leaderboard filter ${exclude ? 'enabled' : 'disabled'}. Leaderboards will ${exclude ? 'exclude' : 'include'} DevOps team members.`
+        });
+    } catch (error) {
+        console.error('Error in toggleDevOpsLeaderboardFilterController:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to toggle DevOps leaderboard filter',
+            error: error.message
+        });
+    }
+}
+
+/**
+ * Check if current user is in DevOps team
+ * GET /api/user/devops-status
+ */
+export async function checkUserDevOpsStatusController(req, res) {
+    try {
+        // Check if user is authenticated
+        if (!req.user || !req.user.username) {
+            console.log('[DEBUG] User not authenticated, returning default values');
+            return res.json({
+                success: true,
+                isDevOps: false,
+                isAuthenticated: false
+            });
+        }
+
+        const username = req.user.username;
+
+        // Check if user exists in contributors table and has isDevOps flag
+        const contributor = await prisma.contributor.findUnique({
+            where: { username },
+            select: { isDevOps: true }
+        });
+
+        // Get user's preference for showing DevOps members (default: true for DevOps members)
+        const showDevOpsMembers = req.session?.showDevOpsMembers ?? true;
+
+        console.log('[DEBUG] User DevOps status check:', {
+            username,
+            'req.user.isDevOps': req.user.isDevOps,
+            'contributor.isDevOps': contributor?.isDevOps,
+            showDevOpsMembers,
+            sessionID: req.sessionID
+        });
+
+        res.json({
+            success: true,
+            isDevOps: contributor?.isDevOps || false,
+            isAuthenticated: true,
+            username,
+            showDevOpsMembers
+        });
+    } catch (error) {
+        console.error('Error in checkUserDevOpsStatusController:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to check DevOps status',
+            error: error.message
+        });
+    }
+}
+
+/**
+ * Set user preference for showing DevOps members in leaderboards
+ * POST /api/user/preferences/show-devops
+ * Body: { showDevOpsMembers: boolean }
+ */
+export async function setShowDevOpsPreferenceController(req, res) {
+    try {
+        const { showDevOpsMembers } = req.body;
+
+        if (typeof showDevOpsMembers !== 'boolean') {
+            return res.status(400).json({
+                success: false,
+                message: 'showDevOpsMembers must be a boolean'
+            });
+        }
+
+        // Store preference in session
+        if (!req.session) {
+            req.session = {};
+        }
+        req.session.showDevOpsMembers = showDevOpsMembers;
+
+        res.json({
+            success: true,
+            showDevOpsMembers,
+            message: `Preference saved: ${showDevOpsMembers ? 'showing' : 'hiding'} DevOps members in leaderboards`
+        });
+    } catch (error) {
+        console.error('Error in setShowDevOpsPreferenceController:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to save preference',
+            error: error.message
+        });
+    }
+}
+
+/**
+ * Backfill badges array from badge flags
+ * POST /api/admin/backfill-badges
+ */
+export async function backfillBadgesController(req, res) {
+    try {
+        const contributors = await prisma.contributor.findMany();
+        let updatedCount = 0;
+
+        for (const contributor of contributors) {
+            const badges = [];
+
+            // Check all badge flags and rebuild badges array
+            if (contributor.firstPrAwarded) {
+                badges.push({ badge: '1st PR badge', date: contributor.createdAt.toISOString() });
+            }
+            if (contributor.firstReviewAwarded) {
+                badges.push({ badge: '1st Review badge', date: contributor.createdAt.toISOString() });
+            }
+            if (contributor.first10PrsAwarded) {
+                badges.push({ badge: '10 PR badge', date: contributor.createdAt.toISOString() });
+            }
+            if (contributor.first10ReviewsAwarded) {
+                badges.push({ badge: '10 Reviews badge', date: contributor.createdAt.toISOString() });
+            }
+            if (contributor.first50PrsAwarded) {
+                badges.push({ badge: '50 PR badge', date: contributor.createdAt.toISOString() });
+            }
+            if (contributor.first50ReviewsAwarded) {
+                badges.push({ badge: '50 Reviews badge', date: contributor.createdAt.toISOString() });
+            }
+            if (contributor.first100PrsAwarded) {
+                badges.push({ badge: '100 PR badge', date: contributor.createdAt.toISOString() });
+            }
+            if (contributor.first100ReviewsAwarded) {
+                badges.push({ badge: '100 Reviews badge', date: contributor.createdAt.toISOString() });
+            }
+            if (contributor.first500PrsAwarded) {
+                badges.push({ badge: '500 PR badge', date: contributor.createdAt.toISOString() });
+            }
+            if (contributor.first500ReviewsAwarded) {
+                badges.push({ badge: '500 Reviews badge', date: contributor.createdAt.toISOString() });
+            }
+            if (contributor.first1000PrsAwarded) {
+                badges.push({ badge: '1000 PR badge', date: contributor.createdAt.toISOString() });
+            }
+            if (contributor.first1000ReviewsAwarded) {
+                badges.push({ badge: '1000 Reviews badge', date: contributor.createdAt.toISOString() });
+            }
+
+            // Only update if badges array is different
+            if (badges.length > 0) {
+                await prisma.contributor.update({
+                    where: { username: contributor.username },
+                    data: { badges }
+                });
+                updatedCount++;
+            }
+        }
+
+        res.json({
+            success: true,
+            message: `Backfilled badges for ${updatedCount} contributors`,
+            updatedCount
+        });
+    } catch (error) {
+        console.error('Error backfilling badges:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to backfill badges',
+            error: error.message
+        });
     }
 }

@@ -124,11 +124,32 @@ export const awardReviewPoints = async (contributor, timestamp = null, prNumber 
 /**
  * Get points leaderboard
  * @param {Number} limit - Number of results to return
+ * @param {Object} options - Optional parameters
+ * @param {boolean} options.userShowDevOps - User's preference to show/hide DevOps members
+ * @param {boolean} options.userIsDevOps - Whether the requesting user is in DevOps team
  * @returns {Array} Top contributors by points
  */
-export const getPointsLeaderboard = async (limit = 10) => {
+export const getPointsLeaderboard = async (limit = 10, options = {}) => {
     try {
+        // Check if DevOps filter is enabled globally
+        const settings = await prisma.quarterSettings.findUnique({
+            where: { id: 'quarter-config' }
+        });
+        const globalExcludeDevOps = settings?.excludeDevOpsFromLeaderboards || false;
+
+        // Apply user preference logic
+        let excludeDevOps;
+        if (options.userIsDevOps) {
+            excludeDevOps = !options.userShowDevOps;
+        } else {
+            excludeDevOps = globalExcludeDevOps;
+        }
+
         const contributors = await prisma.contributor.findMany({
+            where: {
+                // Exclude DevOps team members if filter is enabled
+                ...(excludeDevOps && { isDevOps: false })
+            },
             orderBy: { totalPoints: 'desc' },
             take: limit,
             select: {

@@ -10,13 +10,17 @@ import logger from '../utils/logger.js';
 export const createChallenge = async (challengeData) => {
     try {
         const challenge = await prisma.challenge.create({
-            data: challengeData
+            data: {
+                ...challengeData,
+                challengeCategory: challengeData.challengeCategory || 'general' // Default to general
+            }
         });
 
         logger.info('Challenge created', {
             challengeId: challenge.id,
             title: challenge.title,
-            type: challenge.type
+            type: challenge.type,
+            challengeCategory: challenge.challengeCategory
         });
 
         return challenge;
@@ -40,6 +44,18 @@ export const getActiveChallenges = async () => {
                 status: 'active',
                 endDate: {
                     gte: now
+                }
+            },
+            include: {
+                participants: {
+                    include: {
+                        contributor: {
+                            select: {
+                                username: true,
+                                avatarUrl: true
+                            }
+                        }
+                    }
                 }
             },
             orderBy: {
@@ -395,6 +411,83 @@ export const getUserChallenges = async (username) => {
 };
 
 /**
+ * Get all challenges (for admin management)
+ * @param {Object} options - Filter options
+ * @returns {Array} Challenges
+ */
+export const getAllChallenges = async (options = {}) => {
+    try {
+        const { status, limit = 50 } = options;
+
+        const where = {};
+        if (status) {
+            where.status = status;
+        }
+
+        const challenges = await prisma.challenge.findMany({
+            where,
+            orderBy: {
+                createdAt: 'desc'
+            },
+            take: limit,
+            include: {
+                participants: {
+                    select: {
+                        id: true,
+                        contributorId: true,
+                        progress: true,
+                        completed: true
+                    }
+                }
+            }
+        });
+
+        return challenges;
+    } catch (error) {
+        logger.error('Error getting all challenges', {
+            error: error.message
+        });
+        throw error;
+    }
+};
+
+/**
+ * Delete a challenge
+ * @param {String} challengeId - Challenge ID
+ * @returns {Object} Deleted challenge
+ */
+export const deleteChallenge = async (challengeId) => {
+    try {
+        // Check if challenge exists
+        const challenge = await prisma.challenge.findUnique({
+            where: { id: challengeId }
+        });
+
+        if (!challenge) {
+            throw new Error('Challenge not found');
+        }
+
+        // Delete challenge (cascade will delete participants)
+        await prisma.challenge.delete({
+            where: { id: challengeId }
+        });
+
+        logger.info('Challenge deleted', {
+            challengeId,
+            title: challenge.title
+        });
+
+        return challenge;
+    } catch (error) {
+        logger.error('Error deleting challenge', {
+            challengeId,
+            error: error.message
+        });
+        throw error;
+    }
+};
+
+/**
  * Generate weekly challenges automatically
  * @returns {Array} Generated challenges
  */
@@ -454,7 +547,8 @@ export const generateWeeklyChallenges = async () => {
                 startDate: startOfWeek,
                 endDate: endOfWeek,
                 status: 'active',
-                category: 'individual'
+                category: 'individual',
+                challengeCategory: 'weekly' // Mark as weekly challenge
             });
 
             generatedChallenges.push(challenge);
@@ -633,6 +727,7 @@ export const createOKRChallenge = async (okrData) => {
                 title,
                 description,
                 type: 'okr-label',
+                challengeCategory: 'okr', // Mark as OKR challenge
                 labelFilters,
                 target,
                 reward: reward || 300, // Default OKR reward

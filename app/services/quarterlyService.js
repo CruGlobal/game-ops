@@ -185,9 +185,19 @@ export async function archiveQuarterWinners(quarterString = null) {
 
         console.log(`Archiving winners for ${quarter}`);
 
+        // Check if DevOps filter is enabled
+        const settings = await prisma.quarterSettings.findUnique({
+            where: { id: 'quarter-config' }
+        });
+        const excludeDevOps = settings?.excludeDevOpsFromLeaderboards || false;
+
         // Get top 3 contributors by points this quarter
         // Note: Prisma doesn't support ordering by JSON field directly, so we fetch all and sort in memory
         const allContributors = await prisma.contributor.findMany({
+            where: {
+                // Exclude DevOps team members if filter is enabled
+                ...(excludeDevOps && { isDevOps: false })
+            },
             select: {
                 username: true,
                 avatarUrl: true,
@@ -197,7 +207,7 @@ export async function archiveQuarterWinners(quarterString = null) {
 
         // Filter and sort in memory
         const topContributors = allContributors
-            .filter(c => 
+            .filter(c =>
                 c.quarterlyStats?.currentQuarter === quarter &&
                 c.quarterlyStats?.pointsThisQuarter > 0
             )
@@ -398,11 +408,28 @@ export async function updateQuarterlyStats(username, updates, activityDate = nul
  * Get quarterly leaderboard
  * @param {String} quarterString - Optional quarter (defaults to current)
  * @param {Number} limit - Maximum number of contributors to return
+ * @param {Object} options - Optional parameters
+ * @param {boolean} options.userShowDevOps - User's preference to show/hide DevOps members
+ * @param {boolean} options.userIsDevOps - Whether the requesting user is in DevOps team
  * @returns {Array} Sorted list of contributors
  */
-export async function getQuarterlyLeaderboard(quarterString = null, limit = 50) {
+export async function getQuarterlyLeaderboard(quarterString = null, limit = 50, options = {}) {
     try {
         const quarter = quarterString || await getCurrentQuarter();
+
+        // Check if DevOps filter is enabled globally
+        const settings = await prisma.quarterSettings.findUnique({
+            where: { id: 'quarter-config' }
+        });
+        const globalExcludeDevOps = settings?.excludeDevOpsFromLeaderboards || false;
+
+        // Apply user preference logic (same as all-time leaderboard)
+        let excludeDevOps;
+        if (options.userIsDevOps) {
+            excludeDevOps = !options.userShowDevOps;
+        } else {
+            excludeDevOps = globalExcludeDevOps;
+        }
 
         const contributors = await prisma.contributor.findMany({
             where: {
@@ -410,7 +437,9 @@ export async function getQuarterlyLeaderboard(quarterString = null, limit = 50) 
                     not: {
                         endsWith: '[bot]'
                     }
-                }
+                },
+                // Exclude DevOps team members if filter is enabled
+                ...(excludeDevOps && { isDevOps: false })
             },
             select: {
                 username: true,
@@ -455,17 +484,46 @@ export async function getQuarterlyLeaderboard(quarterString = null, limit = 50) 
 /**
  * Get all-time leaderboard (existing functionality)
  * @param {Number} limit - Maximum number of contributors to return
+ * @param {Object} options - Optional parameters
+ * @param {boolean} options.userShowDevOps - User's preference to show/hide DevOps members (overrides global setting if user is DevOps)
+ * @param {boolean} options.userIsDevOps - Whether the requesting user is in DevOps team
  * @returns {Array} Sorted list of contributors
  */
-export async function getAllTimeLeaderboard(limit = 50) {
+export async function getAllTimeLeaderboard(limit = 50, options = {}) {
     try {
+        // Check if DevOps filter is enabled globally
+        const settings = await prisma.quarterSettings.findUnique({
+            where: { id: 'quarter-config' }
+        });
+        const globalExcludeDevOps = settings?.excludeDevOpsFromLeaderboards || false;
+
+        // For DevOps members: respect their preference (default: show DevOps)
+        // For non-DevOps members: always apply global filter
+        let excludeDevOps;
+        if (options.userIsDevOps) {
+            // DevOps members can toggle: if they want to see DevOps, show them (excludeDevOps = false)
+            excludeDevOps = !options.userShowDevOps;
+        } else {
+            // Non-DevOps members always see the globally filtered view
+            excludeDevOps = globalExcludeDevOps;
+        }
+
+        console.log('[DEBUG] All-time leaderboard filter:', {
+            globalExcludeDevOps,
+            userIsDevOps: options.userIsDevOps,
+            userShowDevOps: options.userShowDevOps,
+            finalExcludeDevOps: excludeDevOps
+        });
+
         const contributors = await prisma.contributor.findMany({
             where: {
                 username: {
                     not: {
                         endsWith: '[bot]'
                     }
-                }
+                },
+                // Exclude DevOps team members if filter is enabled
+                ...(excludeDevOps && { isDevOps: false })
             },
             orderBy: {
                 totalPoints: 'desc'

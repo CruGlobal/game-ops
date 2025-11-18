@@ -39,6 +39,8 @@ model Contributor {
   yearLongBadge           Boolean                @default(false) @map("year_long_badge")
   createdAt               DateTime               @default(now()) @map("created_at")
   updatedAt               DateTime               @updatedAt @map("updated_at")
+  isDevOps                Boolean                @default(false) @map("is_devops")
+  devOpsTeamSyncedAt      DateTime?              @map("devops_team_synced_at")
   achievements            Achievement[]
   activeChallenges        ChallengeParticipant[]
   completedChallenges     CompletedChallenge[]
@@ -51,6 +53,7 @@ model Contributor {
   @@index([username])
   @@index([totalPoints(sort: Desc)])
   @@index([currentStreak(sort: Desc)])
+  @@index([isDevOps])
   @@map("contributors")
 }
 
@@ -132,24 +135,26 @@ model ProcessedReview {
 }
 
 model Challenge {
-  id           String                 @id @default(cuid())
-  title        String
-  description  String
-  type         String
-  target       Int
-  reward       Int
-  startDate    DateTime               @map("start_date")
-  endDate      DateTime               @map("end_date")
-  status       String                 @default("upcoming")
-  difficulty   String                 @default("medium")
-  category     String                 @default("individual")
-  labelFilters Json?                  @map("label_filters")
-  okrMetadata  Json?                  @map("okr_metadata")
-  createdAt    DateTime               @default(now()) @map("created_at")
-  updatedAt    DateTime               @updatedAt @map("updated_at")
-  participants ChallengeParticipant[]
+  id                String                 @id @default(cuid())
+  title             String
+  description       String
+  type              String
+  target            Int
+  reward            Int
+  startDate         DateTime               @map("start_date")
+  endDate           DateTime               @map("end_date")
+  status            String                 @default("upcoming")
+  difficulty        String                 @default("medium")
+  category          String                 @default("individual")
+  challengeCategory String                 @default("general") @map("challenge_category") // okr, general, weekly
+  labelFilters      Json?                  @map("label_filters")
+  okrMetadata       Json?                  @map("okr_metadata")
+  createdAt         DateTime               @default(now()) @map("created_at")
+  updatedAt         DateTime               @updatedAt @map("updated_at")
+  participants      ChallengeParticipant[]
 
   @@index([status, endDate])
+  @@index([challengeCategory, status])
   @@map("challenges")
 }
 
@@ -210,15 +215,20 @@ model PRMetadata {
 }
 
 model QuarterSettings {
-  id                        String   @id @default("quarter-config")
-  systemType                String   @default("calendar") @map("system_type")
-  q1StartMonth              Int      @default(1) @map("q1_start_month")
-  customQuarters            Json?    @map("custom_quarters")
-  lastModified              DateTime @default(now()) @updatedAt @map("last_modified")
-  modifiedBy                String   @default("system") @map("modified_by")
-  createdAt                 DateTime @default(now()) @map("created_at")
-  enableAchievementComments Boolean  @default(false) @map("enable_achievement_comments")
-  enableBillsComments       Boolean  @default(false) @map("enable_bills_comments")
+  id                            String    @id @default("quarter-config")
+  systemType                    String    @default("calendar") @map("system_type")
+  q1StartMonth                  Int       @default(1) @map("q1_start_month")
+  customQuarters                Json?     @map("custom_quarters")
+  lastModified                  DateTime  @default(now()) @updatedAt @map("last_modified")
+  modifiedBy                    String    @default("system") @map("modified_by")
+  createdAt                     DateTime  @default(now()) @map("created_at")
+  enableAchievementComments     Boolean   @default(false) @map("enable_achievement_comments")
+  enableBillsComments           Boolean   @default(false) @map("enable_bills_comments")
+  devOpsTeamMembers             Json      @default("[]") @map("devops_team_members")
+  excludeDevOpsFromLeaderboards Boolean   @default(false) @map("exclude_devops_from_leaderboards")
+  devOpsTeamSlug                String    @default("devops-engineering-team") @map("devops_team_slug")
+  devOpsTeamLastSync            DateTime? @map("devops_team_last_sync")
+  devOpsTeamSyncEnabled         Boolean   @default(true) @map("devops_team_sync_enabled")
 
   @@map("quarter_settings")
 }

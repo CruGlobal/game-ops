@@ -104,7 +104,14 @@ export const topReviewersDateRange = async (req, res) => {
 // Controller to get the top contributors based on PR count
 export const topContributors = async (req, res) => {
     try {
-        const contributors = await getTopContributors(); // Get top contributors
+        // Get user's DevOps status and preference
+        const userIsDevOps = req.user?.isDevOps || false;
+        const userShowDevOps = req.session?.showDevOpsMembers ?? true;
+
+        const contributors = await getTopContributors({
+            userIsDevOps,
+            userShowDevOps
+        });
         res.json(contributors);
     } catch (err) {
         res.status(500).json({ error: 'Internal Server Error' }); // Handle errors
@@ -114,7 +121,14 @@ export const topContributors = async (req, res) => {
 // Controller to get the top reviewers based on review count
 export const topReviewers = async (req, res) => {
     try {
-        const reviewers = await getTopReviewers(); // Get top reviewers
+        // Get user's DevOps status and preference
+        const userIsDevOps = req.user?.isDevOps || false;
+        const userShowDevOps = req.session?.showDevOpsMembers ?? true;
+
+        const reviewers = await getTopReviewers({
+            userIsDevOps,
+            userShowDevOps
+        });
         res.json(reviewers);
     } catch (err) {
         res.status(500).json({ error: 'Internal Server Error' }); // Handle errors
@@ -202,7 +216,15 @@ export const getAchievementProgressController = async (req, res) => {
 export const getPointsLeaderboardController = async (req, res) => {
     try {
         const limit = parseInt(req.query.limit) || 10;
-        const leaderboard = await getPointsLeaderboard(limit);
+
+        // Get user's DevOps status and preference
+        const userIsDevOps = req.user?.isDevOps || false;
+        const userShowDevOps = req.session?.showDevOpsMembers ?? true;
+
+        const leaderboard = await getPointsLeaderboard(limit, {
+            userIsDevOps,
+            userShowDevOps
+        });
         res.json({ leaderboard });
     } catch (err) {
         res.status(500).json({ error: 'Error fetching points leaderboard' });
@@ -236,7 +258,15 @@ export const getPointsSummaryController = async (req, res) => {
 export const getStreakLeaderboardController = async (req, res) => {
     try {
         const limit = parseInt(req.query.limit) || 10;
-        const leaderboard = await getStreakLeaderboard(limit);
+
+        // Get user's DevOps status and preference
+        const userIsDevOps = req.user?.isDevOps || false;
+        const userShowDevOps = req.session?.showDevOpsMembers ?? true;
+
+        const leaderboard = await getStreakLeaderboard(limit, {
+            userIsDevOps,
+            userShowDevOps
+        });
         res.json({ leaderboard });
     } catch (err) {
         res.status(500).json({ error: 'Error fetching streak leaderboard' });
@@ -274,7 +304,15 @@ export const getContributorController = async (req, res) => {
 export const getAllTimeLeaderboardController = async (req, res) => {
     try {
         const limit = parseInt(req.query.limit) || 50;
-        const leaderboard = await getAllTimeLeaderboard(limit);
+
+        // Get user's DevOps status and preference
+        const userIsDevOps = req.user?.isDevOps || false;
+        const userShowDevOps = req.session?.showDevOpsMembers ?? true; // Default: show DevOps
+
+        const leaderboard = await getAllTimeLeaderboard(limit, {
+            userIsDevOps,
+            userShowDevOps
+        });
         res.json({ success: true, data: leaderboard });
     } catch (err) {
         res.status(500).json({ success: false, message: 'Error fetching all-time leaderboard', error: err.message });
@@ -286,7 +324,15 @@ export const getQuarterlyLeaderboardController = async (req, res) => {
     try {
         const { quarter } = req.params;
         const limit = parseInt(req.query.limit) || 50;
-        const leaderboard = await getQuarterlyLeaderboard(quarter, limit);
+
+        // Get user's DevOps status and preference
+        const userIsDevOps = req.user?.isDevOps || false;
+        const userShowDevOps = req.session?.showDevOpsMembers ?? true;
+
+        const leaderboard = await getQuarterlyLeaderboard(quarter, limit, {
+            userIsDevOps,
+            userShowDevOps
+        });
         res.json({ success: true, data: leaderboard });
     } catch (err) {
         res.status(500).json({ success: false, message: 'Error fetching quarterly leaderboard', error: err.message });

@@ -16,12 +16,14 @@ import { fetchPRsCron, awardContributorBadgesCron } from './controllers/contribu
 import { awardBillsAndVonettes } from './services/contributorService.js';
 import { generateWeeklyChallenges, checkExpiredChallenges } from './services/challengeService.js';
 import { checkAndResetIfNewQuarter } from './services/quarterlyService.js';
+import { syncDevOpsTeamFromGitHub } from './services/devOpsTeamService.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import logger from './utils/logger.js';
 import session from 'express-session';
 import passport from './config/passport.js';
 import jwt from 'jsonwebtoken';
 import { ensureAuthenticated } from './middleware/ensureAuthenticated.js';
+import { ensureRepositoryAccess } from './middleware/ensureRepositoryAccess.js';
 import { socketConfig, SOCKET_EVENTS } from './config/websocket-config.js';
 import { setSocketIO } from './utils/socketEmitter.js';
 import testRoutes from './routes/testRoutes.js';
@@ -122,13 +124,15 @@ app.get('/', (req, res) => {
 });
 
 // Route to render the leaderboard.ejs template (new home page)
-app.get('/leaderboard', (req, res) => {
-    res.render('leaderboard');
+// Requires repository access (any org member or collaborator)
+app.get('/leaderboard', ensureRepositoryAccess, (req, res) => {
+    res.render('leaderboard', { user: req.user });
 });
 
 // Route to render the challenges.ejs template
-app.get('/challenges', (req, res) => {
-    res.render('challenges');
+// Requires repository access (any org member or collaborator)
+app.get('/challenges', ensureRepositoryAccess, (req, res) => {
+    res.render('challenges', { user: req.user });
 });
 
 // Route to render individual profile pages
@@ -183,13 +187,23 @@ app.get('/auth/github/callback',
             return res.redirect('/');
         }
         const token = jwt.sign({ username: req.user.username }, process.env.JWT_SECRET, { expiresIn: '1h' });
-        res.redirect(`/admin?token=${token}`);
+
+        // Redirect back to the original page if stored in session, otherwise go to admin
+        const returnTo = req.session.returnTo || '/admin';
+        delete req.session.returnTo; // Clear the stored URL
+
+        // If going to admin, include the token in URL
+        if (returnTo.startsWith('/admin')) {
+            res.redirect(`${returnTo}${returnTo.includes('?') ? '&' : '?'}token=${token}`);
+        } else {
+            res.redirect(returnTo);
+        }
     }
 );
 
 // Protect admin routes - more specific routes first
-app.get('/admin/okr-challenges', ensureAuthenticated, (req, res) => {
-    res.render('okr-challenges', { user: req.user });
+app.get('/admin/challenges', ensureAuthenticated, (req, res) => {
+    res.render('challenge-management', { user: req.user });
 });
 
 app.get('/admin', ensureAuthenticated, (req, res) => {
@@ -308,6 +322,26 @@ cron.schedule('0 0 * * *', async () => {
         }
     } catch (error) {
         logger.error('Error checking quarterly reset', { error: error.message });
+    }
+});
+
+// Sync DevOps team from GitHub daily at 2 AM UTC
+cron.schedule('0 2 * * *', async () => {
+    logger.info('Running daily task to sync DevOps team from GitHub');
+    try {
+        if (!(await shouldRunCron('syncDevOpsTeam'))) return;
+        const result = await syncDevOpsTeamFromGitHub(false);
+        if (result.success) {
+            logger.info('DevOps team synced from GitHub', {
+                totalMembers: result.totalMembers,
+                addedMembers: result.addedMembers?.length || 0,
+                removedMembers: result.removedMembers?.length || 0
+            });
+        } else {
+            logger.info('DevOps team sync skipped', { reason: result.message });
+        }
+    } catch (error) {
+        logger.error('Error syncing DevOps team from GitHub', { error: error.message });
     }
 });
 

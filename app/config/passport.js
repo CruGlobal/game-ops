@@ -36,6 +36,16 @@ passport.deserializeUser(async (id, done) => {
         const user = await prisma.user.findUnique({
             where: { id }
         });
+
+        // Also fetch DevOps status from Contributor table if available
+        if (user) {
+            const contributor = await prisma.contributor.findUnique({
+                where: { username: user.username },
+                select: { isDevOps: true }
+            });
+            user.isDevOps = contributor?.isDevOps || false;
+        }
+
         done(null, user);
     } catch (err) {
         done(err);
