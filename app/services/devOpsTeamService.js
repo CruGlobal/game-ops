@@ -151,11 +151,12 @@ export async function syncDevOpsTeamFromGitHub(forceSync = false) {
       }
     });
 
-    // Update Contributor.isDevOps flags for added members
-    if (addedMembers.length > 0) {
+    // Update Contributor.isDevOps flags for ALL GitHub team members
+    // This ensures all team members are marked, even on first sync
+    if (githubMembers.length > 0) {
       await prisma.contributor.updateMany({
         where: {
-          username: { in: addedMembers }
+          username: { in: githubMembers }
         },
         data: {
           isDevOps: true,
