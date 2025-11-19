@@ -96,14 +96,14 @@ router.post('/admin/reset-all', ensureDevOpsTeamMember, resetAllContributors);
 router.get('/admin/pr-range-info', ensureDevOpsTeamMember, getPRRangeInfoController);
 
 // Duplicate Detection & Fix
-router.get('/admin/duplicate-check', ensureDevOpsTeamMember, checkDuplicatesController);r);
+router.get('/admin/duplicate-check', ensureDevOpsTeamMember, checkDuplicatesController);
 router.post('/admin/fix-duplicates', ensureDevOpsTeamMember, fixDuplicatesController);
 
 // Public Quarter Info (no auth required)
 router.get('/quarter-info', getQuarterInfoController);
 
 // Quarter Configuration (admin only)
-router.get('/admin/quarter-config', ensureDevOpsTeamMember, getQuarterConfigController);r);
+router.get('/admin/quarter-config', ensureDevOpsTeamMember, getQuarterConfigController);
 router.post('/admin/quarter-config', ensureDevOpsTeamMember, updateQuarterConfigController);
 
 // Historical Data Backfill (admin only)
