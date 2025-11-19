@@ -167,11 +167,11 @@ const result = await prisma.$queryRaw`
 
 ### "Environment variable not found: DATABASE_URL"
 - Check that `.env` file exists in app directory
-- Verify `DATABASE_URL` is set: `postgresql://user:pass@localhost:5432/github_scoreboard`
+- Verify `DATABASE_URL` is set: `postgresql://user:pass@localhost:5432/game_ops`
 - Verify `dotenv.config()` path is correct
 
 ### "P1001: Can't reach database server"
-- Ensure PostgreSQL is running: `docker ps` (look for `postgres_scoreboard`)
+- Ensure PostgreSQL is running: `docker ps` (look for `postgres_game_ops`)
 - Start Docker if needed: `docker-compose up -d postgres`
 - Check connection string matches your database credentials
 

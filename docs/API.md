@@ -1,6 +1,6 @@
 # API Documentation
 
-Complete API reference for the GitHub PR Scoreboard application.
+Complete API reference for the Game Ops application.
 
 **Base URL:** `http://localhost:3000` (development)
 
@@ -872,7 +872,7 @@ socket.on('challenge-completed', (data) => {
 ## Support
 
 For API questions or issues:
-- GitHub Issues: [github.com/yourusername/github-pr-scoreboard/issues](https://github.com/yourusername/github-pr-scoreboard/issues)
+- GitHub Issues: [github.com/yourusername/game-ops/issues](https://github.com/yourusername/game-ops/issues)
 - Email: your.email@example.com
 
 ---

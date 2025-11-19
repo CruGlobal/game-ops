@@ -129,7 +129,7 @@ function emitBackfillProgress() {
 
 **Evidence:**
 ```bash
-docker logs github-pr-scoreboard-app-1 --tail 50
+docker logs game-ops-app-1 --tail 50
 # Shows:
 [15:14:21] INFO: Starting backfill from 2019-01-31 to 2025-10-18
 [15:15:47] INFO: Found 8517 PRs to process
@@ -267,7 +267,7 @@ function emitBackfillProgress() {
 ### Test 1: Verify Logging
 ```bash
 # After implementing Fix 1
-docker logs -f github-pr-scoreboard-app-1 | grep "Backfill progress"
+docker logs -f game-ops-app-1 | grep "Backfill progress"
 
 # Expected output every 10 PRs:
 # [TIME] INFO: Backfill progress: 10/8517 PRs (0%), 15 reviews {status, eta, rateLimit}

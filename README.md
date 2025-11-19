@@ -1,4 +1,4 @@
-# 🏆 GitHub PR Scoreboard
+# 🏆 Game Ops
 
 A gamified GitHub Pull Request tracking and leaderboard system with real-time updates, streak tracking, weekly challenges, and achievement badges.
 
@@ -87,8 +87,8 @@ A gamified GitHub Pull Request tracking and leaderboard system with real-time up
 
 1. **Clone the repository**
 ```bash
-git clone https://github.com/yourusername/github-pr-scoreboard.git
-cd github-pr-scoreboard
+git clone https://github.com/yourusername/game-ops.git
+cd game-ops
 ```
 
 2. **Set up PostgreSQL database**
@@ -100,7 +100,7 @@ brew install postgresql@15
 brew services start postgresql@15
 
 # Create database
-createdb github_scoreboard
+createdb game_ops
 ```
 
 **Option B: Neon (Cloud PostgreSQL - Recommended)**
@@ -120,9 +120,9 @@ Edit `.env` and add your credentials:
 GITHUB_TOKEN=your_github_token_here
 
 # PostgreSQL Database (use one)
-DATABASE_URL=postgresql://user:password@localhost:5432/github_scoreboard
+DATABASE_URL=postgresql://user:password@localhost:5432/game_ops
 # OR for Neon:
-DATABASE_URL=postgresql://user:password@your-project.neon.tech/github_scoreboard?sslmode=require
+DATABASE_URL=postgresql://user:password@your-project.neon.tech/game_ops?sslmode=require
 
 # Session & App Config
 SESSION_SECRET=your_random_secret_here
@@ -540,8 +540,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 📞 Support
 
 For questions, issues, or feature requests:
-- **Issues**: [GitHub Issues](https://github.com/yourusername/github-pr-scoreboard/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/yourusername/github-pr-scoreboard/discussions)
+- **Issues**: [GitHub Issues](https://github.com/yourusername/game-ops/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/yourusername/game-ops/discussions)
 - **Email**: your.email@example.com
 
 ---

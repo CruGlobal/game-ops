@@ -1,6 +1,6 @@
 # Deployment Guide
 
-Complete guide for deploying the GitHub PR Scoreboard to various environments.
+Complete guide for deploying the Game Ops to various environments.
 
 ---
 
@@ -40,8 +40,8 @@ Complete guide for deploying the GitHub PR Scoreboard to various environments.
 ### 1. Clone Repository
 
 ```bash
-git clone https://github.com/yourusername/github-pr-scoreboard.git
-cd github-pr-scoreboard
+git clone https://github.com/yourusername/game-ops.git
+cd game-ops
 ```
 
 ### 2. Install Dependencies
@@ -64,7 +64,7 @@ Edit `.env` with your configuration:
 ```env
 # Required Variables
 GITHUB_TOKEN=<your-github-token>
-DATABASE_URL=postgresql://user:password@localhost:5432/scoreboard
+DATABASE_URL=postgresql://user:password@localhost:5432/game_ops
 SESSION_SECRET=<generate-random-secret>
 NODE_ENV=development
 
@@ -152,20 +152,20 @@ npm run dev  # Uses nodemon for auto-restart
 ### Build Docker Image
 
 ```bash
-docker build -t github-pr-scoreboard:latest .
+docker build -t game-ops:latest .
 ```
 
 ### Run Container
 
 ```bash
 docker run -d \
-  --name pr-scoreboard \
+  --name game-ops \
   -p 3000:3000 \
   -e GITHUB_TOKEN=<your-token> \
-  -e DATABASE_URL=postgresql://user:password@host.docker.internal:5432/scoreboard \
+  -e DATABASE_URL=postgresql://user:password@host.docker.internal:5432/game_ops \
   -e SESSION_SECRET=<your-secret> \
   -e NODE_ENV=production \
-  github-pr-scoreboard:latest
+  game-ops:latest
 ```
 
 ### Using Docker Compose for Production
@@ -183,7 +183,7 @@ services:
     environment:
       NODE_ENV: production
       GITHUB_TOKEN: ${GITHUB_TOKEN}
-      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/scoreboard
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/game_ops
       SESSION_SECRET: ${SESSION_SECRET}
     depends_on:
       - postgres
@@ -236,27 +236,27 @@ docker-compose -f docker-compose.prod.yml up -d
 aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin <account-id>.dkr.ecr.us-east-1.amazonaws.com
 
 # Create repository
-aws ecr create-repository --repository-name github-pr-scoreboard --region us-east-1
+aws ecr create-repository --repository-name game-ops --region us-east-1
 
 # Build and push image
-docker build -t github-pr-scoreboard .
-docker tag github-pr-scoreboard:latest <account-id>.dkr.ecr.us-east-1.amazonaws.com/github-pr-scoreboard:latest
-docker push <account-id>.dkr.ecr.us-east-1.amazonaws.com/github-pr-scoreboard:latest
+docker build -t game-ops .
+docker tag game-ops:latest <account-id>.dkr.ecr.us-east-1.amazonaws.com/game-ops:latest
+docker push <account-id>.dkr.ecr.us-east-1.amazonaws.com/game-ops:latest
 ```
 
 **2. Create ECS Task Definition**
 
 ```json
 {
-  "family": "pr-scoreboard",
+  "family": "game-ops",
   "networkMode": "awsvpc",
   "requiresCompatibilities": ["FARGATE"],
   "cpu": "512",
   "memory": "1024",
   "containerDefinitions": [
     {
-      "name": "pr-scoreboard",
-      "image": "<account-id>.dkr.ecr.us-east-1.amazonaws.com/github-pr-scoreboard:latest",
+      "name": "game-ops",
+      "image": "<account-id>.dkr.ecr.us-east-1.amazonaws.com/game-ops:latest",
       "portMappings": [
         {
           "containerPort": 3000,
@@ -282,7 +282,7 @@ docker push <account-id>.dkr.ecr.us-east-1.amazonaws.com/github-pr-scoreboard:la
       "logConfiguration": {
         "logDriver": "awslogs",
         "options": {
-          "awslogs-group": "/ecs/pr-scoreboard",
+          "awslogs-group": "/ecs/game-ops",
           "awslogs-region": "us-east-1",
           "awslogs-stream-prefix": "ecs"
         }
@@ -296,9 +296,9 @@ docker push <account-id>.dkr.ecr.us-east-1.amazonaws.com/github-pr-scoreboard:la
 
 ```bash
 aws ecs create-service \
-  --cluster pr-scoreboard-cluster \
-  --service-name pr-scoreboard \
-  --task-definition pr-scoreboard \
+  --cluster game-ops-cluster \
+  --service-name game-ops \
+  --task-definition game-ops \
   --desired-count 2 \
   --launch-type FARGATE \
   --network-configuration "awsvpcConfiguration={subnets=[subnet-xxx],securityGroups=[sg-xxx],assignPublicIp=ENABLED}"
@@ -336,8 +336,8 @@ sudo usermod -a -G docker ec2-user
 **4. Clone and Deploy**
 
 ```bash
-git clone https://github.com/yourusername/github-pr-scoreboard.git
-cd github-pr-scoreboard
+git clone https://github.com/yourusername/game-ops.git
+cd game-ops
 
 # Set environment variables
 sudo nano /etc/environment
@@ -473,8 +473,8 @@ sudo chmod +x /usr/local/bin/docker-compose
 **4. Clone and Deploy**
 
 ```bash
-git clone https://github.com/yourusername/github-pr-scoreboard.git
-cd github-pr-scoreboard
+git clone https://github.com/yourusername/game-ops.git
+cd game-ops
 ```
 
 **5. Configure Environment**
@@ -492,7 +492,7 @@ sudo npm install -g pm2
 
 # Start application
 cd app
-pm2 start scoreboard.js --name pr-scoreboard
+pm2 start scoreboard.js --name game-ops
 
 # Save PM2 configuration
 pm2 save
@@ -515,7 +515,7 @@ sudo ufw enable
 ```bash
 sudo apt install -y nginx
 
-sudo nano /etc/nginx/sites-available/pr-scoreboard
+sudo nano /etc/nginx/sites-available/game-ops
 ```
 
 Add configuration:
@@ -542,7 +542,7 @@ server {
 Enable site:
 
 ```bash
-sudo ln -s /etc/nginx/sites-available/pr-scoreboard /etc/nginx/sites-enabled/
+sudo ln -s /etc/nginx/sites-available/game-ops /etc/nginx/sites-enabled/
 sudo nginx -t
 sudo systemctl restart nginx
 ```
@@ -570,13 +570,13 @@ sudo certbot --nginx -d your-domain.com
 **2. Get Connection String**
 
 ```
-postgresql://user:password@ep-example-123.us-east-2.aws.neon.tech/scoreboard?sslmode=require
+postgresql://user:password@ep-example-123.us-east-2.aws.neon.tech/game_ops?sslmode=require
 ```
 
 **3. Update Environment Variable**
 
 ```env
-DATABASE_URL=postgresql://user:password@ep-example-123.us-east-2.aws.neon.tech/scoreboard?sslmode=require
+DATABASE_URL=postgresql://user:password@ep-example-123.us-east-2.aws.neon.tech/game_ops?sslmode=require
 ```
 
 **4. Run Migrations**
@@ -594,7 +594,7 @@ npx prisma migrate deploy
 docker run -d \
   --name postgres \
   -p 5432:5432 \
-  -e POSTGRES_DB=scoreboard \
+  -e POSTGRES_DB=game_ops \
   -e POSTGRES_USER=postgres \
   -e POSTGRES_PASSWORD=yourpassword \
   -v postgres_data:/var/lib/postgresql/data \
@@ -615,8 +615,8 @@ sudo systemctl enable postgresql
 # Create database and user
 sudo -u postgres psql
 CREATE DATABASE scoreboard;
-CREATE USER scoreboard_user WITH ENCRYPTED PASSWORD 'yourpassword';
-GRANT ALL PRIVILEGES ON DATABASE scoreboard TO scoreboard_user;
+CREATE USER game_ops_user WITH ENCRYPTED PASSWORD 'yourpassword';
+GRANT ALL PRIVILEGES ON DATABASE scoreboard TO game_ops_user;
 \q
 ```
 
@@ -630,13 +630,13 @@ brew install postgresql@14
 brew services start postgresql@14
 
 # Create database
-createdb scoreboard
+createdb game_ops
 ```
 
 **Set DATABASE_URL:**
 
 ```env
-DATABASE_URL=postgresql://postgres:yourpassword@localhost:5432/scoreboard
+DATABASE_URL=postgresql://postgres:yourpassword@localhost:5432/game_ops
 ```
 
 **Run Prisma Migrations:**
@@ -662,7 +662,7 @@ Opens at `http://localhost:5555` - GUI for viewing and editing data.
 
 ```bash
 # Connect to database
-psql postgresql://user:password@localhost:5432/scoreboard
+psql postgresql://user:password@localhost:5432/game_ops
 
 # List tables
 \dt
@@ -682,13 +682,13 @@ SELECT * FROM "Contributor" LIMIT 10;
 
 ```bash
 # View logs
-pm2 logs pr-scoreboard
+pm2 logs game-ops
 
 # Monitor resources
 pm2 monit
 
 # View process info
-pm2 info pr-scoreboard
+pm2 info game-ops
 
 # View dashboard
 pm2 plus
@@ -698,7 +698,7 @@ pm2 plus
 
 Logs are stored in:
 - Development: Console output
-- Production: `/var/log/pr-scoreboard/` (configure in logger.js)
+- Production: `/var/log/game-ops/` (configure in logger.js)
 
 ### Health Check Endpoint
 
@@ -795,7 +795,7 @@ chmod -R 755 /path/to/app
 
 ### Logs Location
 
-- **Application logs:** `/var/log/pr-scoreboard/`
+- **Application logs:** `/var/log/game-ops/`
 - **Nginx logs:** `/var/log/nginx/`
 - **PM2 logs:** `~/.pm2/logs/`
 - **PostgreSQL logs:** `/var/log/postgresql/`
@@ -865,16 +865,16 @@ app.get('/api/contributors', async (req, res) => {
 
 ```bash
 # Backup
-pg_dump $DATABASE_URL > /backup/scoreboard_$(date +%Y%m%d).sql
+pg_dump $DATABASE_URL > /backup/game_ops_$(date +%Y%m%d).sql
 
 # Or using docker
-docker exec postgres pg_dump -U postgres scoreboard > /backup/scoreboard_$(date +%Y%m%d).sql
+docker exec postgres pg_dump -U postgres scoreboard > /backup/game_ops_$(date +%Y%m%d).sql
 
 # Restore
-psql $DATABASE_URL < /backup/scoreboard_20251015.sql
+psql $DATABASE_URL < /backup/game_ops_20251015.sql
 
 # Or using docker
-docker exec -i postgres psql -U postgres scoreboard < /backup/scoreboard_20251015.sql
+docker exec -i postgres psql postgresql://user:password@localhost:5432/game_ops < /backup/game_ops_20251015.sql
 ```
 
 **Automated Backup Script:**
@@ -884,10 +884,10 @@ docker exec -i postgres psql -U postgres scoreboard < /backup/scoreboard_2025101
 BACKUP_DIR="/backups"
 DATE=$(date +%Y%m%d_%H%M%S)
 
-pg_dump $DATABASE_URL > "$BACKUP_DIR/scoreboard_$DATE.sql"
+pg_dump $DATABASE_URL > "$BACKUP_DIR/game_ops_$DATE.sql"
 
 # Compress backup
-gzip "$BACKUP_DIR/scoreboard_$DATE.sql"
+gzip "$BACKUP_DIR/game_ops_$DATE.sql"
 
 # Keep only last 7 days
 find $BACKUP_DIR -name "*.sql.gz" -type f -mtime +7 -delete
@@ -940,7 +940,7 @@ jobs:
       run: cd app && npm test
 
     - name: Build Docker image
-      run: docker build -t pr-scoreboard .
+      run: docker build -t game-ops .
 
     - name: Deploy to production
       run: |
@@ -971,7 +971,7 @@ jobs:
 
 For deployment issues:
 - **Documentation:** [CLAUDE.md](../CLAUDE.md)
-- **GitHub Issues:** [github.com/yourusername/github-pr-scoreboard/issues](https://github.com/yourusername/github-pr-scoreboard/issues)
+- **GitHub Issues:** [github.com/yourusername/game-ops/issues](https://github.com/yourusername/game-ops/issues)
 
 ---
 

@@ -1,5 +1,5 @@
 -- scripts/init-postgres.sql
--- PostgreSQL initialization script for GitHub PR Scoreboard
+-- PostgreSQL initialization script for Game Ops
 -- This script sets up extensions and initial configuration
 
 -- ============================================
@@ -174,7 +174,7 @@ $$ LANGUAGE plpgsql;
 -- Grant appropriate permissions to app user
 -- Note: In production, create separate user with limited permissions
 -- CREATE USER scoreboard_app WITH PASSWORD 'your_secure_password';
--- GRANT CONNECT ON DATABASE github_scoreboard TO scoreboard_app;
+-- GRANT CONNECT ON DATABASE game_ops TO scoreboard_app;
 -- GRANT USAGE ON SCHEMA public TO scoreboard_app;
 -- GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO scoreboard_app;
 -- GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO scoreboard_app;
@@ -184,10 +184,10 @@ $$ LANGUAGE plpgsql;
 -- ============================================
 
 -- Enable auto-vacuum for better performance
-ALTER DATABASE github_scoreboard SET autovacuum = on;
+ALTER DATABASE game_ops SET autovacuum = on;
 
 -- Set statistics target higher for better query planning
-ALTER DATABASE github_scoreboard SET default_statistics_target = 100;
+ALTER DATABASE game_ops SET default_statistics_target = 100;
 
 -- ============================================
 -- INITIAL DATA (Optional)

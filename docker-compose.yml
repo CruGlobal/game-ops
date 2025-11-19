@@ -8,7 +8,7 @@ services:
     ports:
       - "3000:3000"
     environment:
-      DATABASE_URL: postgresql://scoreboard:scoreboard@postgres:5432/github_scoreboard
+      DATABASE_URL: postgresql://gameops:gameops@postgres:5432/game_ops
       NODE_ENV: production
       ADMIN_PASSWORD: admin
     env_file:
@@ -20,18 +20,18 @@ services:
 
   postgres:
     image: postgres:15-alpine
-    container_name: postgres_scoreboard
+    container_name: postgres_game_ops
     restart: always
     ports:
       - "5432:5432"
     environment:
-      POSTGRES_USER: scoreboard
-      POSTGRES_PASSWORD: scoreboard
-      POSTGRES_DB: github_scoreboard
+      POSTGRES_USER: gameops
+      POSTGRES_PASSWORD: gameops
+      POSTGRES_DB: game_ops
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_data1:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U scoreboard"]
+      test: ["CMD-SHELL", "pg_isready -U gameops"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -53,7 +53,7 @@ services:
   #     - postgres
 
 volumes:
-  postgres_data:
+  postgres_data1:
     driver: local
   # pgadmin_data:
   #   driver: local

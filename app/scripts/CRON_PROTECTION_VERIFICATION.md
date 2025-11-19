@@ -125,7 +125,7 @@ if (!alreadyProcessedReview) {
 
 ### Docker Status
 ```
-Container: github-pr-scoreboard-app-1
+Container: game-ops-app-1
 Status: Up About a minute ago
 Code Version: Latest (with duplicate prevention fix)
 ```

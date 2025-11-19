@@ -100,12 +100,12 @@ io.on(SOCKET_EVENTS.CONNECTION, (socket) => {
     logger.info('Client connected', { socketId: socket.id });
 
     socket.on(SOCKET_EVENTS.SUBSCRIBE_UPDATES, () => {
-        socket.join('scoreboard-updates');
+        socket.join('game-ops-updates');
         logger.info('Client subscribed to updates', { socketId: socket.id });
     });
 
     socket.on(SOCKET_EVENTS.UNSUBSCRIBE_UPDATES, () => {
-        socket.leave('scoreboard-updates');
+        socket.leave('game-ops-updates');
         logger.info('Client unsubscribed from updates', { socketId: socket.id });
     });
 
@@ -357,7 +357,7 @@ process.on('SIGINT', () => {
 });
 
 httpServer.listen(port, () => {
-    logger.info('GitHub PR Scoreboard app started', {
+    logger.info('Game Ops app started', {
         port,
         environment: process.env.NODE_ENV || 'development',
         url: `http://localhost:${port}`,
