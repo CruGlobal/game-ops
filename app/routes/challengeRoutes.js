@@ -12,6 +12,7 @@ import {
 } from '../controllers/challengeController.js';
 import { authenticate } from '../middleware/authMiddleware.js';
 import { ensureAuthenticated } from '../middleware/ensureAuthenticated.js';
+import { ensureDevOpsTeamMember } from '../middleware/ensureDevOpsTeamMember.js';
 
 const router = express.Router();
 
@@ -34,8 +35,8 @@ router.get('/user/:username', getUserChallengesController);
 router.post('/okr/create', authenticate, createOKRChallengeController);
 
 // Admin routes for challenge management
-router.post('/admin/create', ensureAuthenticated, createManualChallengeController);
-router.get('/admin/all', ensureAuthenticated, getAllChallengesController);
-router.delete('/admin/:id', ensureAuthenticated, deleteChallengeController);
+router.post('/admin/create', ensureDevOpsTeamMember, createManualChallengeController);
+router.get('/admin/all', ensureDevOpsTeamMember, getAllChallengesController);
+router.delete('/admin/:id', ensureDevOpsTeamMember, deleteChallengeController);
 
 export default router;

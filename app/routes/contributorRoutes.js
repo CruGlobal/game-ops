@@ -55,6 +55,7 @@ import {
 import { authenticate } from '../middleware/authMiddleware.js';
 import { login } from '../controllers/authController.js';
 import { ensureAuthenticated } from '../middleware/ensureAuthenticated.js';
+import { ensureDevOpsTeamMember } from '../middleware/ensureDevOpsTeamMember.js';
 import { getCronStatusController, setCronStatusController } from '../controllers/adminController.js';
 
 const router = express.Router();
@@ -83,51 +84,51 @@ router.get('/award-bills-vonettes', authenticate, awardBillsAndVonettesControlle
 router.post('/admin/login', login);
 
 // Route to get all contributors
-router.get('/admin/contributors', ensureAuthenticated, getContributors);
+router.get('/admin/contributors', ensureDevOpsTeamMember, getContributors);
 
 // Route to reset a specific contributor
-router.post('/admin/reset-contributor', ensureAuthenticated, resetContributor);
+router.post('/admin/reset-contributor', ensureDevOpsTeamMember, resetContributor);
 
 // Route to reset all contributors
-router.post('/admin/reset-all', ensureAuthenticated, resetAllContributors);
+router.post('/admin/reset-all', ensureDevOpsTeamMember, resetAllContributors);
 
 // PR Range Info and Data Statistics
-router.get('/admin/pr-range-info', ensureAuthenticated, getPRRangeInfoController);
+router.get('/admin/pr-range-info', ensureDevOpsTeamMember, getPRRangeInfoController);
 
 // Duplicate Detection & Fix
-router.get('/admin/duplicate-check', ensureAuthenticated, checkDuplicatesController);
-router.post('/admin/fix-duplicates', ensureAuthenticated, fixDuplicatesController);
+router.get('/admin/duplicate-check', ensureDevOpsTeamMember, checkDuplicatesController);
+router.post('/admin/fix-duplicates', ensureDevOpsTeamMember, fixDuplicatesController);
 
 // Public Quarter Info (no auth required)
 router.get('/quarter-info', getQuarterInfoController);
 
 // Quarter Configuration (admin only)
-router.get('/admin/quarter-config', ensureAuthenticated, getQuarterConfigController);
-router.post('/admin/quarter-config', ensureAuthenticated, updateQuarterConfigController);
+router.get('/admin/quarter-config', ensureDevOpsTeamMember, getQuarterConfigController);
+router.post('/admin/quarter-config', ensureDevOpsTeamMember, updateQuarterConfigController);
 
 // Historical Data Backfill (admin only)
-router.post('/admin/backfill/start', ensureAuthenticated, startBackfillController);
-router.post('/admin/backfill/stop', ensureAuthenticated, stopBackfillController);
-router.get('/admin/backfill/status', ensureAuthenticated, getBackfillStatusController);
+router.post('/admin/backfill/start', ensureDevOpsTeamMember, startBackfillController);
+router.post('/admin/backfill/stop', ensureDevOpsTeamMember, stopBackfillController);
+router.get('/admin/backfill/status', ensureDevOpsTeamMember, getBackfillStatusController);
 
 // Cron controls (admin only)
-router.get('/admin/cron-status', ensureAuthenticated, getCronStatusController);
-router.post('/admin/cron-status', ensureAuthenticated, setCronStatusController);
+router.get('/admin/cron-status', ensureDevOpsTeamMember, getCronStatusController);
+router.post('/admin/cron-status', ensureDevOpsTeamMember, setCronStatusController);
 
 // DevOps Team Management (admin only)
-router.get('/admin/devops-team/settings', ensureAuthenticated, getDevOpsTeamSettingsController);
-router.post('/admin/devops-team/sync', ensureAuthenticated, syncDevOpsTeamController);
-router.post('/admin/devops-team/toggle-sync', ensureAuthenticated, toggleDevOpsTeamSyncController);
-router.post('/admin/devops-team/toggle-filter', ensureAuthenticated, toggleDevOpsLeaderboardFilterController);
+router.get('/admin/devops-team/settings', ensureDevOpsTeamMember, getDevOpsTeamSettingsController);
+router.post('/admin/devops-team/sync', ensureDevOpsTeamMember, syncDevOpsTeamController);
+router.post('/admin/devops-team/toggle-sync', ensureDevOpsTeamMember, toggleDevOpsTeamSyncController);
+router.post('/admin/devops-team/toggle-filter', ensureDevOpsTeamMember, toggleDevOpsLeaderboardFilterController);
 
 // User DevOps Status and Preferences (public - no auth required)
 router.get('/user/devops-status', checkUserDevOpsStatusController);
 router.post('/user/preferences/show-devops', setShowDevOpsPreferenceController);
 
 // Admin recompute endpoints
-router.post('/admin/leaderboard/recompute/current-quarter', ensureAuthenticated, recomputeCurrentQuarterController);
-router.post('/admin/leaderboard/recompute/hall-of-fame', ensureAuthenticated, recomputeHallOfFameController);
-router.post('/admin/leaderboard/recompute/hall-of-fame/all', ensureAuthenticated, recomputeHallOfFameAllController);
+router.post('/admin/leaderboard/recompute/current-quarter', ensureDevOpsTeamMember, recomputeCurrentQuarterController);
+router.post('/admin/leaderboard/recompute/hall-of-fame', ensureDevOpsTeamMember, recomputeHallOfFameController);
+router.post('/admin/leaderboard/recompute/hall-of-fame/all', ensureDevOpsTeamMember, recomputeHallOfFameAllController);
 
 // Leaderboard Routes
 router.get('/leaderboard/all-time', getAllTimeLeaderboardController);
@@ -191,6 +192,6 @@ router.get('/:username/streak', getStreakStatsController);
 router.get('/contributors/:username', getContributorController);
 
 // Backfill badges (admin only)
-router.post('/admin/backfill-badges', ensureAuthenticated, backfillBadgesController);
+router.post('/admin/backfill-badges', ensureDevOpsTeamMember, backfillBadgesController);
 
 export default router;
