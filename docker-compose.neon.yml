@@ -1,6 +1,5 @@
 # docker-compose.neon.yml
-# Updated Docker Compose for Migration from MongoDB to Neon (PostgreSQL)
-# This file supports both MongoDB (during migration) and PostgreSQL side-by-side
+# PostgreSQL-based deployment configuration with Neon compatibility
 
 version: '3.8'
 
@@ -16,32 +15,25 @@ services:
     ports:
       - "3000:3000"
     environment:
-      # Database selection
-      DB_TYPE: postgres  # Switch to 'mongo' for rollback
       NODE_ENV: development
-      
+
       # PostgreSQL/Neon connection
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/game_ops
       DB_POOL_MIN: 2
       DB_POOL_MAX: 10
-      
-      # MongoDB (legacy - keep during migration)
-      MONGO_URI: mongodb://mongo:27017/game-ops
-      
+
       # Application settings
       PORT: 3000
       ADMIN_PASSWORD: admin
-      
+
       # Session
       SESSION_SECRET: ${SESSION_SECRET:-change-me-in-production}
-      
+
     env_file:
       - .env
     depends_on:
       postgres:
         condition: service_healthy
-      mongo:
-        condition: service_started
     volumes:
       - ./app:/app
       - /app/node_modules
@@ -125,43 +117,6 @@ services:
       - app-network
 
   # ============================================
-  # MONGODB (Legacy - Keep during migration)
-  # ============================================
-  mongo:
-    image: mongo:6.0
-    container_name: mongodb
-    restart: unless-stopped
-    ports:
-      - "27017:27017"
-    environment:
-      MONGO_INITDB_DATABASE: game-ops
-    volumes:
-      - mongo_data:/data/db
-      - ./scripts/init-mongo.js:/docker-entrypoint-initdb.d/init.js:ro
-    networks:
-      - app-network
-
-  # ============================================
-  # MONGO EXPRESS (MongoDB Management UI)
-  # ============================================
-  mongo-express:
-    image: mongo-express:1.0.0
-    container_name: mongo-express
-    restart: unless-stopped
-    ports:
-      - "8081:8081"
-    environment:
-      ME_CONFIG_MONGODB_SERVER: mongo
-      ME_CONFIG_MONGODB_PORT: 27017
-      ME_CONFIG_MONGODB_ENABLE_ADMIN: 'true'
-      ME_CONFIG_BASICAUTH_USERNAME: admin
-      ME_CONFIG_BASICAUTH_PASSWORD: admin
-    depends_on:
-      - mongo
-    networks:
-      - app-network
-
-  # ============================================
   # REDIS (Optional - for caching/sessions)
   # ============================================
   redis:
@@ -191,9 +146,6 @@ volumes:
   pgadmin_data:
     driver: local
     name: game-ops-pgadmin
-  mongo_data:
-    driver: local
-    name: game-ops-mongo
   redis_data:
     driver: local
     name: game-ops-redis
@@ -209,7 +161,7 @@ networks:
 # ============================================
 # USAGE INSTRUCTIONS
 # ============================================
-# 
+#
 # Start all services:
 #   docker-compose -f docker-compose.neon.yml up -d
 #
@@ -228,13 +180,11 @@ networks:
 # Access points:
 #   - Application: http://localhost:3000
 #   - PgAdmin: http://localhost:5050 (admin@admin.com / admin)
-#   - Mongo Express: http://localhost:8081 (admin / admin)
 #   - PostgreSQL: localhost:5432 (postgres / postgres)
-#   - MongoDB: localhost:27017
 #   - Redis: localhost:6379
 #
 # Run migrations:
-#   docker-compose -f docker-compose.neon.yml exec app npm run migrate
+#   docker-compose -f docker-compose.neon.yml exec app npx prisma migrate deploy
 #
 # Run Prisma Studio (DB GUI):
 #   docker-compose -f docker-compose.neon.yml exec app npx prisma studio

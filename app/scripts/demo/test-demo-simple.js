@@ -136,7 +136,7 @@ botTestCases.forEach((testCase, index) => {
 console.log('\n🌐 API Testing Framework:');
 console.log('✅ HTTP endpoint testing with supertest');
 console.log('✅ JWT authentication testing');
-console.log('✅ Database integration testing with in-memory MongoDB');
+console.log('✅ Database integration testing with PostgreSQL');
 console.log('✅ GitHub API mocking with nock');
 console.log('✅ Error handling and edge case testing');
 
