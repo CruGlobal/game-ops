@@ -54,7 +54,7 @@ COPY --from=builder /usr/src/app/views ./views
 COPY --from=builder /usr/src/app/public ./public
 
 # Add DataDog label for log processing
-LABEL "com.datadoghq.ad.logs"='[{"source": "node", "service": "game-ops", "log_processing_rules": [{"type": "exclude_at_match", "name": "exclude_health_checks", "pattern": "/health"}]}]'
+LABEL "com.datadoghq.ad.logs"='[{"source": "node", "service": "game-ops", "log_processing_rules": [{"type": "exclude_at_match", "name": "exclude_health_checks", "pattern": "/health|/monitors/lb"}]}]'
 
 EXPOSE 3000
 

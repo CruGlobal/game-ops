@@ -94,4 +94,13 @@ router.get('/live', (req, res) => {
     res.status(200).json({ status: 'alive', uptime: process.uptime() });
 });
 
+// ALB health check endpoint (CruGlobal standard)
+router.get('/monitors/lb', (req, res) => {
+    res.status(200).json({
+        status: 'ok',
+        service: 'game-ops',
+        timestamp: new Date().toISOString()
+    });
+});
+
 export default router;
