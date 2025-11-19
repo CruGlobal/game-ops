@@ -23,6 +23,7 @@ import session from 'express-session';
 import passport from './config/passport.js';
 import jwt from 'jsonwebtoken';
 import { ensureAuthenticated } from './middleware/ensureAuthenticated.js';
+import { ensureDevOpsTeamMember } from './middleware/ensureDevOpsTeamMember.js';
 import { ensureRepositoryAccess } from './middleware/ensureRepositoryAccess.js';
 import { socketConfig, SOCKET_EVENTS } from './config/websocket-config.js';
 import { setSocketIO } from './utils/socketEmitter.js';
@@ -203,11 +204,11 @@ app.get('/auth/github/callback',
 );
 
 // Protect admin routes - more specific routes first
-app.get('/admin/challenges', ensureAuthenticated, (req, res) => {
+app.get('/admin/challenges', ensureDevOpsTeamMember, (req, res) => {
     res.render('challenge-management', { user: req.user });
 });
 
-app.get('/admin', ensureAuthenticated, (req, res) => {
+app.get('/admin', ensureDevOpsTeamMember, (req, res) => {
     res.render('admin', { user: req.user });
 });
 
