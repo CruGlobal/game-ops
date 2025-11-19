@@ -188,8 +188,9 @@ app.get('/auth/github/callback',
         }
         const token = jwt.sign({ username: req.user.username }, process.env.JWT_SECRET, { expiresIn: '1h' });
 
-        // Redirect back to the original page if stored in session, otherwise go to admin
-        const returnTo = req.session.returnTo || '/admin';
+        // Redirect back to the original page if stored in session, otherwise go to leaderboard
+        // Default previously pointed to '/admin'; changed to '/leaderboard' for improved initial UX.
+        const returnTo = req.session.returnTo || '/leaderboard';
         delete req.session.returnTo; // Clear the stored URL
 
         // If going to admin, include the token in URL
