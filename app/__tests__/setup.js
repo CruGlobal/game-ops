@@ -35,9 +35,9 @@ beforeAll(async () => {
   process.env.GITHUB_CLIENT_ID = 'test_client_id';
   process.env.GITHUB_CLIENT_SECRET = 'test_client_secret';
   process.env.GITHUB_ORG = 'TestOrg';
-  process.env.GITHUB_TEAM_SLUG = 'test-team';
+  process.env.DEVOPS_TEAM_SLUG = 'test-team';
   process.env.SESSION_SECRET = 'test_session_secret';
-  process.env.DOMAIN = 'https://test.example.com';
+  process.env.BASE_URL = 'https://test.example.com';
 
   // Import Prisma after env vars are set
   const { prisma: prismaInstance } = await import('../lib/prisma.js');
