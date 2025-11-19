@@ -19,7 +19,7 @@ const octokit = new Octokit({
 
 const repoOwner = process.env.REPO_OWNER;
 const repoName = process.env.REPO_NAME;
-const domain = process.env.DOMAIN;
+const domain = process.env.BASE_URL || process.env.DOMAIN || 'http://localhost:3000';
 
 // Function to sleep for a specified number of milliseconds
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));

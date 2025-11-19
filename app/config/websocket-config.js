@@ -1,7 +1,9 @@
 // WebSocket configuration for real-time updates
+const baseUrl = process.env.BASE_URL || process.env.CORS_ORIGIN || "http://localhost:3000";
+
 export const socketConfig = {
     cors: {
-        origin: process.env.CORS_ORIGIN || "http://localhost:3000",
+        origin: baseUrl,
         methods: ["GET", "POST"],
         credentials: true
     },

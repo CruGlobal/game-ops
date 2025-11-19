@@ -3,10 +3,13 @@ import passport from 'passport';
 import { Strategy as GitHubStrategy } from 'passport-github2';
 import { prisma } from '../lib/prisma.js';
 
+const baseUrl = process.env.BASE_URL || process.env.GITHUB_CALLBACK_URL?.replace('/auth/github/callback', '') || 'http://localhost:3000';
+const callbackURL = process.env.GITHUB_CALLBACK_URL || `${baseUrl}/auth/github/callback`;
+
 passport.use(new GitHubStrategy({
     clientID: process.env.GITHUB_CLIENT_ID,
     clientSecret: process.env.GITHUB_CLIENT_SECRET,
-    callbackURL: process.env.GITHUB_CALLBACK_URL || 'http://localhost:3000/auth/github/callback'
+    callbackURL
 },
 async (accessToken, refreshToken, profile, done) => {
     try {

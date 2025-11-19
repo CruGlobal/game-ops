@@ -10,7 +10,7 @@ export const ensureAuthenticated = async (req, res, next) => {
     if (isAuth) {
         const token = process.env.GITHUB_TOKEN;
         const org = process.env.GITHUB_ORG; // Read GitHub organization from environment variable
-        const teamSlug = process.env.GITHUB_TEAM_SLUG; // Read GitHub team slug from environment variable
+        const teamSlug = process.env.DEVOPS_TEAM_SLUG || 'devops-engineering-team'; // Use DEVOPS_TEAM_SLUG for consistency
 
         try {
             const response = await fetch(`https://api.github.com/orgs/${org}/teams/${teamSlug}/memberships/${req.user.username}`, {
