@@ -23,6 +23,62 @@ docker-compose up --build
 
 **Important:** Docker Compose uses the `github_scoreboard` database name (configured in `docker-compose.yml` via `DATABASE_URL`). All scripts and services connect to `postgresql://scoreboard:scoreboard@localhost:5432/github_scoreboard` for the production data.
 
+### Running with Cru CLI (Production-like Local Environment)
+
+The [cru-cli](https://github.com/CruGlobal/cru-cli) tool allows running the production ECS container locally with AWS Parameter Store secrets, making it easier to troubleshoot issues after deployment.
+
+#### Installation
+```bash
+# Install via asdf (recommended)
+# See: https://github.com/CruGlobal/asdf-cru-cli
+
+# Verify installation
+cru --help
+```
+
+#### Running Game Ops Locally with Production Config
+```bash
+# Run the latest ECS image for staging environment
+cru app run -n game-ops -e s
+
+# This command:
+# - Pulls the latest ECR image for game-ops-stage
+# - Loads secrets from AWS Parameter Store (stage environment)
+# - Runs the container locally as if running on ECS
+# - Allows debugging production issues without deploying
+```
+
+#### Common Cru CLI Commands for Game Ops
+```bash
+# View application secrets (opens TUI)
+cru application secrets -n game-ops -e s
+
+# Update a secret
+echo "new_value" | cru application secrets update --name SECRET_NAME --value -
+
+# Assume application IAM role (for AWS access)
+cru application impersonate -n game-ops -e s -- /bin/sh
+
+# Stop running application (ECS)
+cru application stop -n game-ops -e s
+
+# Invoke scheduled task manually
+cru application invoke -n game-ops -e s --task cron
+```
+
+#### Use Cases
+- **Post-deployment troubleshooting**: Run the exact ECS image that's deployed to staging/production
+- **Secret verification**: Test with actual Parameter Store secrets without exposing them
+- **Database debugging**: Connect to Neon production database with production credentials
+- **Integration testing**: Test GitHub OAuth, WebSocket, and other integrations with real configs
+
+**Prerequisites:**
+- AWS credentials configured
+- Listed as a `developer` in `cru-terraform/applications/game-ops/{env}/application.tf`
+- Docker running locally
+
+**Note:** The `-e` flag specifies environment: `s` (stage), `p` (prod), `l` (lab)
+
 ### Environment Setup
 - Copy `.env.example` to `.env` in app directory and populate with actual values:
   - `GITHUB_TOKEN`: GitHub personal access token (**requires `read:org` scope for DevOps team sync**)
