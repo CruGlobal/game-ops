@@ -7,7 +7,11 @@ import {
     createOKRChallenge,
     createChallenge,
     deleteChallenge,
-    getAllChallenges
+    getAllChallenges,
+    updateChallenge,
+    duplicateChallenge,
+    bulkUpdateChallenges,
+    bulkDeleteChallenges
 } from '../services/challengeService.js';
 
 // Get all active challenges
@@ -246,6 +250,108 @@ export const deleteChallengeController = async (req, res) => {
         });
     } catch (err) {
         console.error('Error deleting challenge:', err);
+        res.status(400).json({ error: err.message });
+    }
+};
+
+// Update challenge (admin only)
+export const updateChallengeController = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const updateData = req.body;
+
+        // Validate type if provided
+        if (updateData.type && !['pr-merge', 'review', 'streak', 'points', 'okr-label'].includes(updateData.type)) {
+            return res.status(400).json({
+                error: 'Type must be one of: pr-merge, review, streak, points, okr-label'
+            });
+        }
+
+        // Validate target if provided
+        if (updateData.target !== undefined && (updateData.target < 1 || !Number.isInteger(updateData.target))) {
+            return res.status(400).json({
+                error: 'Target must be a positive integer'
+            });
+        }
+
+        // Validate reward if provided
+        if (updateData.reward !== undefined && updateData.reward < 0) {
+            return res.status(400).json({
+                error: 'Reward must be at least 0'
+            });
+        }
+
+        // Validate difficulty if provided
+        if (updateData.difficulty && !['easy', 'medium', 'hard'].includes(updateData.difficulty)) {
+            return res.status(400).json({
+                error: 'Difficulty must be one of: easy, medium, hard'
+            });
+        }
+
+        const updated = await updateChallenge(id, updateData);
+
+        res.json({
+            success: true,
+            message: 'Challenge updated successfully',
+            challenge: updated
+        });
+    } catch (err) {
+        console.error('Error updating challenge:', err);
+        const status = err.message.includes('not found') ? 404 : 400;
+        res.status(status).json({ error: err.message });
+    }
+};
+
+// Duplicate challenge (admin only)
+export const duplicateChallengeController = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const duplicated = await duplicateChallenge(id);
+
+        res.status(201).json({
+            success: true,
+            message: 'Challenge duplicated successfully',
+            challenge: duplicated
+        });
+    } catch (err) {
+        console.error('Error duplicating challenge:', err);
+        const status = err.message.includes('not found') ? 404 : 400;
+        res.status(status).json({ error: err.message });
+    }
+};
+
+// Bulk action on challenges (admin only)
+export const bulkActionController = async (req, res) => {
+    try {
+        const { ids, action } = req.body;
+
+        if (!ids || !Array.isArray(ids) || ids.length === 0) {
+            return res.status(400).json({
+                error: 'ids must be a non-empty array of challenge IDs'
+            });
+        }
+
+        if (!action || !['activate', 'expire', 'delete'].includes(action)) {
+            return res.status(400).json({
+                error: 'Action must be one of: activate, expire, delete'
+            });
+        }
+
+        let result;
+        if (action === 'delete') {
+            result = await bulkDeleteChallenges(ids);
+        } else {
+            result = await bulkUpdateChallenges(ids, action);
+        }
+
+        res.json({
+            success: true,
+            message: `Bulk ${action} completed successfully`,
+            ...result
+        });
+    } catch (err) {
+        console.error('Error performing bulk action:', err);
         res.status(400).json({ error: err.message });
     }
 };
