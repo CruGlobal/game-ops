@@ -452,6 +452,242 @@ export const getAllChallenges = async (options = {}) => {
 };
 
 /**
+ * Update an existing challenge
+ * @param {String} challengeId - Challenge ID
+ * @param {Object} updateData - Fields to update
+ * @returns {Object} Updated challenge
+ */
+export const updateChallenge = async (challengeId, updateData) => {
+    try {
+        const existing = await prisma.challenge.findUnique({
+            where: { id: challengeId },
+            include: {
+                participants: {
+                    select: { id: true, progress: true, completed: true }
+                }
+            }
+        });
+
+        if (!existing) {
+            throw new Error('Challenge not found');
+        }
+
+        // Whitelist allowed fields
+        const allowedFields = [
+            'title', 'description', 'target', 'reward',
+            'startDate', 'endDate', 'difficulty', 'category',
+            'labelFilters', 'okrMetadata', 'status'
+        ];
+        const data = {};
+        for (const field of allowedFields) {
+            if (updateData[field] !== undefined) {
+                data[field] = updateData[field];
+            }
+        }
+
+        // Block type change if participants exist
+        if (updateData.type !== undefined && updateData.type !== existing.type) {
+            if (existing.participants.length > 0) {
+                throw new Error('Cannot change challenge type when participants exist');
+            }
+            data.type = updateData.type;
+        }
+
+        // Block target reduction below max participant progress
+        if (data.target !== undefined && existing.participants.length > 0) {
+            const maxProgress = Math.max(...existing.participants.map(p => p.progress));
+            if (data.target < maxProgress) {
+                throw new Error(`Cannot reduce target below current maximum participant progress (${maxProgress})`);
+            }
+        }
+
+        // Convert date strings to Date objects
+        if (data.startDate) data.startDate = new Date(data.startDate);
+        if (data.endDate) data.endDate = new Date(data.endDate);
+
+        // Validate dates
+        const effectiveStart = data.startDate || existing.startDate;
+        const effectiveEnd = data.endDate || existing.endDate;
+        if (effectiveEnd <= effectiveStart) {
+            throw new Error('End date must be after start date');
+        }
+
+        const updated = await prisma.challenge.update({
+            where: { id: challengeId },
+            data,
+            include: {
+                participants: {
+                    select: { id: true, contributorId: true, progress: true, completed: true }
+                }
+            }
+        });
+
+        logger.info('Challenge updated', {
+            challengeId: updated.id,
+            title: updated.title,
+            updatedFields: Object.keys(data)
+        });
+
+        return updated;
+    } catch (error) {
+        logger.error('Error updating challenge', {
+            challengeId,
+            error: error.message
+        });
+        throw error;
+    }
+};
+
+/**
+ * Generate a title for a duplicated challenge
+ * @param {String} title - Original title
+ * @returns {String} New title
+ */
+const generateDuplicateTitle = (title) => {
+    const copyPattern = /^(.*)\s\(Copy(?:\s(\d+))?\)$/;
+    const match = title.match(copyPattern);
+
+    if (match) {
+        const baseTitle = match[1];
+        const currentNum = match[2] ? parseInt(match[2]) : 1;
+        return `${baseTitle} (Copy ${currentNum + 1})`;
+    }
+
+    return `${title} (Copy)`;
+};
+
+/**
+ * Duplicate an existing challenge
+ * @param {String} challengeId - Challenge ID to duplicate
+ * @returns {Object} Newly created challenge
+ */
+export const duplicateChallenge = async (challengeId) => {
+    try {
+        const existing = await prisma.challenge.findUnique({
+            where: { id: challengeId }
+        });
+
+        if (!existing) {
+            throw new Error('Challenge not found');
+        }
+
+        // Calculate duration of original challenge
+        const originalDuration = existing.endDate.getTime() - existing.startDate.getTime();
+
+        // New dates: start today, end after same duration
+        const newStartDate = new Date();
+        newStartDate.setHours(0, 0, 0, 0);
+        const newEndDate = new Date(newStartDate.getTime() + originalDuration);
+
+        const newTitle = generateDuplicateTitle(existing.title);
+
+        const duplicate = await prisma.challenge.create({
+            data: {
+                title: newTitle,
+                description: existing.description,
+                type: existing.type,
+                target: existing.target,
+                reward: existing.reward,
+                startDate: newStartDate,
+                endDate: newEndDate,
+                status: 'active',
+                difficulty: existing.difficulty,
+                category: existing.category,
+                challengeCategory: existing.challengeCategory,
+                labelFilters: existing.labelFilters,
+                okrMetadata: existing.okrMetadata
+            }
+        });
+
+        logger.info('Challenge duplicated', {
+            originalId: challengeId,
+            newId: duplicate.id,
+            title: duplicate.title
+        });
+
+        return duplicate;
+    } catch (error) {
+        logger.error('Error duplicating challenge', {
+            challengeId,
+            error: error.message
+        });
+        throw error;
+    }
+};
+
+/**
+ * Bulk update challenge status
+ * @param {Array<String>} challengeIds - Challenge IDs
+ * @param {String} action - 'activate' | 'expire'
+ * @returns {Object} Results { updated: Number }
+ */
+export const bulkUpdateChallenges = async (challengeIds, action) => {
+    try {
+        if (!challengeIds || challengeIds.length === 0) {
+            throw new Error('No challenge IDs provided');
+        }
+
+        const statusMap = {
+            'activate': 'active',
+            'expire': 'expired'
+        };
+
+        const newStatus = statusMap[action];
+        if (!newStatus) {
+            throw new Error('Invalid action. Must be one of: activate, expire');
+        }
+
+        const result = await prisma.challenge.updateMany({
+            where: { id: { in: challengeIds } },
+            data: { status: newStatus }
+        });
+
+        logger.info('Bulk challenge update', {
+            action,
+            count: result.count,
+            challengeIds
+        });
+
+        return { updated: result.count };
+    } catch (error) {
+        logger.error('Error in bulk challenge update', {
+            action,
+            error: error.message
+        });
+        throw error;
+    }
+};
+
+/**
+ * Bulk delete challenges
+ * @param {Array<String>} challengeIds - Challenge IDs
+ * @returns {Object} Results { deleted: Number }
+ */
+export const bulkDeleteChallenges = async (challengeIds) => {
+    try {
+        if (!challengeIds || challengeIds.length === 0) {
+            throw new Error('No challenge IDs provided');
+        }
+
+        const result = await prisma.challenge.deleteMany({
+            where: { id: { in: challengeIds } }
+        });
+
+        logger.info('Bulk challenge delete', {
+            count: result.count,
+            challengeIds
+        });
+
+        return { deleted: result.count };
+    } catch (error) {
+        logger.error('Error in bulk challenge delete', {
+            error: error.message
+        });
+        throw error;
+    }
+};
+
+/**
  * Delete a challenge
  * @param {String} challengeId - Challenge ID
  * @returns {Object} Deleted challenge

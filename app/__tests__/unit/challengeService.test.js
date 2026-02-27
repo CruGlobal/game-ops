@@ -10,7 +10,11 @@ import {
     getUserChallenges,
     generateWeeklyChallenges,
     checkExpiredChallenges,
-    getChallengeLeaderboard
+    getChallengeLeaderboard,
+    updateChallenge,
+    duplicateChallenge,
+    bulkUpdateChallenges,
+    bulkDeleteChallenges
 } from '../../services/challengeService.js';
 import { prisma, createTestContributor } from '../setup.js';
 
@@ -729,6 +733,357 @@ describe('ChallengeService', () => {
             await expect(getChallengeLeaderboard('fakeid')).rejects.toThrow(
                 'Challenge not found'
             );
+        });
+    });
+
+    describe('updateChallenge', () => {
+        it('should update allowed fields', async () => {
+            const challenge = await prisma.challenge.create({
+                data: {
+                    title: 'Original Title',
+                    description: 'Original Description',
+                    type: 'pr-merge',
+                    target: 5,
+                    reward: 100,
+                    status: 'active',
+                    startDate: new Date(),
+                    endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+                    difficulty: 'easy',
+                    category: 'individual'
+                }
+            });
+
+            const updated = await updateChallenge(challenge.id, {
+                title: 'Updated Title',
+                description: 'Updated Description',
+                target: 10,
+                reward: 200,
+                difficulty: 'hard'
+            });
+
+            expect(updated.title).toBe('Updated Title');
+            expect(updated.description).toBe('Updated Description');
+            expect(updated.target).toBe(10);
+            expect(updated.reward).toBe(200);
+            expect(updated.difficulty).toBe('hard');
+        });
+
+        it('should throw error for non-existent challenge', async () => {
+            await expect(updateChallenge('nonexistent', { title: 'New' }))
+                .rejects.toThrow();
+        });
+
+        it('should block type change when participants exist', async () => {
+            const contributor = await prisma.contributor.create({
+                data: createTestContributor({ username: 'typeBlocker' })
+            });
+
+            const challenge = await prisma.challenge.create({
+                data: {
+                    title: 'Has Participants',
+                    description: 'Test',
+                    type: 'pr-merge',
+                    target: 5,
+                    reward: 100,
+                    status: 'active',
+                    startDate: new Date(),
+                    endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+                    difficulty: 'easy',
+                    category: 'individual',
+                    participants: {
+                        create: {
+                            contributorId: contributor.id,
+                            progress: 3,
+                            completed: false,
+                            joinedAt: new Date()
+                        }
+                    }
+                }
+            });
+
+            await expect(updateChallenge(challenge.id, { type: 'review' }))
+                .rejects.toThrow('Cannot change challenge type when participants exist');
+        });
+
+        it('should block target reduction below max participant progress', async () => {
+            const contributor = await prisma.contributor.create({
+                data: createTestContributor({ username: 'targetBlocker' })
+            });
+
+            const challenge = await prisma.challenge.create({
+                data: {
+                    title: 'Target Block',
+                    description: 'Test',
+                    type: 'pr-merge',
+                    target: 10,
+                    reward: 100,
+                    status: 'active',
+                    startDate: new Date(),
+                    endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+                    difficulty: 'easy',
+                    category: 'individual',
+                    participants: {
+                        create: {
+                            contributorId: contributor.id,
+                            progress: 7,
+                            completed: false,
+                            joinedAt: new Date()
+                        }
+                    }
+                }
+            });
+
+            await expect(updateChallenge(challenge.id, { target: 5 }))
+                .rejects.toThrow('Cannot reduce target below current maximum participant progress');
+        });
+
+        it('should allow type change without participants', async () => {
+            const challenge = await prisma.challenge.create({
+                data: {
+                    title: 'No Participants',
+                    description: 'Test',
+                    type: 'pr-merge',
+                    target: 5,
+                    reward: 100,
+                    status: 'active',
+                    startDate: new Date(),
+                    endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+                    difficulty: 'easy',
+                    category: 'individual'
+                }
+            });
+
+            const updated = await updateChallenge(challenge.id, { type: 'review' });
+            expect(updated.type).toBe('review');
+        });
+
+        it('should validate end date after start date', async () => {
+            const challenge = await prisma.challenge.create({
+                data: {
+                    title: 'Date Validation',
+                    description: 'Test',
+                    type: 'pr-merge',
+                    target: 5,
+                    reward: 100,
+                    status: 'active',
+                    startDate: new Date('2025-01-10'),
+                    endDate: new Date('2025-01-20'),
+                    difficulty: 'easy',
+                    category: 'individual'
+                }
+            });
+
+            await expect(updateChallenge(challenge.id, {
+                startDate: '2025-01-15',
+                endDate: '2025-01-10'
+            })).rejects.toThrow('End date must be after start date');
+        });
+    });
+
+    describe('duplicateChallenge', () => {
+        it('should copy fields and set new dates', async () => {
+            const challenge = await prisma.challenge.create({
+                data: {
+                    title: 'Original',
+                    description: 'Desc',
+                    type: 'pr-merge',
+                    target: 5,
+                    reward: 100,
+                    status: 'active',
+                    startDate: new Date('2025-01-01'),
+                    endDate: new Date('2025-01-08'),
+                    difficulty: 'easy',
+                    category: 'individual'
+                }
+            });
+
+            const dup = await duplicateChallenge(challenge.id);
+
+            expect(dup.title).toBe('Original (Copy)');
+            expect(dup.description).toBe('Desc');
+            expect(dup.type).toBe('pr-merge');
+            expect(dup.target).toBe(5);
+            expect(dup.reward).toBe(100);
+            expect(dup.status).toBe('active');
+            expect(dup.difficulty).toBe('easy');
+            expect(dup.id).not.toBe(challenge.id);
+
+            // Duration preserved (7 days)
+            const duration = dup.endDate - dup.startDate;
+            expect(duration).toBe(7 * 24 * 60 * 60 * 1000);
+        });
+
+        it('should not copy participants', async () => {
+            const contributor = await prisma.contributor.create({
+                data: createTestContributor({ username: 'dupParticipant' })
+            });
+
+            const challenge = await prisma.challenge.create({
+                data: {
+                    title: 'With Participants',
+                    description: 'Test',
+                    type: 'pr-merge',
+                    target: 5,
+                    reward: 100,
+                    status: 'active',
+                    startDate: new Date(),
+                    endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+                    difficulty: 'easy',
+                    category: 'individual',
+                    participants: {
+                        create: {
+                            contributorId: contributor.id,
+                            progress: 3,
+                            completed: false,
+                            joinedAt: new Date()
+                        }
+                    }
+                }
+            });
+
+            const dup = await duplicateChallenge(challenge.id);
+
+            const participants = await prisma.challengeParticipant.findMany({
+                where: { challengeId: dup.id }
+            });
+            expect(participants).toHaveLength(0);
+        });
+
+        it('should increment copy number in title', async () => {
+            const challenge = await prisma.challenge.create({
+                data: {
+                    title: 'Test (Copy)',
+                    description: 'Test',
+                    type: 'pr-merge',
+                    target: 5,
+                    reward: 100,
+                    status: 'active',
+                    startDate: new Date(),
+                    endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+                    difficulty: 'easy',
+                    category: 'individual'
+                }
+            });
+
+            const dup = await duplicateChallenge(challenge.id);
+            expect(dup.title).toBe('Test (Copy 2)');
+        });
+
+        it('should throw error for non-existent challenge', async () => {
+            await expect(duplicateChallenge('nonexistent'))
+                .rejects.toThrow();
+        });
+    });
+
+    describe('bulkUpdateChallenges', () => {
+        it('should bulk activate challenges', async () => {
+            const challenges = await Promise.all([
+                prisma.challenge.create({
+                    data: {
+                        title: 'Bulk 1', description: 'Test', type: 'pr-merge',
+                        target: 5, reward: 100, status: 'expired',
+                        startDate: new Date(), endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+                        difficulty: 'easy', category: 'individual'
+                    }
+                }),
+                prisma.challenge.create({
+                    data: {
+                        title: 'Bulk 2', description: 'Test', type: 'review',
+                        target: 10, reward: 200, status: 'expired',
+                        startDate: new Date(), endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+                        difficulty: 'medium', category: 'individual'
+                    }
+                })
+            ]);
+
+            const result = await bulkUpdateChallenges(
+                challenges.map(c => c.id), 'activate'
+            );
+
+            expect(result.updated).toBe(2);
+
+            const updated = await prisma.challenge.findMany({
+                where: { id: { in: challenges.map(c => c.id) } }
+            });
+            expect(updated.every(c => c.status === 'active')).toBe(true);
+        });
+
+        it('should throw error for invalid action', async () => {
+            await expect(bulkUpdateChallenges(['id1'], 'invalid'))
+                .rejects.toThrow('Invalid action');
+        });
+
+        it('should throw error for empty ids array', async () => {
+            await expect(bulkUpdateChallenges([], 'activate'))
+                .rejects.toThrow('No challenge IDs provided');
+        });
+    });
+
+    describe('bulkDeleteChallenges', () => {
+        it('should bulk delete challenges', async () => {
+            const challenges = await Promise.all([
+                prisma.challenge.create({
+                    data: {
+                        title: 'Delete 1', description: 'Test', type: 'pr-merge',
+                        target: 5, reward: 100, status: 'active',
+                        startDate: new Date(), endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+                        difficulty: 'easy', category: 'individual'
+                    }
+                }),
+                prisma.challenge.create({
+                    data: {
+                        title: 'Delete 2', description: 'Test', type: 'review',
+                        target: 10, reward: 200, status: 'active',
+                        startDate: new Date(), endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+                        difficulty: 'medium', category: 'individual'
+                    }
+                })
+            ]);
+
+            const result = await bulkDeleteChallenges(challenges.map(c => c.id));
+
+            expect(result.deleted).toBe(2);
+
+            const remaining = await prisma.challenge.findMany({
+                where: { id: { in: challenges.map(c => c.id) } }
+            });
+            expect(remaining).toHaveLength(0);
+        });
+
+        it('should cascade delete participants', async () => {
+            const contributor = await prisma.contributor.create({
+                data: createTestContributor({ username: 'cascadeUser' })
+            });
+
+            const challenge = await prisma.challenge.create({
+                data: {
+                    title: 'Cascade Delete',
+                    description: 'Test',
+                    type: 'pr-merge',
+                    target: 5,
+                    reward: 100,
+                    status: 'active',
+                    startDate: new Date(),
+                    endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+                    difficulty: 'easy',
+                    category: 'individual',
+                    participants: {
+                        create: {
+                            contributorId: contributor.id,
+                            progress: 3,
+                            completed: false,
+                            joinedAt: new Date()
+                        }
+                    }
+                }
+            });
+
+            await bulkDeleteChallenges([challenge.id]);
+
+            const participants = await prisma.challengeParticipant.findMany({
+                where: { challengeId: challenge.id }
+            });
+            expect(participants).toHaveLength(0);
         });
     });
 
