@@ -42,6 +42,17 @@
                 </div>
             </div>
 
+            <!-- Template Selector -->
+            <div class="template-selector">
+                <h3>Quick Start from Template</h3>
+                <div class="template-controls">
+                    <select id="template-select">
+                        <option value="">-- Select a template --</option>
+                    </select>
+                    <button type="button" class="btn-apply-template" onclick="applyTemplate()">Apply Template</button>
+                </div>
+            </div>
+
             <!-- Create Challenge Section -->
             <div class="challenge-create-section">
                 <h2>Create New Challenge</h2>
@@ -188,9 +199,103 @@
                         <input type="text" id="search-filter" placeholder="Search challenges...">
                     </div>
 
+                    <!-- Bulk Action Bar -->
+                    <div id="bulk-action-bar" class="bulk-action-bar">
+                        <span class="selected-count"><span id="selected-count">0</span> selected</span>
+                        <div class="bulk-buttons">
+                            <button class="btn-bulk btn-bulk-activate" onclick="bulkAction('activate')">Activate</button>
+                            <button class="btn-bulk btn-bulk-expire" onclick="bulkAction('expire')">Expire</button>
+                            <button class="btn-bulk btn-bulk-delete" onclick="bulkAction('delete')">Delete</button>
+                            <button class="btn-bulk btn-bulk-clear" onclick="clearSelection()">Clear</button>
+                        </div>
+                    </div>
+
+                    <!-- Select All -->
+                    <div class="select-all-container">
+                        <input type="checkbox" id="select-all" onchange="toggleSelectAll(this.checked)">
+                        <label for="select-all">Select All</label>
+                    </div>
+
                     <div id="challenges-list">
                         <p class="loading">Loading challenges...</p>
                     </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Edit Challenge Modal -->
+        <div id="edit-modal" class="edit-modal-overlay" onclick="if(event.target===this)closeEditModal()">
+            <div class="edit-modal-content">
+                <div class="edit-modal-header">
+                    <h2>Edit Challenge</h2>
+                    <button class="edit-modal-close" onclick="closeEditModal()">&times;</button>
+                </div>
+                <div class="edit-modal-body">
+                    <form id="edit-challenge-form">
+                        <input type="hidden" id="edit-challenge-id">
+                        <div class="form-group">
+                            <label for="edit-title">Title *</label>
+                            <input type="text" id="edit-title" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="edit-description">Description *</label>
+                            <textarea id="edit-description" required rows="3"></textarea>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="edit-type">Type</label>
+                                <select id="edit-type">
+                                    <option value="pr-merge">PR Merge</option>
+                                    <option value="review">Code Review</option>
+                                    <option value="streak">Streak</option>
+                                    <option value="points">Points</option>
+                                    <option value="okr-label">OKR Label</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="edit-difficulty">Difficulty</label>
+                                <select id="edit-difficulty">
+                                    <option value="easy">Easy</option>
+                                    <option value="medium">Medium</option>
+                                    <option value="hard">Hard</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="edit-target">Target *</label>
+                                <input type="number" id="edit-target" required min="1">
+                            </div>
+                            <div class="form-group">
+                                <label for="edit-reward">Reward Points</label>
+                                <input type="number" id="edit-reward" min="0">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="edit-start-date">Start Date</label>
+                                <input type="date" id="edit-start-date">
+                            </div>
+                            <div class="form-group">
+                                <label for="edit-end-date">End Date</label>
+                                <input type="date" id="edit-end-date">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="edit-status">Status</label>
+                            <select id="edit-status">
+                                <option value="active">Active</option>
+                                <option value="expired">Expired</option>
+                            </select>
+                        </div>
+                        <div id="edit-participant-warning" style="display:none; color: #f59e0b; font-size: 0.85rem; margin-bottom: 12px;">
+                            Note: Type cannot be changed because this challenge has participants.
+                        </div>
+                    </form>
+                </div>
+                <div class="edit-modal-footer">
+                    <button class="btn-secondary" onclick="closeEditModal()">Cancel</button>
+                    <button class="btn-primary" onclick="submitEditForm()">Save Changes</button>
                 </div>
             </div>
         </div>

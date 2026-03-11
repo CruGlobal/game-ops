@@ -8,8 +8,12 @@ import {
     createOKRChallengeController,
     createManualChallengeController,
     getAllChallengesController,
-    deleteChallengeController
+    deleteChallengeController,
+    updateChallengeController,
+    duplicateChallengeController,
+    bulkActionController
 } from '../controllers/challengeController.js';
+import { getTemplates } from '../config/challenge-templates.js';
 import { authenticate } from '../middleware/authMiddleware.js';
 import { ensureAuthenticated } from '../middleware/ensureAuthenticated.js';
 import { ensureDevOpsTeamMember } from '../middleware/ensureDevOpsTeamMember.js';
@@ -35,8 +39,19 @@ router.get('/user/:username', getUserChallengesController);
 router.post('/okr/create', authenticate, createOKRChallengeController);
 
 // Admin routes for challenge management
+router.post('/admin/bulk-action', ensureDevOpsTeamMember, bulkActionController);
 router.post('/admin/create', ensureDevOpsTeamMember, createManualChallengeController);
 router.get('/admin/all', ensureDevOpsTeamMember, getAllChallengesController);
+router.get('/admin/templates', ensureDevOpsTeamMember, (req, res) => {
+    try {
+        const templates = getTemplates();
+        res.json({ success: true, templates });
+    } catch (err) {
+        res.status(500).json({ error: 'Error fetching templates' });
+    }
+});
+router.put('/admin/:id', ensureDevOpsTeamMember, updateChallengeController);
+router.post('/admin/:id/duplicate', ensureDevOpsTeamMember, duplicateChallengeController);
 router.delete('/admin/:id', ensureDevOpsTeamMember, deleteChallengeController);
 
 export default router;
