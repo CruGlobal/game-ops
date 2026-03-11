@@ -16,6 +16,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     let currentTab = 'all';
     let currentStatusFilter = 'active';
     let searchTerm = '';
+    let selectedChallenges = new Set();
+    let templates = [];
 
     // Token management
     const setToken = (token) => {
@@ -206,7 +208,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             `
             : '';
 
+        const isSelected = selectedChallenges.has(challenge.id);
+
         card.innerHTML = `
+            <input type="checkbox" class="challenge-card-checkbox" data-id="${challenge.id}"
+                ${isSelected ? 'checked' : ''}
+                onchange="toggleChallengeSelection('${challenge.id}', this.checked)">
             <div class="challenge-header">
                 <h3>${challenge.title}</h3>
                 <div class="challenge-badges">
@@ -226,10 +233,17 @@ document.addEventListener('DOMContentLoaded', async () => {
             </div>
             ${okrInfo}
             <div class="challenge-actions">
+                <button class="btn-edit" onclick="openEditModal('${challenge.id}')">Edit</button>
+                <button class="btn-duplicate" onclick="duplicateChallenge('${challenge.id}')">Duplicate</button>
                 <a href="/challenges" class="btn-secondary">View Public Page</a>
                 <button class="btn-danger" onclick="deleteChallenge('${challenge.id}')">Delete</button>
             </div>
         `;
+
+        if (isSelected) {
+            card.classList.add('selected');
+        }
+
         return card;
     };
 
@@ -269,6 +283,278 @@ document.addEventListener('DOMContentLoaded', async () => {
             console.error('Error deleting challenge:', error);
             showNotification(`Error: ${error.message}`, 'error');
         }
+    };
+
+    // ===== Edit Modal =====
+    window.openEditModal = (challengeId) => {
+        const challenge = allChallenges.find(c => c.id === challengeId);
+        if (!challenge) return;
+
+        document.getElementById('edit-challenge-id').value = challenge.id;
+        document.getElementById('edit-title').value = challenge.title;
+        document.getElementById('edit-description').value = challenge.description;
+        document.getElementById('edit-type').value = challenge.type || 'pr-merge';
+        document.getElementById('edit-difficulty').value = challenge.difficulty || 'medium';
+        document.getElementById('edit-target').value = challenge.target;
+        document.getElementById('edit-reward').value = challenge.reward;
+        document.getElementById('edit-status').value = challenge.status;
+
+        const startDate = challenge.startDate ? new Date(challenge.startDate).toISOString().split('T')[0] : '';
+        const endDate = challenge.endDate ? new Date(challenge.endDate).toISOString().split('T')[0] : '';
+        document.getElementById('edit-start-date').value = startDate;
+        document.getElementById('edit-end-date').value = endDate;
+
+        // Disable type change if participants exist
+        const hasParticipants = challenge.participants && challenge.participants.length > 0;
+        document.getElementById('edit-type').disabled = hasParticipants;
+        document.getElementById('edit-participant-warning').style.display = hasParticipants ? 'block' : 'none';
+
+        document.getElementById('edit-modal').classList.add('show');
+    };
+
+    window.closeEditModal = () => {
+        document.getElementById('edit-modal').classList.remove('show');
+    };
+
+    window.submitEditForm = async () => {
+        const challengeId = document.getElementById('edit-challenge-id').value;
+        const updateData = {
+            title: document.getElementById('edit-title').value,
+            description: document.getElementById('edit-description').value,
+            type: document.getElementById('edit-type').value,
+            difficulty: document.getElementById('edit-difficulty').value,
+            target: parseInt(document.getElementById('edit-target').value),
+            reward: parseInt(document.getElementById('edit-reward').value),
+            status: document.getElementById('edit-status').value,
+            startDate: document.getElementById('edit-start-date').value,
+            endDate: document.getElementById('edit-end-date').value
+        };
+
+        // Don't send type if the field is disabled (has participants)
+        if (document.getElementById('edit-type').disabled) {
+            delete updateData.type;
+        }
+
+        try {
+            const storedToken = getToken();
+            const response = await fetch(`/api/challenges/admin/${challengeId}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${storedToken}`
+                },
+                body: JSON.stringify(updateData)
+            });
+
+            const result = await response.json();
+
+            if (response.ok) {
+                showNotification('Challenge updated successfully', 'success');
+                closeEditModal();
+                loadChallenges();
+            } else {
+                showNotification(`Error: ${result.error}`, 'error');
+            }
+        } catch (error) {
+            console.error('Error updating challenge:', error);
+            showNotification(`Error: ${error.message}`, 'error');
+        }
+    };
+
+    // ===== Duplicate Challenge =====
+    window.duplicateChallenge = async (challengeId) => {
+        try {
+            const storedToken = getToken();
+            const response = await fetch(`/api/challenges/admin/${challengeId}/duplicate`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${storedToken}`
+                }
+            });
+
+            const result = await response.json();
+
+            if (response.ok) {
+                showNotification(`Challenge duplicated: "${result.challenge.title}"`, 'success');
+                loadChallenges();
+            } else {
+                showNotification(`Error: ${result.error}`, 'error');
+            }
+        } catch (error) {
+            console.error('Error duplicating challenge:', error);
+            showNotification(`Error: ${error.message}`, 'error');
+        }
+    };
+
+    // ===== Bulk Operations =====
+    const updateBulkBar = () => {
+        const bar = document.getElementById('bulk-action-bar');
+        const countEl = document.getElementById('selected-count');
+        countEl.textContent = selectedChallenges.size;
+
+        if (selectedChallenges.size > 0) {
+            bar.classList.add('show');
+        } else {
+            bar.classList.remove('show');
+        }
+    };
+
+    window.toggleChallengeSelection = (challengeId, checked) => {
+        if (checked) {
+            selectedChallenges.add(challengeId);
+        } else {
+            selectedChallenges.delete(challengeId);
+        }
+
+        // Update card visual
+        const cards = document.querySelectorAll('.challenge-card');
+        cards.forEach(card => {
+            const checkbox = card.querySelector('.challenge-card-checkbox');
+            if (checkbox && checkbox.dataset.id === challengeId) {
+                card.classList.toggle('selected', checked);
+            }
+        });
+
+        // Update select-all state
+        const selectAll = document.getElementById('select-all');
+        if (selectAll) {
+            const allCheckboxes = document.querySelectorAll('.challenge-card-checkbox');
+            selectAll.checked = allCheckboxes.length > 0 &&
+                [...allCheckboxes].every(cb => cb.checked);
+        }
+
+        updateBulkBar();
+    };
+
+    window.toggleSelectAll = (checked) => {
+        const checkboxes = document.querySelectorAll('.challenge-card-checkbox');
+        checkboxes.forEach(cb => {
+            cb.checked = checked;
+            const id = cb.dataset.id;
+            if (checked) {
+                selectedChallenges.add(id);
+            } else {
+                selectedChallenges.delete(id);
+            }
+            cb.closest('.challenge-card').classList.toggle('selected', checked);
+        });
+        updateBulkBar();
+    };
+
+    window.clearSelection = () => {
+        selectedChallenges.clear();
+        document.querySelectorAll('.challenge-card-checkbox').forEach(cb => {
+            cb.checked = false;
+            cb.closest('.challenge-card').classList.remove('selected');
+        });
+        const selectAll = document.getElementById('select-all');
+        if (selectAll) selectAll.checked = false;
+        updateBulkBar();
+    };
+
+    window.bulkAction = async (action) => {
+        if (selectedChallenges.size === 0) return;
+
+        const confirmMsg = action === 'delete'
+            ? `Are you sure you want to delete ${selectedChallenges.size} challenge(s)? This cannot be undone.`
+            : `Are you sure you want to ${action} ${selectedChallenges.size} challenge(s)?`;
+
+        if (!confirm(confirmMsg)) return;
+
+        try {
+            const storedToken = getToken();
+            const response = await fetch('/api/challenges/admin/bulk-action', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${storedToken}`
+                },
+                body: JSON.stringify({
+                    ids: [...selectedChallenges],
+                    action
+                })
+            });
+
+            const result = await response.json();
+
+            if (response.ok) {
+                showNotification(`Bulk ${action} completed: ${result.count || selectedChallenges.size} challenge(s)`, 'success');
+                selectedChallenges.clear();
+                updateBulkBar();
+                loadChallenges();
+            } else {
+                showNotification(`Error: ${result.error}`, 'error');
+            }
+        } catch (error) {
+            console.error('Error performing bulk action:', error);
+            showNotification(`Error: ${error.message}`, 'error');
+        }
+    };
+
+    // ===== Templates =====
+    const loadTemplates = async () => {
+        try {
+            const response = await fetch('/api/challenges/admin/templates');
+            if (!response.ok) return;
+
+            const data = await response.json();
+            templates = data.templates || [];
+
+            const select = document.getElementById('template-select');
+            if (!select) return;
+
+            // Group by category
+            const byCategory = {};
+            templates.forEach(t => {
+                if (!byCategory[t.category]) byCategory[t.category] = [];
+                byCategory[t.category].push(t);
+            });
+
+            // Build optgroups
+            for (const [category, items] of Object.entries(byCategory)) {
+                const group = document.createElement('optgroup');
+                group.label = category.charAt(0).toUpperCase() + category.slice(1);
+                items.forEach(t => {
+                    const option = document.createElement('option');
+                    option.value = t.id;
+                    option.textContent = t.name;
+                    group.appendChild(option);
+                });
+                select.appendChild(group);
+            }
+        } catch (error) {
+            console.error('Error loading templates:', error);
+        }
+    };
+
+    window.applyTemplate = () => {
+        const select = document.getElementById('template-select');
+        const templateId = select.value;
+        if (!templateId) return;
+
+        const template = templates.find(t => t.id === templateId);
+        if (!template) return;
+
+        // Pre-fill the create form
+        document.getElementById('challenge-title').value = template.title;
+        document.getElementById('challenge-description').value = template.description;
+        document.getElementById('challenge-type').value = template.type;
+        document.getElementById('challenge-target').value = template.target;
+        document.getElementById('challenge-reward').value = template.reward;
+        document.getElementById('challenge-difficulty').value = template.difficulty;
+
+        // Set category to general
+        challengeCategorySelect.value = 'general';
+        challengeCategorySelect.dispatchEvent(new Event('change'));
+
+        // Set dates based on template duration
+        const start = new Date();
+        const end = new Date();
+        end.setDate(end.getDate() + template.durationDays);
+        startDateInput.value = start.toISOString().split('T')[0];
+        endDateInput.value = end.toISOString().split('T')[0];
+
+        showNotification(`Template "${template.name}" applied. Review and submit the form.`, 'info');
     };
 
     // Handle form submission
@@ -389,6 +675,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 adminContent.style.display = 'block';
                 unauthorizedContent.style.display = 'none';
                 loadChallenges();
+                loadTemplates();
             } else {
                 adminContent.style.display = 'none';
                 unauthorizedContent.style.display = 'block';
