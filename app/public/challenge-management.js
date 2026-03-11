@@ -115,10 +115,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             const data = await response.json();
             allChallenges = data.challenges || [];
-            console.debug('[challenges] Loaded %d challenges from API', allChallenges.length);
-            if (allChallenges.length > 0) {
-                console.debug('[challenges] First challenge:', JSON.stringify(allChallenges[0], null, 2));
-            }
 
             updateStats();
             filterAndDisplayChallenges();
@@ -145,9 +141,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     const filterAndDisplayChallenges = () => {
         let filtered = allChallenges;
 
-        console.debug('[challenges] filterAndDisplay: total=%d, tab=%s, status=%s, search=%s',
-            allChallenges.length, currentTab, currentStatusFilter, searchTerm);
-
         // Filter by tab
         if (currentTab !== 'all') {
             if (currentTab === 'expired') {
@@ -170,17 +163,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             );
         }
 
-        console.debug('[challenges] after filtering: %d challenges remain', filtered.length);
-        if (filtered.length === 0 && allChallenges.length > 0) {
-            console.debug('[challenges] All filtered out. Sample challenge statuses:', allChallenges.map(c => c.status));
-        }
-
         displayChallenges(filtered);
     };
 
     // Display challenges
     const displayChallenges = (challenges) => {
-        console.debug('[challenges] displayChallenges called with %d challenges', challenges.length);
         if (challenges.length === 0) {
             challengesList.innerHTML = '<p class="no-data">No challenges found matching your filters.</p>';
             return;
@@ -191,8 +178,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             const card = createChallengeCard(challenge);
             challengesList.appendChild(card);
         });
-        console.debug('[challenges] Rendered %d cards, challengesList children: %d',
-            challenges.length, challengesList.children.length);
     };
 
     // Create challenge card
