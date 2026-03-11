@@ -49,7 +49,7 @@
                     <select id="template-select">
                         <option value="">-- Select a template --</option>
                     </select>
-                    <button type="button" class="btn-apply-template" onclick="applyTemplate()">Apply Template</button>
+                    <button type="button" class="btn-apply-template" id="apply-template-btn">Apply Template</button>
                 </div>
             </div>
 
@@ -203,16 +203,16 @@
                     <div id="bulk-action-bar" class="bulk-action-bar">
                         <span class="selected-count"><span id="selected-count">0</span> selected</span>
                         <div class="bulk-buttons">
-                            <button class="btn-bulk btn-bulk-activate" onclick="bulkAction('activate')">Activate</button>
-                            <button class="btn-bulk btn-bulk-expire" onclick="bulkAction('expire')">Expire</button>
-                            <button class="btn-bulk btn-bulk-delete" onclick="bulkAction('delete')">Delete</button>
-                            <button class="btn-bulk btn-bulk-clear" onclick="clearSelection()">Clear</button>
+                            <button class="btn-bulk btn-bulk-activate" data-bulk-action="activate">Activate</button>
+                            <button class="btn-bulk btn-bulk-expire" data-bulk-action="expire">Expire</button>
+                            <button class="btn-bulk btn-bulk-delete" data-bulk-action="delete">Delete</button>
+                            <button class="btn-bulk btn-bulk-clear" id="bulk-clear-btn">Clear</button>
                         </div>
                     </div>
 
                     <!-- Select All -->
                     <div class="select-all-container">
-                        <input type="checkbox" id="select-all" onchange="toggleSelectAll(this.checked)">
+                        <input type="checkbox" id="select-all">
                         <label for="select-all">Select All</label>
                     </div>
 
@@ -224,11 +224,11 @@
         </div>
 
         <!-- Edit Challenge Modal -->
-        <div id="edit-modal" class="edit-modal-overlay" onclick="if(event.target===this)closeEditModal()">
+        <div id="edit-modal" class="edit-modal-overlay">
             <div class="edit-modal-content">
                 <div class="edit-modal-header">
                     <h2>Edit Challenge</h2>
-                    <button class="edit-modal-close" onclick="closeEditModal()">&times;</button>
+                    <button class="edit-modal-close" id="edit-modal-close-btn">&times;</button>
                 </div>
                 <div class="edit-modal-body">
                     <form id="edit-challenge-form">
@@ -294,8 +294,8 @@
                     </form>
                 </div>
                 <div class="edit-modal-footer">
-                    <button class="btn-secondary" onclick="closeEditModal()">Cancel</button>
-                    <button class="btn-primary" onclick="submitEditForm()">Save Changes</button>
+                    <button class="btn-secondary" id="edit-modal-cancel-btn">Cancel</button>
+                    <button class="btn-primary" id="edit-modal-save-btn">Save Changes</button>
                 </div>
             </div>
         </div>

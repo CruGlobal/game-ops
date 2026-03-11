@@ -212,8 +212,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         card.innerHTML = `
             <input type="checkbox" class="challenge-card-checkbox" data-id="${challenge.id}"
-                ${isSelected ? 'checked' : ''}
-                onchange="toggleChallengeSelection('${challenge.id}', this.checked)">
+                ${isSelected ? 'checked' : ''}>
             <div class="challenge-header">
                 <h3>${challenge.title}</h3>
                 <div class="challenge-badges">
@@ -233,10 +232,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             </div>
             ${okrInfo}
             <div class="challenge-actions">
-                <button class="btn-edit" onclick="openEditModal('${challenge.id}')">Edit</button>
-                <button class="btn-duplicate" onclick="duplicateChallenge('${challenge.id}')">Duplicate</button>
+                <button class="btn-edit" data-action="edit" data-id="${challenge.id}">Edit</button>
+                <button class="btn-duplicate" data-action="duplicate" data-id="${challenge.id}">Duplicate</button>
                 <a href="/challenges" class="btn-secondary">View Public Page</a>
-                <button class="btn-danger" onclick="deleteChallenge('${challenge.id}')">Delete</button>
+                <button class="btn-danger" data-action="delete" data-id="${challenge.id}">Delete</button>
             </div>
         `;
 
@@ -258,7 +257,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     };
 
     // Delete challenge
-    window.deleteChallenge = async (challengeId) => {
+    const deleteChallenge = async (challengeId) => {
         if (!confirm('Are you sure you want to delete this challenge? This action cannot be undone.')) {
             return;
         }
@@ -286,7 +285,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     };
 
     // ===== Edit Modal =====
-    window.openEditModal = (challengeId) => {
+    const openEditModal = (challengeId) => {
         const challenge = allChallenges.find(c => c.id === challengeId);
         if (!challenge) return;
 
@@ -312,11 +311,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.getElementById('edit-modal').classList.add('show');
     };
 
-    window.closeEditModal = () => {
+    const closeEditModal = () => {
         document.getElementById('edit-modal').classList.remove('show');
     };
 
-    window.submitEditForm = async () => {
+    const submitEditForm = async () => {
         const challengeId = document.getElementById('edit-challenge-id').value;
         const updateData = {
             title: document.getElementById('edit-title').value,
@@ -362,7 +361,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     };
 
     // ===== Duplicate Challenge =====
-    window.duplicateChallenge = async (challengeId) => {
+    const duplicateChallenge = async (challengeId) => {
         try {
             const storedToken = getToken();
             const response = await fetch(`/api/challenges/admin/${challengeId}/duplicate`, {
@@ -399,7 +398,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     };
 
-    window.toggleChallengeSelection = (challengeId, checked) => {
+    const toggleChallengeSelection = (challengeId, checked) => {
         if (checked) {
             selectedChallenges.add(challengeId);
         } else {
@@ -426,7 +425,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         updateBulkBar();
     };
 
-    window.toggleSelectAll = (checked) => {
+    const toggleSelectAll = (checked) => {
         const checkboxes = document.querySelectorAll('.challenge-card-checkbox');
         checkboxes.forEach(cb => {
             cb.checked = checked;
@@ -441,7 +440,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         updateBulkBar();
     };
 
-    window.clearSelection = () => {
+    const clearSelection = () => {
         selectedChallenges.clear();
         document.querySelectorAll('.challenge-card-checkbox').forEach(cb => {
             cb.checked = false;
@@ -452,7 +451,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         updateBulkBar();
     };
 
-    window.bulkAction = async (action) => {
+    const bulkAction = async (action) => {
         if (selectedChallenges.size === 0) return;
 
         const confirmMsg = action === 'delete'
@@ -527,7 +526,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     };
 
-    window.applyTemplate = () => {
+    const applyTemplate = () => {
         const select = document.getElementById('template-select');
         const templateId = select.value;
         if (!templateId) return;
@@ -556,6 +555,43 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         showNotification(`Template "${template.name}" applied. Review and submit the form.`, 'info');
     };
+
+    // ===== Event Delegation for dynamic card buttons =====
+    challengesList.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-action]');
+        if (!btn) return;
+        const action = btn.dataset.action;
+        const id = btn.dataset.id;
+        if (action === 'edit') openEditModal(id);
+        else if (action === 'duplicate') duplicateChallenge(id);
+        else if (action === 'delete') deleteChallenge(id);
+    });
+
+    challengesList.addEventListener('change', (e) => {
+        if (e.target.classList.contains('challenge-card-checkbox')) {
+            toggleChallengeSelection(e.target.dataset.id, e.target.checked);
+        }
+    });
+
+    // ===== Static element event listeners =====
+    document.getElementById('apply-template-btn').addEventListener('click', () => applyTemplate());
+
+    document.querySelectorAll('[data-bulk-action]').forEach(btn => {
+        btn.addEventListener('click', () => bulkAction(btn.dataset.bulkAction));
+    });
+
+    document.getElementById('bulk-clear-btn').addEventListener('click', () => clearSelection());
+
+    document.getElementById('select-all').addEventListener('change', (e) => toggleSelectAll(e.target.checked));
+
+    // Edit modal listeners
+    const editModal = document.getElementById('edit-modal');
+    editModal.addEventListener('click', (e) => {
+        if (e.target === editModal) closeEditModal();
+    });
+    document.getElementById('edit-modal-close-btn').addEventListener('click', () => closeEditModal());
+    document.getElementById('edit-modal-cancel-btn').addEventListener('click', () => closeEditModal());
+    document.getElementById('edit-modal-save-btn').addEventListener('click', () => submitEditForm());
 
     // Handle form submission
     challengeCreateForm.addEventListener('submit', async (e) => {
