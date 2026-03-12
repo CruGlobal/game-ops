@@ -796,23 +796,86 @@ function showError(message) {
     });
 }
 
-// Socket.IO real-time updates
-if (typeof io !== 'undefined') {
-    const socket = io();
+// Socket.IO real-time updates - use the shared socket from socket-client.js
+(function initLeaderboardSocket() {
+    // Wait for the shared socket to be available (socket-client.js exposes it as window.realtimeSocket)
+    function getSocket() {
+        return window.realtimeSocket;
+    }
 
-    socket.on('leaderboard-update', async () => {
-        console.log('Leaderboard update received, refreshing data...');
-        await loadLeaderboardData();
-    });
+    // Debounce: coalesce rapid events into a single refresh
+    let refreshTimer = null;
+    let pendingUsername = null;
 
-    socket.on('badge-awarded', async (data) => {
-        console.log('Badge awarded:', data);
-        // Optionally show toast notification
-        await loadLeaderboardData();
-    });
+    function debouncedRefresh(username) {
+        pendingUsername = username || pendingUsername;
+        if (refreshTimer) return; // already scheduled
+        refreshTimer = setTimeout(async () => {
+            const usernameToHighlight = pendingUsername;
+            refreshTimer = null;
+            pendingUsername = null;
+            await loadLeaderboardData();
+            if (usernameToHighlight) {
+                highlightUpdatedCard(usernameToHighlight);
+            }
+        }, 500);
+    }
 
-    socket.on('pr-update', async (data) => {
-        console.log('PR update:', data);
-        await loadLeaderboardData();
-    });
-}
+    function highlightUpdatedCard(username) {
+        const cards = document.querySelectorAll(`[data-username="${username}"]`);
+        cards.forEach(card => {
+            card.classList.add('live-update-highlight');
+            setTimeout(() => card.classList.remove('live-update-highlight'), 2000);
+        });
+    }
+
+    function setupListeners() {
+        const socket = getSocket();
+        if (!socket) {
+            // Retry until socket-client.js has initialized
+            setTimeout(setupListeners, 200);
+            return;
+        }
+
+        socket.on('leaderboard-update', (data) => {
+            console.log('Leaderboard update received:', data);
+            debouncedRefresh(data?.username);
+        });
+
+        socket.on('badge-awarded', (data) => {
+            console.log('Badge awarded:', data);
+            debouncedRefresh(data?.username);
+        });
+
+        socket.on('pr-update', (data) => {
+            console.log('PR update:', data);
+            debouncedRefresh(data?.username);
+        });
+
+        socket.on('review-update', (data) => {
+            console.log('Review update:', data);
+            debouncedRefresh(data?.username);
+        });
+
+        socket.on('streak-update', (data) => {
+            console.log('Streak update:', data);
+            debouncedRefresh(data?.username);
+        });
+
+        socket.on('points-awarded', (data) => {
+            console.log('Points awarded:', data);
+            debouncedRefresh(data?.username);
+        });
+
+        // Full refresh on reconnect to pick up any missed events
+        socket.on('connect', () => {
+            // Only refresh if we've loaded data before (not the initial connection)
+            if (allTimeLeaderboard.length > 0) {
+                console.log('Socket reconnected, refreshing leaderboard...');
+                loadLeaderboardData();
+            }
+        });
+    }
+
+    setupListeners();
+})();
