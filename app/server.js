@@ -12,6 +12,7 @@ import contributorRoutes from './routes/contributorRoutes.js';
 import healthRoutes from './routes/healthRoutes.js';
 import challengeRoutes from './routes/challengeRoutes.js';
 import analyticsRoutes from './routes/analyticsRoutes.js';
+import webhookRoutes from './routes/webhookRoutes.js';
 import { fetchPRsCron, awardContributorBadgesCron } from './controllers/contributorController.js';
 import { awardBillsAndVonettes } from './services/contributorService.js';
 import { generateWeeklyChallenges, checkExpiredChallenges } from './services/challengeService.js';
@@ -41,7 +42,12 @@ const __dirname = path.dirname(__filename);
 
 app.use(errorHandler);
 
-app.use(express.json());
+// Store raw body for webhook signature verification
+app.use(express.json({
+    verify: (req, res, buf) => {
+        req.rawBody = buf;
+    }
+}));
 
 app.use(helmet({
     contentSecurityPolicy: {
@@ -217,6 +223,7 @@ app.use('/api', contributorRoutes);
 app.use('/api', healthRoutes);
 app.use('/api/challenges', challengeRoutes);
 app.use('/api/analytics', analyticsRoutes);
+app.use('/api/webhooks', webhookRoutes);
 
 // Test routes (development only)
 if (process.env.NODE_ENV !== 'production') {
@@ -248,19 +255,20 @@ ensureAppSettingsTable()
         logger.error('Failed to initialize app settings table', { error: err.message });
     });
 
-cron.schedule('0 * * * *', async () => {
-    logger.info('Running hourly task to fetch PRs and reviews');
+// Catch-up fetch every 6 hours (webhooks handle real-time updates)
+cron.schedule('0 */6 * * *', async () => {
+    logger.info('Running 6-hour catch-up fetch for PRs and reviews');
     try {
         if (!(await shouldRunCron('fetchPRsCron'))) return;
         const result = await fetchPRsCron();
-        logger.info('Data fetched successfully', { result });
+        logger.info('Catch-up fetch completed', { result });
     } catch (error) {
-        logger.error('Error fetching data', { error: error.message });
+        logger.error('Error in catch-up fetch', { error: error.message });
     }
 });
 
-cron.schedule('0 * * * *', async () => {
-    logger.info('Running hourly task to award badges');
+cron.schedule('0 */6 * * *', async () => {
+    logger.info('Running 6-hour task to award badges');
     try {
         if (!(await shouldRunCron('awardContributorBadgesCron'))) return;
         const result = await awardContributorBadgesCron();
