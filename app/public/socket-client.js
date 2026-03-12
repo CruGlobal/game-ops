@@ -133,18 +133,16 @@
         }
     }
 
-    function updateLeaderboard(leaderboard) {
-        // Refresh the leaderboard without full page reload
-        // This will be implemented based on current DOM structure
-        location.reload(); // Temporary - will optimize later
-    }
-
     function refreshLeaderboard() {
-        // Fetch updated leaderboard data
-        fetch('/api/contributors/leaderboard')
-            .then(res => res.json())
-            .then(data => updateLeaderboard(data))
-            .catch(err => console.error('Failed to refresh leaderboard:', err));
+        // On the leaderboard page, leaderboard-client.js handles full refresh via socket events.
+        // On other pages (profile, etc.), do a targeted DOM update if elements exist.
+        const cards = document.querySelectorAll('.leaderboard-card[data-username]');
+        if (cards.length > 0) {
+            // leaderboard-client.js will handle this
+            return;
+        }
+        // Fallback for non-leaderboard pages with contributor data
+        // No-op — individual event handlers below handle targeted updates
     }
 
     function showBadgeNotification(data) {
@@ -348,77 +346,19 @@
         }
     }
 
-    // Listen for leaderboard updates
+    // Leaderboard update events are handled by leaderboard-client.js on the leaderboard page.
+    // This handler provides a lightweight highlight for contributor cards on other pages (profile, etc.).
     socket.on('leaderboard-update', (data) => {
         console.log('Leaderboard update received:', data);
-        updateLeaderboard(data);
+        if (!data || !data.username) return;
+
+        // Find any cards for this contributor (works on any page)
+        const cards = document.querySelectorAll(`[data-username="${data.username}"]`);
+        cards.forEach(card => {
+            card.classList.add('live-update-highlight');
+            setTimeout(() => card.classList.remove('live-update-highlight'), 2000);
+        });
     });
-
-    /**
-     * Update leaderboard in real-time without page refresh
-     * @param {Object} data - Updated contributor data
-     */
-    function updateLeaderboard(data) {
-        const { username, pullRequestCount, reviewCount, totalPoints } = data;
-
-        // Find the list item for this contributor
-        const listItem = document.querySelector(`li[data-username="${username}"]`);
-
-        if (!listItem) {
-            // Contributor not in current view
-            console.log('Contributor not found in leaderboard:', username);
-            return;
-        }
-
-        // Update PR count
-        const prCell = listItem.querySelector('.pr-count');
-        if (prCell && prCell.textContent !== pullRequestCount.toString()) {
-            prCell.textContent = pullRequestCount;
-            animateChange(prCell);
-        }
-
-        // Update review count
-        const reviewCell = listItem.querySelector('.review-count');
-        if (reviewCell && reviewCell.textContent !== reviewCount.toString()) {
-            reviewCell.textContent = reviewCount;
-            animateChange(reviewCell);
-        }
-
-        // Update total points (if displayed)
-        const pointsCell = listItem.querySelector('.total-points');
-        if (pointsCell && totalPoints !== undefined) {
-            const oldPoints = parseInt(pointsCell.textContent.replace(/,/g, '')) || 0;
-            if (oldPoints !== totalPoints) {
-                pointsCell.textContent = totalPoints.toLocaleString();
-                animateChange(pointsCell);
-            }
-        }
-
-        // Highlight the entire list item
-        highlightRow(listItem);
-    }
-
-    /**
-     * Animate value change in a cell
-     * @param {HTMLElement} cell - The cell to animate
-     */
-    function animateChange(cell) {
-        cell.classList.add('value-changed');
-        setTimeout(() => {
-            cell.classList.remove('value-changed');
-        }, 1000);
-    }
-
-    /**
-     * Highlight a row temporarily
-     * @param {HTMLElement} row - The row to highlight
-     */
-    function highlightRow(row) {
-        row.classList.add('row-updated');
-        setTimeout(() => {
-            row.classList.remove('row-updated');
-        }, 2000);
-    }
 
     // Expose functions globally for testing and external use
     window.realtimeSocket = socket;
