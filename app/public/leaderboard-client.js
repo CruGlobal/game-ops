@@ -408,6 +408,7 @@ function createQuarterlyCard(user, rank) {
     const card = document.createElement('div');
     card.className = 'leaderboard-card';
     card.setAttribute('data-username', user.username);
+    card.setAttribute('data-rank', rank);
     card.style.cursor = 'pointer';
 
     // Make card clickable to navigate to profile
@@ -415,9 +416,10 @@ function createQuarterlyCard(user, rank) {
         window.location.href = `/profile/${user.username}`;
     });
 
-    // Rank badge
+    // Rank display: medal + number for top 3, just number for others
     const rankBadgeClass = rank <= 3 ? `rank-badge rank-${rank}` : 'rank-badge';
-    const rankEmoji = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : rank;
+    const medalEmoji = rank === 1 ? '🥇 ' : rank === 2 ? '🥈 ' : rank === 3 ? '🥉 ' : '';
+    const rankDisplay = `${medalEmoji}#${rank}`;
 
     const quarterStats = user.quarterlyStats || {};
     const prsThisQuarter = (typeof user.prsThisQuarter === 'number') ? user.prsThisQuarter : (quarterStats.prsThisQuarter || 0);
@@ -425,7 +427,7 @@ function createQuarterlyCard(user, rank) {
     const pointsThisQuarter = (typeof user.pointsThisQuarter === 'number') ? user.pointsThisQuarter : (quarterStats.pointsThisQuarter || 0);
 
     card.innerHTML = `
-        <div class="${rankBadgeClass}">${rankEmoji}</div>
+        <div class="${rankBadgeClass}" data-rank-display>${rankDisplay}</div>
 
         <div class="contributor-info">
             <div class="contributor-header">
@@ -437,21 +439,21 @@ function createQuarterlyCard(user, rank) {
                     <span class="stat-icon">📝</span>
                     <div>
                         <div class="stat-label">PRs</div>
-                        <div class="stat-value">${prsThisQuarter}</div>
+                        <div class="stat-value" data-stat="prsThisQuarter">${prsThisQuarter}</div>
                     </div>
                 </div>
                 <div class="stat-item">
                     <span class="stat-icon">👀</span>
                     <div>
                         <div class="stat-label">Reviews</div>
-                        <div class="stat-value">${reviewsThisQuarter}</div>
+                        <div class="stat-value" data-stat="reviewsThisQuarter">${reviewsThisQuarter}</div>
                     </div>
                 </div>
                 <div class="stat-item">
                     <span class="stat-icon">⭐</span>
                     <div>
                         <div class="stat-label">Points</div>
-                        <div class="stat-value">${pointsThisQuarter}</div>
+                        <div class="stat-value" data-stat="pointsThisQuarter">${pointsThisQuarter}</div>
                     </div>
                 </div>
             </div>
@@ -598,6 +600,7 @@ function createLeaderboardCard(user, rank, type) {
     const card = document.createElement('div');
     card.className = 'leaderboard-card';
     card.setAttribute('data-username', user.username);
+    card.setAttribute('data-rank', rank);
     card.style.cursor = 'pointer';
 
     // Make card clickable to navigate to profile
@@ -605,9 +608,10 @@ function createLeaderboardCard(user, rank, type) {
         window.location.href = `/profile/${user.username}`;
     });
 
-    // Rank badge
+    // Rank display: medal + number for top 3, just number for others
     const rankBadgeClass = rank <= 3 ? `rank-badge rank-${rank}` : 'rank-badge';
-    const rankEmoji = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : rank;
+    const medalEmoji = rank === 1 ? '🥇 ' : rank === 2 ? '🥈 ' : rank === 3 ? '🥉 ' : '';
+    const rankDisplay = `${medalEmoji}#${rank}`;
 
     // Stats based on type
     const statsHTML = generateStatsHTML(user, type);
@@ -616,7 +620,7 @@ function createLeaderboardCard(user, rank, type) {
     const badgesHTML = generateBadgesHTML(user);
 
     card.innerHTML = `
-        <div class="${rankBadgeClass}">${rankEmoji}</div>
+        <div class="${rankBadgeClass}" data-rank-display>${rankDisplay}</div>
 
         <div class="contributor-info">
             <div class="contributor-header">
@@ -647,7 +651,7 @@ function generateStatsHTML(user, type) {
                 <span class="stat-icon">📝</span>
                 <div>
                     <div class="stat-label">PRs</div>
-                    <div class="stat-value">${user.prCount || 0}</div>
+                    <div class="stat-value" data-stat="prCount">${user.prCount || 0}</div>
                 </div>
             </div>
         `);
@@ -659,7 +663,7 @@ function generateStatsHTML(user, type) {
                 <span class="stat-icon">👀</span>
                 <div>
                     <div class="stat-label">Reviews</div>
-                    <div class="stat-value">${user.reviewCount || 0}</div>
+                    <div class="stat-value" data-stat="reviewCount">${user.reviewCount || 0}</div>
                 </div>
             </div>
         `);
@@ -671,7 +675,7 @@ function generateStatsHTML(user, type) {
                 <span class="stat-icon">⭐</span>
                 <div>
                     <div class="stat-label">Points</div>
-                    <div class="stat-value">${user.totalPoints || 0}</div>
+                    <div class="stat-value" data-stat="totalPoints">${user.totalPoints || 0}</div>
                 </div>
             </div>
         `);
@@ -683,7 +687,7 @@ function generateStatsHTML(user, type) {
                 <span class="stat-icon">🔥</span>
                 <div>
                     <div class="stat-label">Streak</div>
-                    <div class="stat-value">${user.currentStreak || 0} days</div>
+                    <div class="stat-value" data-stat="currentStreak">${user.currentStreak || 0} days</div>
                 </div>
             </div>
         `);
@@ -696,7 +700,7 @@ function generateStatsHTML(user, type) {
                 <span class="stat-icon">💵</span>
                 <div>
                     <div class="stat-label">Bills</div>
-                    <div class="stat-value">${user.totalBillsAwarded}</div>
+                    <div class="stat-value" data-stat="totalBillsAwarded">${user.totalBillsAwarded}</div>
                 </div>
             </div>
         `);
@@ -798,78 +802,463 @@ function showError(message) {
 
 // Socket.IO real-time updates - use the shared socket from socket-client.js
 (function initLeaderboardSocket() {
-    // Wait for the shared socket to be available (socket-client.js exposes it as window.realtimeSocket)
     function getSocket() {
         return window.realtimeSocket;
     }
 
-    // Debounce: coalesce rapid events into a single refresh
+    // Debounce: coalesce rapid events into a single smart refresh
     let refreshTimer = null;
-    let pendingUsername = null;
+    let pendingUsernames = new Set();
 
-    function debouncedRefresh(username) {
-        pendingUsername = username || pendingUsername;
-        if (refreshTimer) return; // already scheduled
+    function debouncedSmartRefresh(username) {
+        if (username) pendingUsernames.add(username);
+        if (refreshTimer) return;
         refreshTimer = setTimeout(async () => {
-            const usernameToHighlight = pendingUsername;
+            const usernamesToHighlight = new Set(pendingUsernames);
             refreshTimer = null;
-            pendingUsername = null;
-            await loadLeaderboardData();
-            if (usernameToHighlight) {
-                highlightUpdatedCard(usernameToHighlight);
-            }
+            pendingUsernames.clear();
+            await smartRefresh(usernamesToHighlight);
         }, 500);
     }
 
-    function highlightUpdatedCard(username) {
-        const cards = document.querySelectorAll(`[data-username="${username}"]`);
-        cards.forEach(card => {
-            card.classList.add('live-update-highlight');
-            setTimeout(() => card.classList.remove('live-update-highlight'), 2000);
+    /**
+     * Smart refresh: fetch fresh data, diff against current DOM, update only changed values.
+     * Falls back to full re-render only if the grid structure changed (new/removed users, rank reorder).
+     */
+    async function smartRefresh(changedUsernames) {
+        try {
+            // Snapshot the old data for comparison
+            const oldAllTime = [...allTimeLeaderboard];
+            const oldQuarterly = [...quarterlyLeaderboard];
+            const oldContributors = [...allContributors];
+            const oldReviewers = [...allReviewers];
+
+            // Fetch fresh data (same as loadLeaderboardData but without showLoading)
+            const [contributorsData, reviewersData, allTimeData, quarterlyData, hallOfFameData, quarterInfoData] = await Promise.all([
+                fetchData('/api/top-contributors'),
+                fetchData('/api/top-reviewers'),
+                fetchData('/api/leaderboard/all-time'),
+                fetchData('/api/leaderboard/quarterly'),
+                fetchData('/api/leaderboard/hall-of-fame'),
+                fetchData('/api/quarter-info')
+            ]);
+
+            allContributors = contributorsData;
+            allReviewers = reviewersData;
+            allTimeLeaderboard = allTimeData?.data || allTimeData || [];
+            quarterlyLeaderboard = Array.isArray(quarterlyData?.data)
+                ? quarterlyData.data
+                : (quarterlyData?.leaderboard || quarterlyData || []);
+            hallOfFame = hallOfFameData?.data || [];
+
+            if (quarterInfoData && quarterInfoData.success) {
+                currentQuarterInfo = {
+                    currentQuarter: quarterInfoData.currentQuarter,
+                    quarterDates: { start: quarterInfoData.quarterStart, end: quarterInfoData.quarterEnd }
+                };
+                updateQuarterInfoDisplay();
+            }
+
+            // Determine which grids need a full re-render vs. in-place update
+            const gridConfigs = [
+                { gridId: 'all-time-grid', oldData: oldAllTime, newData: allTimeLeaderboard, sortKey: currentSort, type: 'all-time' },
+                { gridId: 'quarterly-grid', oldData: oldQuarterly, newData: quarterlyLeaderboard, sortKey: 'pointsThisQuarter', type: 'quarterly' },
+                { gridId: 'contributors-grid', oldData: oldContributors, newData: allContributors, sortKey: 'prCount', type: 'contributors' },
+                { gridId: 'reviewers-grid', oldData: oldReviewers, newData: allReviewers, sortKey: 'reviewCount', type: 'reviewers' },
+            ];
+
+            // Collect grid analysis before animating
+            const gridUpdates = [];
+
+            for (const config of gridConfigs) {
+                const grid = document.getElementById(config.gridId);
+                if (!grid || grid.closest('[hidden]')) continue; // skip hidden tabs
+
+                const oldSorted = sortUsers(filterUsers(config.oldData), config.sortKey);
+                const newSorted = sortUsers(filterUsers(config.newData), config.sortKey);
+
+                const oldOrder = oldSorted.map(u => u.username);
+                const newOrder = newSorted.map(u => u.username);
+                const orderChanged = oldOrder.length !== newOrder.length || oldOrder.some((u, i) => u !== newOrder[i]);
+
+                gridUpdates.push({ grid, newSorted, type: config.type, orderChanged });
+            }
+
+            // Find the first changed card to scroll to
+            const firstChangedCard = findFirstChangedCard(gridUpdates, changedUsernames);
+
+            // Phase 1: Slow scroll to the card's current position
+            if (firstChangedCard) {
+                await smoothScrollTo(firstChangedCard, 4500);
+                await wait(400); // Pause so user can see the card
+            }
+
+            // Phase 2: Update stats in-place (number change animation)
+            for (const { grid, newSorted } of gridUpdates) {
+                updateStatsInPlace(grid, newSorted, changedUsernames);
+            }
+
+            // Phase 3: After stats animate, shuffle cards to new rank positions
+            const pendingRerenders = gridUpdates.filter(g => g.orderChanged);
+            if (pendingRerenders.length > 0) {
+                await wait(1000); // Let stat animation finish
+
+                for (const { grid, newSorted, type } of pendingRerenders) {
+                    smoothRerender(grid, newSorted, type, changedUsernames);
+                }
+
+                // Phase 4: Follow the card as it slides up during FLIP
+                const movingCard = findFirstChangedCard(gridUpdates, changedUsernames);
+                if (movingCard) {
+                    await followCardDuringFlip(movingCard, 5000);
+
+                    // Phase 5: Blue highlight at destination
+                    movingCard.classList.add('live-update-highlight');
+                    movingCard.classList.add('card-pop');
+                    await wait(2000); // Let user see the highlight
+                    movingCard.classList.remove('card-pop');
+
+                    // Phase 6: Slow scroll to the very top of the page
+                    await scrollToTop(4500);
+                    await wait(500);
+                    movingCard.classList.remove('live-update-highlight');
+                }
+            }
+
+            // Hall of fame: always full render (rarely changes, static data)
+            // Only re-render if tab is visible
+            const hofContainer = document.getElementById('hall-of-fame-container');
+            if (hofContainer && !hofContainer.closest('[hidden]')) {
+                renderHallOfFame();
+            }
+
+        } catch (error) {
+            console.error('Smart refresh failed, falling back to full reload:', error);
+            await loadLeaderboardData();
+        }
+    }
+
+    /**
+     * Update stat values in-place on existing cards — zero flicker.
+     */
+    function updateStatsInPlace(grid, newData, changedUsernames) {
+        for (let i = 0; i < newData.length; i++) {
+            const user = newData[i];
+            const newRank = i + 1;
+            const card = grid.querySelector(`[data-username="${user.username}"]`);
+            if (!card) continue;
+
+            let hasChanges = false;
+
+            // Update rank number if it changed
+            const rankEl = card.querySelector('[data-rank-display]');
+            const oldRank = parseInt(card.getAttribute('data-rank'));
+            if (rankEl && oldRank !== newRank) {
+                const medalEmoji = newRank === 1 ? '🥇 ' : newRank === 2 ? '🥈 ' : newRank === 3 ? '🥉 ' : '';
+                rankEl.textContent = `${medalEmoji}#${newRank}`;
+                card.setAttribute('data-rank', newRank);
+
+                // Update rank badge styling
+                rankEl.className = newRank <= 3 ? `rank-badge rank-${newRank}` : 'rank-badge';
+            }
+
+            // Update each stat value that has a data-stat attribute
+            const statFields = {
+                prCount: user.prCount || 0,
+                reviewCount: user.reviewCount || 0,
+                totalPoints: user.totalPoints || 0,
+                currentStreak: user.currentStreak || 0,
+                totalBillsAwarded: user.totalBillsAwarded || 0,
+                prsThisQuarter: user.prsThisQuarter || (user.quarterlyStats?.prsThisQuarter) || 0,
+                reviewsThisQuarter: user.reviewsThisQuarter || (user.quarterlyStats?.reviewsThisQuarter) || 0,
+                pointsThisQuarter: user.pointsThisQuarter || (user.quarterlyStats?.pointsThisQuarter) || 0,
+            };
+
+            for (const [stat, newValue] of Object.entries(statFields)) {
+                const el = card.querySelector(`[data-stat="${stat}"]`);
+                if (!el) continue;
+
+                const displayValue = stat === 'currentStreak' ? `${newValue} days` : String(newValue);
+                const currentText = el.textContent.trim();
+
+                if (currentText !== displayValue) {
+                    animateStatChange(el, currentText, displayValue);
+                    hasChanges = true;
+                }
+            }
+
+            // Highlight the card if it changed
+            if (hasChanges || changedUsernames.has(user.username)) {
+                playCardUpdateAnimation(card);
+            }
+        }
+    }
+
+    /**
+     * Find the first changed username's card in the visible grids.
+     */
+    function findFirstChangedCard(gridUpdates, changedUsernames) {
+        for (const { grid } of gridUpdates) {
+            for (const username of changedUsernames) {
+                const card = grid.querySelector(`[data-username="${username}"]`);
+                if (card) return card;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Promise-based wait helper.
+     */
+    function wait(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    /**
+     * Custom smooth scroll with controllable duration using easing.
+     * Returns a promise that resolves when the scroll completes.
+     * Skips scrolling if the card is already in view.
+     */
+    function smoothScrollTo(card, duration = 2500) {
+        return new Promise(resolve => {
+            const rect = card.getBoundingClientRect();
+            const inView = rect.top >= 80 && rect.bottom <= window.innerHeight - 40;
+            if (inView) { resolve(); return; }
+
+            const startY = window.scrollY;
+            const targetY = startY + rect.top - (window.innerHeight / 2) + (rect.height / 2);
+            const distance = targetY - startY;
+            const startTime = performance.now();
+
+            // Gentle ease — slow start, slow finish, very smooth middle
+            function easeInOutQuart(t) {
+                return t < 0.5 ? 8 * t * t * t * t : 1 - Math.pow(-2 * t + 2, 4) / 2;
+            }
+
+            function step(currentTime) {
+                const elapsed = currentTime - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+                const eased = easeInOutQuart(progress);
+
+                window.scrollTo(0, startY + distance * eased);
+
+                if (progress < 1) {
+                    requestAnimationFrame(step);
+                } else {
+                    resolve();
+                }
+            }
+
+            requestAnimationFrame(step);
+        });
+    }
+
+    /**
+     * Smooth scroll to the very top of the page with controllable duration.
+     */
+    function scrollToTop(duration = 4000) {
+        return new Promise(resolve => {
+            const startY = window.scrollY;
+            if (startY < 10) { resolve(); return; }
+
+            const startTime = performance.now();
+
+            function easeInOutQuart(t) {
+                return t < 0.5 ? 8 * t * t * t * t : 1 - Math.pow(-2 * t + 2, 4) / 2;
+            }
+
+            function step(currentTime) {
+                const elapsed = currentTime - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+                const eased = easeInOutQuart(progress);
+
+                window.scrollTo(0, startY * (1 - eased));
+
+                if (progress < 1) {
+                    requestAnimationFrame(step);
+                } else {
+                    resolve();
+                }
+            }
+
+            requestAnimationFrame(step);
+        });
+    }
+
+    /**
+     * Follow a card with the viewport as it slides during a FLIP animation.
+     * Continuously centers the card in the viewport until the transition ends.
+     */
+    function followCardDuringFlip(card, duration) {
+        return new Promise(resolve => {
+            const startTime = performance.now();
+            let done = false;
+
+            function track() {
+                if (done) return;
+
+                const rect = card.getBoundingClientRect();
+                const viewportCenter = window.innerHeight / 2;
+                const cardCenter = rect.top + rect.height / 2;
+                const offset = cardCenter - viewportCenter;
+
+                // Only scroll if the card is noticeably off-center
+                if (Math.abs(offset) > 30) {
+                    window.scrollBy(0, offset * 0.15); // Gentle follow (15% of offset per frame)
+                }
+
+                const elapsed = performance.now() - startTime;
+                if (elapsed < duration) {
+                    requestAnimationFrame(track);
+                } else {
+                    // Final snap to center the card precisely
+                    const finalRect = card.getBoundingClientRect();
+                    const finalOffset = finalRect.top + finalRect.height / 2 - viewportCenter;
+                    window.scrollBy(0, finalOffset);
+                    done = true;
+                    resolve();
+                }
+            }
+
+            requestAnimationFrame(track);
+        });
+    }
+
+    /**
+     * Animate a stat value changing from old to new.
+     */
+    function animateStatChange(el, oldText, newText) {
+        el.classList.add('stat-changing');
+        // Quick scale-up with color flash, then set new value
+        setTimeout(() => {
+            el.textContent = newText;
+            el.classList.remove('stat-changing');
+            el.classList.add('stat-changed');
+            setTimeout(() => el.classList.remove('stat-changed'), 1500);
+        }, 150);
+    }
+
+    /**
+     * Play a fun attention-grabbing animation on an updated card.
+     */
+    function playCardUpdateAnimation(card) {
+        card.classList.add('live-update-highlight');
+        card.classList.add('card-pop');
+        setTimeout(() => {
+            card.classList.remove('card-pop');
+        }, 600);
+        setTimeout(() => {
+            card.classList.remove('live-update-highlight');
+        }, 2500);
+    }
+
+    /**
+     * FLIP animation: cards physically slide to their new rank positions.
+     * (First, Last, Invert, Play)
+     */
+    function smoothRerender(grid, newData, type, changedUsernames) {
+        const existingCards = grid.querySelectorAll('[data-username]');
+
+        // FIRST: record current positions of all cards
+        const firstPositions = new Map();
+        existingCards.forEach(card => {
+            const username = card.getAttribute('data-username');
+            const rect = card.getBoundingClientRect();
+            firstPositions.set(username, { top: rect.top, left: rect.left });
+        });
+
+        // Rebuild the grid with new order and updated rank numbers
+        grid.innerHTML = '';
+        if (newData.length === 0) {
+            grid.innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-state-icon">🔍</div>
+                    <div class="empty-state-text">No contributors found</div>
+                </div>
+            `;
+            return;
+        }
+
+        if (type === 'quarterly') {
+            newData.forEach((user, index) => grid.appendChild(createQuarterlyCard(user, index + 1)));
+        } else {
+            newData.forEach((user, index) => grid.appendChild(createLeaderboardCard(user, index + 1, type)));
+        }
+
+        // LAST: record new positions
+        const newCards = grid.querySelectorAll('[data-username]');
+
+        // INVERT + PLAY: animate each card from old position to new
+        newCards.forEach(card => {
+            const username = card.getAttribute('data-username');
+            const oldPos = firstPositions.get(username);
+            if (!oldPos) return; // new card, no old position
+
+            const newRect = card.getBoundingClientRect();
+            const deltaY = oldPos.top - newRect.top;
+            const deltaX = oldPos.left - newRect.left;
+
+            if (Math.abs(deltaY) < 2 && Math.abs(deltaX) < 2) return; // didn't move
+
+            // Start at old position
+            card.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
+            card.style.transition = 'none';
+            card.style.zIndex = changedUsernames.has(username) ? '10' : '1';
+
+            // Force layout so the transform takes effect
+            card.getBoundingClientRect();
+
+            // Animate to new position
+            card.style.transition = 'transform 5s cubic-bezier(0.16, 0.7, 0.3, 1)';
+            card.style.transform = '';
+
+            // Cleanup after animation
+            card.addEventListener('transitionend', () => {
+                card.style.transition = '';
+                card.style.zIndex = '';
+            }, { once: true });
         });
     }
 
     function setupListeners() {
         const socket = getSocket();
         if (!socket) {
-            // Retry until socket-client.js has initialized
             setTimeout(setupListeners, 200);
             return;
         }
 
         socket.on('leaderboard-update', (data) => {
             console.log('Leaderboard update received:', data);
-            debouncedRefresh(data?.username);
+            debouncedSmartRefresh(data?.username);
         });
 
         socket.on('badge-awarded', (data) => {
             console.log('Badge awarded:', data);
-            debouncedRefresh(data?.username);
+            debouncedSmartRefresh(data?.username);
         });
 
         socket.on('pr-update', (data) => {
             console.log('PR update:', data);
-            debouncedRefresh(data?.username);
+            debouncedSmartRefresh(data?.username);
         });
 
         socket.on('review-update', (data) => {
             console.log('Review update:', data);
-            debouncedRefresh(data?.username);
+            debouncedSmartRefresh(data?.username);
         });
 
         socket.on('streak-update', (data) => {
             console.log('Streak update:', data);
-            debouncedRefresh(data?.username);
+            debouncedSmartRefresh(data?.username);
         });
 
         socket.on('points-awarded', (data) => {
             console.log('Points awarded:', data);
-            debouncedRefresh(data?.username);
+            debouncedSmartRefresh(data?.username);
         });
 
         // Full refresh on reconnect to pick up any missed events
         socket.on('connect', () => {
-            // Only refresh if we've loaded data before (not the initial connection)
             if (allTimeLeaderboard.length > 0) {
                 console.log('Socket reconnected, refreshing leaderboard...');
                 loadLeaderboardData();
