@@ -258,6 +258,20 @@ model FetchDate {
   @@map("fetch_dates")
 }
 
+model WebhookEvent {
+  id          String   @id @default(cuid())
+  deliveryId  String   @unique @map("delivery_id")
+  eventType   String   @map("event_type")
+  action      String
+  payload     Json
+  processedAt DateTime @default(now()) @map("processed_at")
+  status      String   @default("processed")
+
+  @@index([eventType, action])
+  @@index([processedAt])
+  @@map("webhook_events")
+}
+
 model app_settings {
   key        String   @id
   value      Json     @default("{}")
