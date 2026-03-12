@@ -56,17 +56,17 @@
 
             <!-- Cron Controls Section -->
             <div class="card">
-                <h2>⏱️ Cron Controls</h2>
-                <p class="settings-description">Enable or pause all scheduled background jobs (PR fetch, badges, challenges, quarter checks). Disabled by default.</p>
+                <h2>⏱️ Background Sync (Catch-Up)</h2>
+                <p class="settings-description">GitHub Webhooks are the primary data source for PR and review tracking. This catch-up sync runs every 6 hours as a safety net to pick up any events webhooks may have missed (e.g. network issues, GitHub outages).</p>
 
                 <div class="settings-controls">
                     <div class="setting-item">
                         <label class="toggle-label">
                             <input type="checkbox" id="cron-toggle" class="toggle-checkbox">
                             <span class="toggle-slider"></span>
-                            <span class="toggle-text">Enable Cron Jobs</span>
+                            <span class="toggle-text">Enable Catch-Up Sync</span>
                         </label>
-                        <p class="setting-hint">When off, all scheduled jobs will be skipped. This does not stop manual actions or admin-triggered tasks.</p>
+                        <p class="setting-hint">When off, all scheduled background jobs (PR fetch, badges, challenges, quarter checks) will be skipped. Webhook processing continues regardless of this setting.</p>
                     </div>
                 </div>
 
@@ -1157,7 +1157,7 @@ document.getElementById('export-hof-csv')?.addEventListener('click', async () =>
 </script>
 
 <script nonce="lexicostatistics">
-// Cron controls
+// Background Sync (Catch-Up) controls
 async function initCronControls() {
     try {
         const resp = await fetch('/api/admin/cron-status');
@@ -1178,24 +1178,23 @@ async function initCronControls() {
                     body: JSON.stringify({ enabled: newVal })
                 });
                 const j2 = await res2.json();
-                const ok = j2.success !== false; // default to optimistic
-                const final = ok ? !!j2.enabled : !newVal; // if failed, revert
+                const ok = j2.success !== false;
+                const final = ok ? !!j2.enabled : !newVal;
                 if (!ok) {
-                    if (typeof showToast === 'function') showToast('Failed to update cron status', 'error');
+                    if (typeof showToast === 'function') showToast('Failed to update catch-up sync', 'error');
                 } else {
-                    if (typeof showToast === 'function') showToast(`Cron ${final ? 'enabled' : 'disabled'}`, 'success');
+                    if (typeof showToast === 'function') showToast(`Catch-up sync ${final ? 'enabled' : 'disabled'}`, 'success');
                 }
                 if (toggle) toggle.checked = final;
                 if (status) status.textContent = final ? 'Enabled' : 'Disabled';
             } catch (err) {
-                console.error('Cron toggle failed', err);
-                if (typeof showToast === 'function') showToast('Failed to update cron status', 'error');
-                // revert checkbox
+                console.error('Catch-up sync toggle failed', err);
+                if (typeof showToast === 'function') showToast('Failed to update catch-up sync', 'error');
                 if (toggle) toggle.checked = !newVal;
             }
         });
     } catch (err) {
-        console.error('Failed to initialize cron controls', err);
+        console.error('Failed to initialize catch-up sync controls', err);
     }
 }
 
