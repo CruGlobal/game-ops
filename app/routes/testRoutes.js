@@ -1,4 +1,5 @@
 import express from 'express';
+import { prisma } from '../lib/prisma.js';
 import { emitPRUpdate, emitBadgeAwarded, emitReviewUpdate, emitLeaderboardUpdate, emitStreakUpdate, emitAchievementUnlocked, emitPointsAwarded, emitChallengeProgress, emitChallengeCompleted } from '../utils/socketEmitter.js';
 import logger from '../utils/logger.js';
 
@@ -178,6 +179,43 @@ router.post('/test/challenge-completed', (req, res) => {
     });
 });
 
+// Simulate a real PR merge: update the DB then emit socket events (full end-to-end test)
+router.post('/test/simulate-pr-merge', async (req, res) => {
+    const username = req.body.username;
+    if (!username) {
+        return res.status(400).json({ success: false, message: 'username is required' });
+    }
+
+    try {
+        const contributor = await prisma.contributor.findUnique({ where: { username } });
+        if (!contributor) {
+            return res.status(404).json({ success: false, message: `Contributor "${username}" not found` });
+        }
+
+        const updated = await prisma.contributor.update({
+            where: { username },
+            data: {
+                prCount: { increment: 1 },
+                totalPoints: { increment: 10 },
+            },
+        });
+
+        logger.info('Simulated PR merge for test', { username, prCount: Number(updated.prCount), totalPoints: Number(updated.totalPoints) });
+
+        emitPRUpdate({ username, prCount: Number(updated.prCount) });
+        emitLeaderboardUpdate({ username });
+
+        res.json({
+            success: true,
+            message: `Simulated PR merge for ${username}`,
+            data: { prCount: Number(updated.prCount), totalPoints: Number(updated.totalPoints) }
+        });
+    } catch (error) {
+        logger.error('Simulate PR merge failed', { error: error.message });
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
 // Get all available test endpoints
 router.get('/test/endpoints', (req, res) => {
     res.json({
@@ -235,6 +273,12 @@ router.get('/test/endpoints', (req, res) => {
                 path: '/api/test/challenge-completed',
                 body: { username: 'string', challengeId: 'string', challengeName: 'string', reward: 'number', totalPoints: 'number' },
                 description: 'Emit a challenge completed event'
+            },
+            {
+                method: 'POST',
+                path: '/api/test/simulate-pr-merge',
+                body: { username: 'string (required)' },
+                description: 'Simulate a real PR merge: increments prCount and totalPoints in DB, then emits socket events'
             }
         ]
     });

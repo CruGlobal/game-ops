@@ -119,32 +119,45 @@
 
 /* Rank Badge */
 .rank-badge {
-    width: 60px;
-    height: 60px;
-    border-radius: 50%;
+    min-width: 48px;
+    height: 48px;
+    padding: 0 0.5rem;
+    border-radius: 24px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 1.5rem;
+    font-size: 1rem;
     font-weight: 700;
-    background: linear-gradient(135deg, var(--primary-color), var(--accent-color));
-    color: white;
-    box-shadow: var(--shadow-md);
+    background: var(--bg-secondary, #f3f4f6);
+    color: var(--text-primary, #1f2937);
+    box-shadow: var(--shadow-sm);
+    white-space: nowrap;
+}
+
+[data-theme="dark"] .rank-badge {
+    background: var(--bg-tertiary, #374151);
+    color: var(--text-primary, #f9fafb);
 }
 
 .rank-badge.rank-1 {
     background: linear-gradient(135deg, #FFD700, #FFA500);
-    font-size: 2rem;
+    color: #5c3d00;
+    font-size: 1.1rem;
+    box-shadow: var(--shadow-md);
 }
 
 .rank-badge.rank-2 {
-    background: linear-gradient(135deg, #C0C0C0, #808080);
-    font-size: 1.75rem;
+    background: linear-gradient(135deg, #C0C0C0, #A0A0A0);
+    color: #333;
+    font-size: 1.1rem;
+    box-shadow: var(--shadow-md);
 }
 
 .rank-badge.rank-3 {
-    background: linear-gradient(135deg, #CD7F32, #8B4513);
-    font-size: 1.75rem;
+    background: linear-gradient(135deg, #CD7F32, #B8722D);
+    color: #3d2200;
+    font-size: 1.1rem;
+    box-shadow: var(--shadow-md);
 }
 
 /* Contributor Info */
@@ -296,9 +309,9 @@
     }
 
     .rank-badge {
-        width: 50px;
-        height: 50px;
-        font-size: 1.25rem;
+        min-width: 42px;
+        height: 42px;
+        font-size: 0.9rem;
     }
 
     .badges-section {
