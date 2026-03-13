@@ -802,6 +802,8 @@ function showError(message) {
 
 // Socket.IO real-time updates - use the shared socket from socket-client.js
 (function initLeaderboardSocket() {
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
     function getSocket() {
         return window.realtimeSocket;
     }
@@ -910,7 +912,7 @@ function showError(message) {
                 // Phase 4: Follow the card as it slides up during FLIP
                 const movingCard = findFirstChangedCard(gridUpdates, changedUsernames);
                 if (movingCard) {
-                    await followCardDuringFlip(movingCard, 5000);
+                    await followCardDuringFlip(movingCard, 3500);
 
                     // Phase 5: Blue highlight at destination
                     movingCard.classList.add('live-update-highlight');
@@ -1025,20 +1027,26 @@ function showError(message) {
             const inView = rect.top >= 80 && rect.bottom <= window.innerHeight - 40;
             if (inView) { resolve(); return; }
 
+            if (prefersReducedMotion) {
+                card.scrollIntoView({ block: 'center' });
+                resolve();
+                return;
+            }
+
             const startY = window.scrollY;
             const targetY = startY + rect.top - (window.innerHeight / 2) + (rect.height / 2);
             const distance = targetY - startY;
             const startTime = performance.now();
 
             // Gentle ease — slow start, slow finish, very smooth middle
-            function easeInOutQuart(t) {
-                return t < 0.5 ? 8 * t * t * t * t : 1 - Math.pow(-2 * t + 2, 4) / 2;
+            function easeInOutCubic(t) {
+                return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
             }
 
             function step(currentTime) {
                 const elapsed = currentTime - startTime;
                 const progress = Math.min(elapsed / duration, 1);
-                const eased = easeInOutQuart(progress);
+                const eased = easeInOutCubic(progress);
 
                 window.scrollTo(0, startY + distance * eased);
 
@@ -1061,16 +1069,22 @@ function showError(message) {
             const startY = window.scrollY;
             if (startY < 10) { resolve(); return; }
 
+            if (prefersReducedMotion) {
+                window.scrollTo(0, 0);
+                resolve();
+                return;
+            }
+
             const startTime = performance.now();
 
-            function easeInOutQuart(t) {
-                return t < 0.5 ? 8 * t * t * t * t : 1 - Math.pow(-2 * t + 2, 4) / 2;
+            function easeInOutCubic(t) {
+                return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
             }
 
             function step(currentTime) {
                 const elapsed = currentTime - startTime;
                 const progress = Math.min(elapsed / duration, 1);
-                const eased = easeInOutQuart(progress);
+                const eased = easeInOutCubic(progress);
 
                 window.scrollTo(0, startY * (1 - eased));
 
@@ -1091,33 +1105,40 @@ function showError(message) {
      */
     function followCardDuringFlip(card, duration) {
         return new Promise(resolve => {
-            const startTime = performance.now();
-            let done = false;
+            if (prefersReducedMotion) {
+                card.scrollIntoView({ block: 'center' });
+                resolve();
+                return;
+            }
 
-            function track() {
-                if (done) return;
+            const startTime = performance.now();
+            const viewportCenter = window.innerHeight / 2;
+
+            function track(now) {
+                const elapsed = now - startTime;
+                if (elapsed >= duration) {
+                    const finalRect = card.getBoundingClientRect();
+                    const finalOffset = finalRect.top + finalRect.height / 2 - viewportCenter;
+                    if (Math.abs(finalOffset) > 5) {
+                        window.scrollBy(0, finalOffset);
+                    }
+                    resolve();
+                    return;
+                }
 
                 const rect = card.getBoundingClientRect();
-                const viewportCenter = window.innerHeight / 2;
                 const cardCenter = rect.top + rect.height / 2;
                 const offset = cardCenter - viewportCenter;
 
-                // Only scroll if the card is noticeably off-center
-                if (Math.abs(offset) > 30) {
-                    window.scrollBy(0, offset * 0.15); // Gentle follow (15% of offset per frame)
+                // Time-based damping: ~8% per frame at 60fps, framerate-independent
+                const dt = 1 / 60;
+                const damping = 1 - Math.pow(0.005, dt);
+
+                if (Math.abs(offset) > 20) {
+                    window.scrollBy(0, offset * damping);
                 }
 
-                const elapsed = performance.now() - startTime;
-                if (elapsed < duration) {
-                    requestAnimationFrame(track);
-                } else {
-                    // Final snap to center the card precisely
-                    const finalRect = card.getBoundingClientRect();
-                    const finalOffset = finalRect.top + finalRect.height / 2 - viewportCenter;
-                    window.scrollBy(0, finalOffset);
-                    done = true;
-                    resolve();
-                }
+                requestAnimationFrame(track);
             }
 
             requestAnimationFrame(track);
@@ -1128,14 +1149,50 @@ function showError(message) {
      * Animate a stat value changing from old to new.
      */
     function animateStatChange(el, oldText, newText) {
-        el.classList.add('stat-changing');
-        // Quick scale-up with color flash, then set new value
-        setTimeout(() => {
+        if (prefersReducedMotion) {
             el.textContent = newText;
-            el.classList.remove('stat-changing');
+            return;
+        }
+
+        const oldNum = parseInt(oldText.replace(/[^\d]/g, ''), 10);
+        const newNum = parseInt(newText.replace(/[^\d]/g, ''), 10);
+        const suffix = newText.replace(/[\d,]+/, ''); // e.g., " days"
+
+        if (isNaN(oldNum) || isNaN(newNum) || oldNum === newNum) {
+            el.textContent = newText;
             el.classList.add('stat-changed');
             setTimeout(() => el.classList.remove('stat-changed'), 1500);
-        }, 150);
+            return;
+        }
+
+        const duration = 1200;
+        const startTime = performance.now();
+        const delta = newNum - oldNum;
+
+        el.style.transition = 'transform 0.3s ease-out';
+        el.style.transform = 'scale(1.15)';
+
+        function step(now) {
+            const progress = Math.min((now - startTime) / duration, 1);
+            const eased = 1 - Math.pow(1 - progress, 3); // easeOutCubic
+            const current = Math.round(oldNum + delta * eased);
+            el.textContent = `${current}${suffix}`;
+
+            if (progress < 1) {
+                requestAnimationFrame(step);
+            } else {
+                el.textContent = newText;
+                el.style.transform = '';
+                el.classList.add('stat-changed');
+                setTimeout(() => {
+                    el.classList.remove('stat-changed');
+                    el.style.transition = '';
+                }, 1500);
+            }
+        }
+
+        requestAnimationFrame(step);
+        setTimeout(() => { el.style.transform = 'scale(1.0)'; }, 300);
     }
 
     /**
@@ -1188,7 +1245,13 @@ function showError(message) {
         // LAST: record new positions
         const newCards = grid.querySelectorAll('[data-username]');
 
+        if (prefersReducedMotion) {
+            // Skip animation entirely for reduced-motion preference
+            return;
+        }
+
         // INVERT + PLAY: animate each card from old position to new
+        let staggerIndex = 0;
         newCards.forEach(card => {
             const username = card.getAttribute('data-username');
             const oldPos = firstPositions.get(username);
@@ -1200,23 +1263,31 @@ function showError(message) {
 
             if (Math.abs(deltaY) < 2 && Math.abs(deltaX) < 2) return; // didn't move
 
-            // Start at old position
-            card.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
-            card.style.transition = 'none';
             card.style.zIndex = changedUsernames.has(username) ? '10' : '1';
+            card.style.willChange = 'transform';
 
-            // Force layout so the transform takes effect
-            card.getBoundingClientRect();
+            // Add elevation for cards that move significantly
+            if (Math.abs(deltaY) > 50) {
+                card.style.boxShadow = '0 12px 40px rgba(0,0,0,0.15), 0 4px 12px rgba(0,0,0,0.1)';
+            }
 
-            // Animate to new position
-            card.style.transition = 'transform 5s cubic-bezier(0.16, 0.7, 0.3, 1)';
-            card.style.transform = '';
+            const animation = card.animate([
+                { transform: `translate(${deltaX}px, ${deltaY}px)` },
+                { transform: 'none' }
+            ], {
+                duration: 3200,
+                easing: 'cubic-bezier(0.25, 0.1, 0.25, 1.0)',
+                fill: 'both',
+                delay: staggerIndex * 100
+            });
 
-            // Cleanup after animation
-            card.addEventListener('transitionend', () => {
-                card.style.transition = '';
+            animation.finished.then(() => {
+                card.style.willChange = '';
                 card.style.zIndex = '';
-            }, { once: true });
+                card.style.boxShadow = '';
+            });
+
+            staggerIndex++;
         });
     }
 
