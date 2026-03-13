@@ -50,7 +50,14 @@ import {
     toggleDevOpsLeaderboardFilterController,
     checkUserDevOpsStatusController,
     setShowDevOpsPreferenceController,
-    backfillBadgesController
+    backfillBadgesController,
+    runBadgeBillScanController,
+    awardBadgeManualController,
+    resetContributorDataController,
+    getCronTaskSettingsController,
+    toggleCronTaskController,
+    searchContributorsController,
+    bulkResetController
 } from '../controllers/adminController.js';
 import { authenticate } from '../middleware/authMiddleware.js';
 import { login } from '../controllers/authController.js';
@@ -193,5 +200,18 @@ router.get('/contributors/:username', getContributorController);
 
 // Backfill badges (admin only)
 router.post('/admin/backfill-badges', ensureDevOpsTeamMember, backfillBadgesController);
+
+// Badge & Bill management (admin only)
+router.post('/admin/run-badge-bill-scan', ensureDevOpsTeamMember, runBadgeBillScanController);
+router.post('/admin/award-badge', ensureDevOpsTeamMember, awardBadgeManualController);
+router.post('/admin/reset-contributor-data', ensureDevOpsTeamMember, resetContributorDataController);
+router.post('/admin/bulk-reset', ensureDevOpsTeamMember, bulkResetController);
+
+// Cron task management (admin only)
+router.get('/admin/cron-tasks', ensureDevOpsTeamMember, getCronTaskSettingsController);
+router.post('/admin/cron-tasks/toggle', ensureDevOpsTeamMember, toggleCronTaskController);
+
+// Contributor search (admin only)
+router.get('/admin/search-contributors', ensureDevOpsTeamMember, searchContributorsController);
 
 export default router;

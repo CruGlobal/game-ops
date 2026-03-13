@@ -295,9 +295,10 @@ export async function resetQuarterlyStats(newQuarter = null) {
 
         console.log(`Resetting quarterly stats for ${quarter}`);
 
-        // Reset all contributors' quarterly stats
+        // Reset all contributors' quarterly stats and totalPoints
         const result = await prisma.contributor.updateMany({
             data: {
+                totalPoints: 0,
                 quarterlyStats: {
                     currentQuarter: quarter,
                     quarterStartDate: quarterDates.start,
@@ -310,7 +311,7 @@ export async function resetQuarterlyStats(newQuarter = null) {
             }
         });
 
-        console.log(`Reset quarterly stats for ${result.count} contributors`);
+        console.log(`Reset quarterly stats and totalPoints for ${result.count} contributors`);
 
         return {
             quarter,
