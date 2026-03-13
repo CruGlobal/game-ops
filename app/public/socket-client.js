@@ -12,105 +12,123 @@
 
     // Connection event handlers
     socket.on('connect', () => {
-        console.log('WebSocket connected');
         socket.emit('subscribe-updates');
         showToast('Connected to live updates', 'success');
     });
 
     socket.on('disconnect', () => {
-        console.log('WebSocket disconnected');
         showToast('Disconnected from live updates', 'warning');
     });
 
-    socket.on('error', (error) => {
-        console.error('WebSocket error:', error);
-    });
+    // PR update event — uses a single updating counter toast per user
+    const prCountToasts = new Map(); // username → { count, toastEl, timeout }
 
-    // PR update event
     socket.on('pr-update', (data) => {
-        console.log('PR Update:', data);
         updateContributorPRCount(data.username, data.prCount);
-        showToast(`${data.username} merged a new PR!`, 'info');
+
+        const existing = prCountToasts.get(data.username);
+        if (existing && existing.toastEl && existing.toastEl.parentNode) {
+            // Update the existing toast in-place
+            existing.count++;
+            const msgEl = existing.toastEl.querySelector('.toast-message');
+            if (msgEl) {
+                msgEl.textContent = `${data.username} merged ${existing.count} PRs!`;
+            }
+            // Reset the auto-dismiss timer
+            clearTimeout(existing.timeout);
+            existing.timeout = setTimeout(() => {
+                existing.toastEl.classList.remove('show');
+                setTimeout(() => {
+                    existing.toastEl.remove();
+                    prCountToasts.delete(data.username);
+                }, 300);
+            }, 5000);
+        } else {
+            // Create a new toast and track it
+            showToast(`${data.username} merged 1 PR!`, 'info', 999999); // long duration, we manage it
+            // Find the toast we just created (last one in container)
+            const container = document.getElementById('toast-container');
+            if (container) {
+                const toasts = container.querySelectorAll('.toast');
+                const toastEl = toasts[toasts.length - 1];
+                if (toastEl) {
+                    const timeout = setTimeout(() => {
+                        toastEl.classList.remove('show');
+                        setTimeout(() => {
+                            toastEl.remove();
+                            prCountToasts.delete(data.username);
+                        }, 300);
+                    }, 5000);
+                    prCountToasts.set(data.username, { count: 1, toastEl, timeout });
+                }
+            }
+        }
     });
 
     // Badge awarded event
     socket.on('badge-awarded', (data) => {
-        console.log('Badge Awarded:', data);
         showBadgeNotification(data);
         refreshLeaderboard();
 
-        // Check if achievements/confetti are enabled
         if (window.notificationSettings && window.notificationSettings.areAchievementsEnabled()) {
-            // Trigger confetti celebration
             if (window.confetti) {
                 window.confetti.burst({ count: 60 });
             }
-        } else {
-            console.log('Badge confetti suppressed (disabled)');
         }
     });
 
     // Review update event
     socket.on('review-update', (data) => {
-        console.log('Review Update:', data);
         updateContributorReviewCount(data.username, data.reviewCount);
     });
 
     // Contributor activity event
     socket.on('contributor-activity', (data) => {
-        console.log('Contributor Activity:', data);
         addActivityToFeed(data);
     });
 
     // Gamification event handlers
     socket.on('streak-update', (data) => {
-        console.log('Streak Update:', data);
         showToast(`🔥 ${data.username} has a ${data.currentStreak}-day streak!`, 'success');
         updateStreakDisplay(data);
     });
 
     socket.on('achievement-unlocked', (data) => {
-        console.log('Achievement Unlocked:', data);
-        showToast(`🏆 ${data.username} unlocked: ${data.achievementName}!`, 'success', 5000);
-
-        // Check if achievements are enabled
-        if (window.notificationSettings && window.notificationSettings.areAchievementsEnabled()) {
-            showAchievementModal(data);
-
-            // Full celebration with confetti
-            if (window.confetti) {
-                window.confetti.celebrate();
+        // Wait for any pending or running leaderboard animation to finish before showing
+        function showWhenReady() {
+            if (window.leaderboardAnimating || window.leaderboardPending) {
+                setTimeout(showWhenReady, 300);
+                return;
             }
-        } else {
-            console.log('Achievement popup suppressed (disabled):', data.achievementName);
+            showCenteredAchievement(data);
+
+            if (window.notificationSettings && window.notificationSettings.areAchievementsEnabled()) {
+                if (window.confetti) {
+                    window.confetti.celebrate();
+                }
+            }
         }
+        showWhenReady();
     });
 
     socket.on('points-awarded', (data) => {
-        console.log('Points Awarded:', data);
         updatePointsDisplay(data.username, data.totalPoints);
     });
 
     socket.on('challenge-progress', (data) => {
-        console.log('Challenge Progress:', data);
         updateChallengeProgressBar(data);
     });
 
     socket.on('challenge-completed', (data) => {
-        console.log('Challenge Completed:', data);
         showToast(`🎉 ${data.username} completed: ${data.challengeName}! (+${data.reward} points)`, 'success', 5000);
 
-        // Check if achievements/confetti are enabled
         if (window.notificationSettings && window.notificationSettings.areAchievementsEnabled()) {
-            // Confetti cannon celebration
             if (window.confetti) {
                 window.confetti.cannon({ side: 'left', count: 40 });
                 setTimeout(() => {
                     window.confetti.cannon({ side: 'right', count: 40 });
                 }, 200);
             }
-        } else {
-            console.log('Challenge confetti suppressed (disabled)');
         }
     });
 
@@ -175,10 +193,20 @@
     }
 
     // Toast notification system (basic implementation)
+    const deferredToasts = [];
+
     function showToast(message, type = 'info', duration = 3000) {
         // Check if toasts are enabled
         if (window.notificationSettings && !window.notificationSettings.areToastsEnabled()) {
-            console.log('Toast suppressed (disabled):', message);
+            return;
+        }
+
+        // Defer toasts while leaderboard animation is running
+        if (window.leaderboardAnimating) {
+            // Only queue unique messages to avoid toast flood
+            if (!deferredToasts.some(t => t.message === message)) {
+                deferredToasts.push({ message, type, duration });
+            }
             return;
         }
 
@@ -305,7 +333,7 @@
 
         const closeModal = () => {
             modal.classList.remove('show');
-            setTimeout(() => modal.remove(), 400);
+            setTimeout(() => modal.remove(), 200);
         };
 
         closeBtn.addEventListener('click', closeModal);
@@ -317,8 +345,8 @@
         // Trigger animation
         setTimeout(() => modal.classList.add('show'), 10);
 
-        // Auto-remove after 15 seconds
-        setTimeout(closeModal, 15000);
+        // Auto-remove after 1 second
+        setTimeout(closeModal, 1000);
     }
 
     // Create confetti particles for celebration effect
@@ -349,7 +377,6 @@
     // Leaderboard update events are handled by leaderboard-client.js on the leaderboard page.
     // This handler provides a lightweight highlight for contributor cards on other pages (profile, etc.).
     socket.on('leaderboard-update', (data) => {
-        console.log('Leaderboard update received:', data);
         if (!data || !data.username) return;
 
         // Find any cards for this contributor (works on any page)
@@ -360,9 +387,73 @@
         });
     });
 
+    // Flush deferred toasts after animation completes (show max 3 summary toasts)
+    function flushDeferredToasts() {
+        if (deferredToasts.length === 0) return;
+        const toasts = deferredToasts.splice(0);
+        // Show at most 3 toasts to avoid flooding
+        toasts.slice(0, 3).forEach((t, i) => {
+            setTimeout(() => showToast(t.message, t.type, t.duration), i * 500);
+        });
+        if (toasts.length > 3) {
+            setTimeout(() => showToast(`...and ${toasts.length - 3} more updates`, 'info', 2000), 1500);
+        }
+    }
+
+    // Watch for animation completion to flush deferred toasts
+    let wasAnimating = false;
+    setInterval(() => {
+        if (wasAnimating && !window.leaderboardAnimating) {
+            flushDeferredToasts();
+        }
+        wasAnimating = !!window.leaderboardAnimating;
+    }, 500);
+
+    // Centered achievement notification — old visual design, no blocking overlay, auto-dismiss
+    function showCenteredAchievement(data) {
+        const badgeIcon = data.badgeIcon || '🏆';
+
+        const el = document.createElement('div');
+        el.className = 'centered-achievement';
+        el.innerHTML = `
+            <div class="achievement-confetti"></div>
+            <div class="achievement-badge">
+                <div class="achievement-badge-ring"></div>
+                <div class="achievement-badge-icon">${escapeHtml(badgeIcon)}</div>
+            </div>
+            <h2 class="achievement-title">Achievement Unlocked!</h2>
+            <h3 class="achievement-name">${escapeHtml(data.achievementName)}</h3>
+            <p class="achievement-description">${escapeHtml(data.description || '')}</p>
+            <div class="achievement-points">
+                <span class="points-label">Reward</span>
+                <span class="points-value">+${data.points || 0} points</span>
+            </div>
+        `;
+        document.body.appendChild(el);
+
+        // Add confetti particles inside the card
+        const confettiContainer = el.querySelector('.achievement-confetti');
+        createConfetti(confettiContainer);
+
+        // Animate in
+        requestAnimationFrame(() => el.classList.add('show'));
+
+        // Click to dismiss early
+        el.addEventListener('click', () => {
+            el.classList.remove('show');
+            setTimeout(() => el.remove(), 400);
+        });
+
+        // Auto-dismiss after 3.5s
+        setTimeout(() => {
+            el.classList.remove('show');
+            setTimeout(() => el.remove(), 400);
+        }, 3500);
+    }
+
     // Expose functions globally for testing and external use
     window.realtimeSocket = socket;
     window.showToast = showToast;
-    window.showAchievementModal = showAchievementModal;
+    window.showCenteredAchievement = showCenteredAchievement;
 
 })();
