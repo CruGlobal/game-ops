@@ -1,7 +1,8 @@
 // adminController.js
 import { prisma } from '../lib/prisma.js';
 import { body, validationResult } from 'express-validator';
-import { getPRRangeInfo, checkForDuplicates, fixDuplicates } from '../services/contributorService.js';
+import { getPRRangeInfo, checkForDuplicates, fixDuplicates, awardBadges, awardBillsAndVonettes } from '../services/contributorService.js';
+import { emitBadgeAwarded } from '../utils/socketEmitter.js';
 import { startBackfill, stopBackfill, getBackfillStatus } from '../services/backfillService.js';
 import {
     getQuarterConfig,
@@ -16,7 +17,7 @@ import {
     recomputeHallOfFame,
     recomputeHallOfFameAll
 } from '../services/quarterlyService.js';
-import { ensureAppSettingsTable, getCronEnabled, setCronEnabled } from '../lib/appSettings.js';
+import { ensureAppSettingsTable, getCronEnabled, setCronEnabled, getCronTaskSettings, setCronTaskSetting, CRON_TASK_DEFAULTS } from '../lib/appSettings.js';
 import {
     syncDevOpsTeamFromGitHub,
     getDevOpsTeamSettings,
@@ -447,9 +448,12 @@ export async function startBackfillController(req, res) {
             });
         }
 
-        const result = await startBackfill(startDate, endDate, checkRateLimits !== false, verboseLogging === true);
+        // Respond immediately — backfill runs in the background
+        // (AWS ALB times out at 60s, backfill can take hours)
+        startBackfill(startDate, endDate, checkRateLimits !== false, verboseLogging === true)
+            .catch(err => console.error('Backfill background error:', err));
 
-        res.json(result);
+        res.json({ success: true, message: 'Backfill started' });
     } catch (error) {
         console.error('Error in startBackfillController:', error);
         res.status(500).json({
@@ -807,5 +811,230 @@ export async function backfillBadgesController(req, res) {
             message: 'Failed to backfill badges',
             error: error.message
         });
+    }
+}
+
+/**
+ * Run batch badge and bill scan for all contributors
+ * POST /api/admin/run-badge-bill-scan
+ */
+export async function runBadgeBillScanController(req, res) {
+    try {
+        const badges = await awardBadges();
+        const bills = await awardBillsAndVonettes();
+        res.json({
+            success: true,
+            message: `Awarded ${badges.length} badge(s) and ${bills.length} bill(s)`,
+            badges,
+            bills
+        });
+    } catch (error) {
+        console.error('Error running badge/bill scan:', error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+}
+
+/**
+ * Manually award a badge to a contributor
+ * POST /api/admin/award-badge
+ */
+export async function awardBadgeManualController(req, res) {
+    try {
+        const { username, badge } = req.body;
+
+        if (!username || !badge) {
+            return res.status(400).json({ success: false, message: 'username and badge are required' });
+        }
+
+        const contributor = await prisma.contributor.findUnique({ where: { username } });
+        if (!contributor) {
+            return res.status(404).json({ success: false, message: `Contributor "${username}" not found` });
+        }
+
+        // Check if already has this badge
+        const badges = contributor.badges || [];
+        if (badges.some(b => b.badge === badge)) {
+            return res.json({ success: false, message: `${username} already has "${badge}"` });
+        }
+
+        // Add badge
+        badges.push({ badge, date: new Date().toISOString() });
+        await prisma.contributor.update({
+            where: { username },
+            data: { badges }
+        });
+
+        // Emit socket event
+        emitBadgeAwarded({ username, badgeName: badge, badgeType: 'manual' });
+
+        res.json({ success: true, message: `Awarded "${badge}" to ${username}` });
+    } catch (error) {
+        console.error('Error awarding badge manually:', error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+}
+
+/**
+ * Reset specific gamification data for a contributor
+ * POST /api/admin/reset-contributor-data
+ */
+export async function resetContributorDataController(req, res) {
+    try {
+        const { username, field } = req.body;
+
+        if (!username || !field) {
+            return res.status(400).json({ success: false, message: 'username and field are required' });
+        }
+
+        const contributor = await prisma.contributor.findUnique({ where: { username } });
+        if (!contributor) {
+            return res.status(404).json({ success: false, message: `Contributor "${username}" not found` });
+        }
+
+        const validFields = ['points', 'streaks', 'bills', 'badges'];
+        if (!validFields.includes(field)) {
+            return res.status(400).json({ success: false, message: `Invalid field. Must be one of: ${validFields.join(', ')}` });
+        }
+
+        let updateData = {};
+
+        switch (field) {
+            case 'points':
+                updateData = { totalPoints: 0 };
+                // Also delete points history
+                await prisma.pointsHistory.deleteMany({ where: { contributorId: contributor.id } });
+                break;
+            case 'streaks':
+                updateData = {
+                    currentStreak: 0,
+                    longestStreak: 0,
+                    lastContributionDate: null,
+                    sevenDayStreakAwarded: false,
+                    thirtyDayStreakAwarded: false,
+                    ninetyDayStreakAwarded: false,
+                    yearLongStreakAwarded: false
+                };
+                break;
+            case 'bills':
+                updateData = { totalBillsAwarded: 0 };
+                break;
+            case 'badges':
+                updateData = {
+                    badges: [],
+                    firstPrAwarded: false,
+                    firstReviewAwarded: false,
+                    first10PrsAwarded: false,
+                    first10ReviewsAwarded: false,
+                    first50PrsAwarded: false,
+                    first50ReviewsAwarded: false,
+                    first100PrsAwarded: false,
+                    first100ReviewsAwarded: false,
+                    first500PrsAwarded: false,
+                    first500ReviewsAwarded: false,
+                    first1000PrsAwarded: false,
+                    first1000ReviewsAwarded: false
+                };
+                break;
+        }
+
+        await prisma.contributor.update({
+            where: { username },
+            data: updateData
+        });
+
+        res.json({ success: true, message: `Reset ${field} for ${username}` });
+    } catch (error) {
+        console.error('Error resetting contributor data:', error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+}
+
+/**
+ * Get per-task cron settings
+ * GET /api/admin/cron-tasks
+ */
+export async function getCronTaskSettingsController(req, res) {
+    try {
+        await ensureAppSettingsTable();
+        const tasks = await getCronTaskSettings();
+        res.json({ success: true, tasks });
+    } catch (error) {
+        console.error('Error getting cron task settings:', error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+}
+
+/**
+ * Toggle a specific cron task
+ * POST /api/admin/cron-tasks/toggle { taskName, enabled }
+ */
+export async function toggleCronTaskController(req, res) {
+    try {
+        const { taskName, enabled } = req.body;
+        if (!taskName) {
+            return res.status(400).json({ success: false, message: 'taskName is required' });
+        }
+        await ensureAppSettingsTable();
+        const tasks = await setCronTaskSetting(taskName, enabled);
+        res.json({ success: true, tasks });
+    } catch (error) {
+        console.error('Error toggling cron task:', error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+}
+
+/**
+ * Search contributors by username prefix
+ * GET /api/admin/search-contributors?q=hal
+ */
+export async function searchContributorsController(req, res) {
+    try {
+        const q = (req.query.q || '').trim();
+        if (!q) {
+            return res.json({ success: true, contributors: [] });
+        }
+        const contributors = await prisma.contributor.findMany({
+            where: { username: { contains: q, mode: 'insensitive' } },
+            select: { username: true, avatarUrl: true },
+            take: 10,
+            orderBy: { username: 'asc' }
+        });
+        res.json({ success: true, contributors });
+    } catch (error) {
+        console.error('Error searching contributors:', error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+}
+
+/**
+ * Bulk reset a field for all contributors
+ * POST /api/admin/bulk-reset { field: 'points' | 'bills' }
+ */
+export async function bulkResetController(req, res) {
+    try {
+        const { field } = req.body;
+        const validFields = ['points', 'bills'];
+        if (!validFields.includes(field)) {
+            return res.status(400).json({ success: false, message: `Invalid field. Must be one of: ${validFields.join(', ')}` });
+        }
+
+        let updateData = {};
+        let extra = '';
+        switch (field) {
+            case 'points':
+                updateData = { totalPoints: 0 };
+                await prisma.pointsHistory.deleteMany({});
+                extra = ' and cleared all points history';
+                break;
+            case 'bills':
+                updateData = { totalBillsAwarded: 0 };
+                break;
+        }
+
+        const result = await prisma.contributor.updateMany({ data: updateData });
+        res.json({ success: true, message: `Reset ${field} for ${result.count} contributor(s)${extra}` });
+    } catch (error) {
+        console.error('Error in bulk reset:', error);
+        res.status(500).json({ success: false, message: error.message });
     }
 }

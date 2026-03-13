@@ -6,6 +6,37 @@
     <title>Settings - Game Ops</title>
     <link rel="stylesheet" href="/modern-design-system.css">
     <link rel="stylesheet" href="/styles.css">
+    <style>
+        .autocomplete-dropdown {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: var(--bg-primary, #fff);
+            border: 1px solid var(--border-color, #dee2e6);
+            border-radius: 6px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            max-height: 200px;
+            overflow-y: auto;
+            z-index: 100;
+            display: none;
+        }
+        .autocomplete-item {
+            padding: 8px 12px;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+        .autocomplete-item:hover {
+            background: var(--bg-secondary, #f0f0f0);
+        }
+        .autocomplete-empty {
+            color: var(--text-muted, #999);
+            cursor: default;
+        }
+        .autocomplete-empty:hover {
+            background: transparent;
+        }
+    </style>
 </head>
 <body>
 <a href="#main-content" class="skip-link">Skip to main content</a>
@@ -56,22 +87,28 @@
 
             <!-- Cron Controls Section -->
             <div class="card">
-                <h2>⏱️ Background Sync (Catch-Up)</h2>
-                <p class="settings-description">GitHub Webhooks are the primary data source for PR and review tracking. This catch-up sync runs every 6 hours as a safety net to pick up any events webhooks may have missed (e.g. network issues, GitHub outages).</p>
+                <h2>Scheduled Tasks</h2>
+                <p class="settings-description">Manage individual scheduled background tasks. Webhooks handle real-time updates; these tasks are safety nets and periodic jobs.</p>
 
                 <div class="settings-controls">
                     <div class="setting-item">
                         <label class="toggle-label">
                             <input type="checkbox" id="cron-toggle" class="toggle-checkbox">
                             <span class="toggle-slider"></span>
-                            <span class="toggle-text">Enable Catch-Up Sync</span>
+                            <span class="toggle-text">Global: Enable All Scheduled Tasks</span>
                         </label>
-                        <p class="setting-hint">When off, all scheduled background jobs (PR fetch, badges, challenges, quarter checks) will be skipped. Webhook processing continues regardless of this setting.</p>
+                        <p class="setting-hint">Master switch. When off, ALL tasks below are skipped regardless of their individual toggle.</p>
                     </div>
                 </div>
 
                 <div style="margin-top: .5rem; color: var(--text-muted)">
-                    Status: <strong id="cron-status-text">Loading...</strong>
+                    Global status: <strong id="cron-status-text">Loading...</strong>
+                </div>
+
+                <h3 style="margin-top: 1.25rem;">Individual Tasks</h3>
+                <div id="cron-tasks-list" style="display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.5rem;">
+                    <!-- Populated by JS -->
+                    <span class="loading-spinner">Loading tasks...</span>
                 </div>
             </div>
 
@@ -420,6 +457,97 @@
                         <span>📤 Export Hall of Fame (CSV)</span>
                     </button>
                 </div>
+            </div>
+
+            <!-- Badges & Bills Management Section -->
+            <div class="card">
+                <h2>Badges & Bills Management</h2>
+                <p class="settings-description">Run badge/bill scans, manually award badges, or reset contributor gamification data.</p>
+
+                <h3 style="margin-top: 1rem;">Batch Scan</h3>
+                <p class="card-description">Scan all contributors and award any earned badges and bills. Use after a backfill or to catch up.</p>
+                <div class="action-buttons">
+                    <button id="run-badge-scan" class="btn btn-primary">
+                        <span>Run Badge & Bill Scan</span>
+                    </button>
+                </div>
+                <div id="badge-scan-result" class="alert" style="display: none; margin-top: 0.75rem;"></div>
+
+                <h3 style="margin-top: 1.5rem;">Manual Badge Award</h3>
+                <p class="card-description">Award a specific badge to a contributor manually.</p>
+                <div class="form-group" style="position: relative;">
+                    <label for="badge-username">Contributor Username</label>
+                    <input type="text" id="badge-username" class="form-control autocomplete-input" placeholder="Start typing username..." autocomplete="off" />
+                    <div id="badge-username-dropdown" class="autocomplete-dropdown"></div>
+                </div>
+                <div class="form-group">
+                    <label for="badge-type">Badge Type</label>
+                    <select id="badge-type" class="form-control">
+                        <optgroup label="PR Badges">
+                            <option value="1st PR badge">1st PR badge</option>
+                            <option value="10 PR badge">10 PR badge</option>
+                            <option value="50 PR badge">50 PR badge</option>
+                            <option value="100 PR badge">100 PR badge</option>
+                            <option value="500 PR badge">500 PR badge</option>
+                            <option value="1000 PR badge">1000 PR badge</option>
+                        </optgroup>
+                        <optgroup label="Review Badges">
+                            <option value="1st Review badge">1st Review badge</option>
+                            <option value="10 Reviews badge">10 Reviews badge</option>
+                            <option value="50 Reviews badge">50 Reviews badge</option>
+                            <option value="100 Reviews badge">100 Reviews badge</option>
+                            <option value="500 Reviews badge">500 Reviews badge</option>
+                            <option value="1000 Reviews badge">1000 Reviews badge</option>
+                        </optgroup>
+                        <optgroup label="Streak Badges">
+                            <option value="Week Warrior">Week Warrior (7-day)</option>
+                            <option value="Monthly Master">Monthly Master (30-day)</option>
+                            <option value="Quarter Champion">Quarter Champion (90-day)</option>
+                            <option value="Year-Long Hero">Year-Long Hero (365-day)</option>
+                        </optgroup>
+                    </select>
+                </div>
+                <div class="action-buttons">
+                    <button id="award-badge-btn" class="btn btn-secondary">
+                        <span>Award Badge</span>
+                    </button>
+                </div>
+                <div id="award-badge-result" class="alert" style="display: none; margin-top: 0.75rem;"></div>
+
+                <h3 style="margin-top: 1.5rem;">Reset Contributor Data</h3>
+                <p class="card-description">Reset specific gamification data for a single contributor. This cannot be undone.</p>
+                <div class="form-group" style="position: relative;">
+                    <label for="reset-username">Contributor Username</label>
+                    <input type="text" id="reset-username" class="form-control autocomplete-input" placeholder="Start typing username..." autocomplete="off" />
+                    <div id="reset-username-dropdown" class="autocomplete-dropdown"></div>
+                </div>
+                <div class="action-buttons" style="gap: 0.5rem; display: flex; flex-wrap: wrap;">
+                    <button id="reset-points-btn" class="btn btn-warning">
+                        <span>Reset Points</span>
+                    </button>
+                    <button id="reset-streaks-btn" class="btn btn-warning">
+                        <span>Reset Streaks</span>
+                    </button>
+                    <button id="reset-bills-btn" class="btn btn-warning">
+                        <span>Reset Bills</span>
+                    </button>
+                    <button id="reset-badges-btn" class="btn btn-danger">
+                        <span>Reset Badges</span>
+                    </button>
+                </div>
+                <div id="reset-result" class="alert" style="display: none; margin-top: 0.75rem;"></div>
+
+                <h3 style="margin-top: 1.5rem;">Bulk Reset (All Contributors)</h3>
+                <p class="card-description">Reset a field for ALL contributors. Use with extreme caution.</p>
+                <div class="action-buttons" style="gap: 0.5rem; display: flex; flex-wrap: wrap;">
+                    <button id="bulk-reset-points-btn" class="btn btn-danger">
+                        <span>Reset ALL Points</span>
+                    </button>
+                    <button id="bulk-reset-bills-btn" class="btn btn-danger">
+                        <span>Reset ALL Bills</span>
+                    </button>
+                </div>
+                <div id="bulk-reset-result" class="alert" style="display: none; margin-top: 0.75rem;"></div>
             </div>
 
             <!-- Contributors Management Section -->
@@ -1108,8 +1236,209 @@ document.getElementById('export-hof-csv')?.addEventListener('click', async () =>
         showToast('Failed to export Hall of Fame (CSV)', 'error');
     }
 });
-// Listen for backfill progress updates via WebSocket
-// This will be set up after socket.io is loaded and initialized
+// === Badges & Bills Management ===
+
+// Run Badge/Bill Scan
+document.getElementById('run-badge-scan')?.addEventListener('click', async () => {
+    const btn = document.getElementById('run-badge-scan');
+    const resultDiv = document.getElementById('badge-scan-result');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="loading-spinner">Scanning...</span>';
+
+    try {
+        const resp = await fetch('/api/admin/run-badge-bill-scan', { method: 'POST' });
+        const data = await resp.json();
+        if (data.success) {
+            const badgeCount = data.badges?.length || 0;
+            const billCount = data.bills?.length || 0;
+            resultDiv.className = 'alert alert-success';
+            let msg = `Scan complete: ${badgeCount} badge(s) and ${billCount} bill(s) awarded.`;
+            if (badgeCount > 0) {
+                msg += '<br>Badges: ' + data.badges.map(b => `${b.username} - ${b.badge}`).join(', ');
+            }
+            if (billCount > 0) {
+                msg += '<br>Bills: ' + data.bills.map(b => `${b.username} - ${b.bills}`).join(', ');
+            }
+            resultDiv.innerHTML = msg;
+        } else {
+            resultDiv.className = 'alert alert-error';
+            resultDiv.textContent = data.message || 'Scan failed';
+        }
+        resultDiv.style.display = 'block';
+    } catch (err) {
+        resultDiv.className = 'alert alert-error';
+        resultDiv.textContent = 'Error: ' + err.message;
+        resultDiv.style.display = 'block';
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<span>Run Badge & Bill Scan</span>';
+    }
+});
+
+// Manual Badge Award
+document.getElementById('award-badge-btn')?.addEventListener('click', async () => {
+    const username = document.getElementById('badge-username').value.trim();
+    const badgeType = document.getElementById('badge-type').value;
+    const resultDiv = document.getElementById('award-badge-result');
+
+    if (!username) {
+        resultDiv.className = 'alert alert-warning';
+        resultDiv.textContent = 'Please enter a username';
+        resultDiv.style.display = 'block';
+        return;
+    }
+
+    const btn = document.getElementById('award-badge-btn');
+    btn.disabled = true;
+
+    try {
+        const resp = await fetch('/api/admin/award-badge', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, badge: badgeType })
+        });
+        const data = await resp.json();
+        resultDiv.className = data.success ? 'alert alert-success' : 'alert alert-error';
+        resultDiv.textContent = data.message;
+        resultDiv.style.display = 'block';
+    } catch (err) {
+        resultDiv.className = 'alert alert-error';
+        resultDiv.textContent = 'Error: ' + err.message;
+        resultDiv.style.display = 'block';
+    } finally {
+        btn.disabled = false;
+    }
+});
+
+// Reset buttons
+['points', 'streaks', 'bills', 'badges'].forEach(field => {
+    document.getElementById(`reset-${field}-btn`)?.addEventListener('click', async () => {
+        const username = document.getElementById('reset-username').value.trim();
+        const resultDiv = document.getElementById('reset-result');
+
+        if (!username) {
+            resultDiv.className = 'alert alert-warning';
+            resultDiv.textContent = 'Please enter a username';
+            resultDiv.style.display = 'block';
+            return;
+        }
+
+        if (!confirm(`Reset ${field} for ${username}? This cannot be undone.`)) return;
+
+        const btn = document.getElementById(`reset-${field}-btn`);
+        btn.disabled = true;
+
+        try {
+            const resp = await fetch('/api/admin/reset-contributor-data', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, field })
+            });
+            const data = await resp.json();
+            resultDiv.className = data.success ? 'alert alert-success' : 'alert alert-error';
+            resultDiv.textContent = data.message;
+            resultDiv.style.display = 'block';
+        } catch (err) {
+            resultDiv.className = 'alert alert-error';
+            resultDiv.textContent = 'Error: ' + err.message;
+            resultDiv.style.display = 'block';
+        } finally {
+            btn.disabled = false;
+        }
+    });
+});
+
+// === Autocomplete for username inputs ===
+function initAutocomplete(inputId, dropdownId) {
+    const input = document.getElementById(inputId);
+    const dropdown = document.getElementById(dropdownId);
+    if (!input || !dropdown) return;
+
+    let debounceTimer = null;
+
+    input.addEventListener('input', () => {
+        clearTimeout(debounceTimer);
+        const q = input.value.trim();
+        if (q.length < 2) { dropdown.innerHTML = ''; dropdown.style.display = 'none'; return; }
+        debounceTimer = setTimeout(async () => {
+            try {
+                const resp = await fetch(`/api/admin/search-contributors?q=${encodeURIComponent(q)}`);
+                const data = await resp.json();
+                if (data.success && data.contributors.length > 0) {
+                    dropdown.innerHTML = data.contributors.map(c =>
+                        `<div class="autocomplete-item" data-username="${c.username}">
+                            <img src="${c.avatarUrl || ''}" alt="" style="width:20px;height:20px;border-radius:50%;vertical-align:middle;margin-right:6px;">
+                            ${c.username}
+                        </div>`
+                    ).join('');
+                    dropdown.style.display = 'block';
+                } else {
+                    dropdown.innerHTML = '<div class="autocomplete-item autocomplete-empty">No results</div>';
+                    dropdown.style.display = 'block';
+                }
+            } catch (err) {
+                dropdown.style.display = 'none';
+            }
+        }, 250);
+    });
+
+    dropdown.addEventListener('click', (e) => {
+        const item = e.target.closest('.autocomplete-item');
+        if (item && item.dataset.username) {
+            input.value = item.dataset.username;
+            dropdown.style.display = 'none';
+        }
+    });
+
+    document.addEventListener('click', (e) => {
+        if (!input.contains(e.target) && !dropdown.contains(e.target)) {
+            dropdown.style.display = 'none';
+        }
+    });
+}
+initAutocomplete('badge-username', 'badge-username-dropdown');
+initAutocomplete('reset-username', 'reset-username-dropdown');
+
+// === Bulk Reset Handlers ===
+document.getElementById('bulk-reset-points-btn')?.addEventListener('click', async () => {
+    if (!confirm('Reset points for ALL contributors? This cannot be undone.')) return;
+    const resultDiv = document.getElementById('bulk-reset-result');
+    try {
+        const resp = await fetch('/api/admin/bulk-reset', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ field: 'points' })
+        });
+        const data = await resp.json();
+        resultDiv.className = data.success ? 'alert alert-success' : 'alert alert-error';
+        resultDiv.textContent = data.message;
+        resultDiv.style.display = 'block';
+    } catch (err) {
+        resultDiv.className = 'alert alert-error';
+        resultDiv.textContent = 'Error: ' + err.message;
+        resultDiv.style.display = 'block';
+    }
+});
+
+document.getElementById('bulk-reset-bills-btn')?.addEventListener('click', async () => {
+    if (!confirm('Reset bills for ALL contributors? This cannot be undone.')) return;
+    const resultDiv = document.getElementById('bulk-reset-result');
+    try {
+        const resp = await fetch('/api/admin/bulk-reset', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ field: 'bills' })
+        });
+        const data = await resp.json();
+        resultDiv.className = data.success ? 'alert alert-success' : 'alert alert-error';
+        resultDiv.textContent = data.message;
+        resultDiv.style.display = 'block';
+    } catch (err) {
+        resultDiv.className = 'alert alert-error';
+        resultDiv.textContent = 'Error: ' + err.message;
+        resultDiv.style.display = 'block';
+    }
+});
 
 // Check backfill status on page load
 (async () => {
@@ -1160,8 +1489,9 @@ document.getElementById('export-hof-csv')?.addEventListener('click', async () =>
 // Background Sync (Catch-Up) controls
 async function initCronControls() {
     try {
+        // Global toggle
         const resp = await fetch('/api/admin/cron-status');
-        if (resp.status === 401) return; // not authed
+        if (resp.status === 401) return;
         const j = await resp.json();
         const enabled = !!j.enabled;
         const toggle = document.getElementById('cron-toggle');
@@ -1181,20 +1511,68 @@ async function initCronControls() {
                 const ok = j2.success !== false;
                 const final = ok ? !!j2.enabled : !newVal;
                 if (!ok) {
-                    if (typeof showToast === 'function') showToast('Failed to update catch-up sync', 'error');
+                    showToast('Failed to update scheduled tasks', 'error');
                 } else {
-                    if (typeof showToast === 'function') showToast(`Catch-up sync ${final ? 'enabled' : 'disabled'}`, 'success');
+                    showToast(`Scheduled tasks ${final ? 'enabled' : 'disabled'}`, 'success');
                 }
                 if (toggle) toggle.checked = final;
                 if (status) status.textContent = final ? 'Enabled' : 'Disabled';
             } catch (err) {
-                console.error('Catch-up sync toggle failed', err);
-                if (typeof showToast === 'function') showToast('Failed to update catch-up sync', 'error');
+                console.error('Toggle failed', err);
+                showToast('Failed to update', 'error');
                 if (toggle) toggle.checked = !newVal;
             }
         });
+
+        // Per-task toggles
+        const taskResp = await fetch('/api/admin/cron-tasks');
+        if (taskResp.ok) {
+            const taskData = await taskResp.json();
+            const container = document.getElementById('cron-tasks-list');
+            if (container && taskData.tasks) {
+                container.innerHTML = '';
+                for (const [key, task] of Object.entries(taskData.tasks)) {
+                    const row = document.createElement('div');
+                    row.style.cssText = 'display: flex; align-items: center; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid var(--border-color, #e5e7eb);';
+                    row.innerHTML = `
+                        <div>
+                            <strong>${task.label}</strong>
+                            <small style="color: var(--text-muted); margin-left: 0.5rem;">${task.schedule}</small>
+                        </div>
+                        <label class="toggle-label" style="margin: 0;">
+                            <input type="checkbox" class="toggle-checkbox cron-task-toggle" data-task="${key}" ${task.enabled ? 'checked' : ''}>
+                            <span class="toggle-slider"></span>
+                        </label>
+                    `;
+                    container.appendChild(row);
+                }
+                // Event delegation for task toggles
+                container.addEventListener('change', async (e) => {
+                    if (!e.target.classList.contains('cron-task-toggle')) return;
+                    const taskName = e.target.dataset.task;
+                    const taskEnabled = e.target.checked;
+                    try {
+                        const res = await fetch('/api/admin/cron-tasks/toggle', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ taskName, enabled: taskEnabled })
+                        });
+                        const data = await res.json();
+                        if (data.success) {
+                            showToast(`${data.tasks[taskName]?.label || taskName} ${taskEnabled ? 'enabled' : 'disabled'}`, 'success');
+                        } else {
+                            e.target.checked = !taskEnabled;
+                            showToast('Failed to toggle task', 'error');
+                        }
+                    } catch (err) {
+                        e.target.checked = !taskEnabled;
+                        showToast('Failed to toggle task', 'error');
+                    }
+                });
+            }
+        }
     } catch (err) {
-        console.error('Failed to initialize catch-up sync controls', err);
+        console.error('Failed to initialize cron controls', err);
     }
 }
 
