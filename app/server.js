@@ -234,11 +234,20 @@ if (process.env.NODE_ENV !== 'production') {
 //Schedule tasks to be run on the server
 async function shouldRunCron(taskName) {
     try {
-        const enabled = await getCronEnabled();
-        if (!enabled) {
-            logger.info(`Cron disabled; skipping task: ${taskName}`);
+        // Check global toggle first
+        const globalEnabled = await getCronEnabled();
+        if (!globalEnabled) {
+            logger.info(`Cron globally disabled; skipping task: ${taskName}`);
+            return false;
         }
-        return enabled;
+        // Check per-task toggle
+        const { isTaskEnabled } = await import('./lib/appSettings.js');
+        const taskEnabled = await isTaskEnabled(taskName);
+        if (!taskEnabled) {
+            logger.info(`Task "${taskName}" disabled; skipping`);
+            return false;
+        }
+        return true;
     } catch (e) {
         logger.warn(`Cron status check failed for ${taskName}: ${e.message}. Defaulting to disabled.`);
         return false;
@@ -259,7 +268,7 @@ ensureAppSettingsTable()
 cron.schedule('0 */6 * * *', async () => {
     logger.info('Running 6-hour catch-up fetch for PRs and reviews');
     try {
-        if (!(await shouldRunCron('fetchPRsCron'))) return;
+        if (!(await shouldRunCron('prReviewSync'))) return;
         const result = await fetchPRsCron();
         logger.info('Catch-up fetch completed', { result });
     } catch (error) {
@@ -270,7 +279,7 @@ cron.schedule('0 */6 * * *', async () => {
 cron.schedule('0 */6 * * *', async () => {
     logger.info('Running 6-hour task to award badges');
     try {
-        if (!(await shouldRunCron('awardContributorBadgesCron'))) return;
+        if (!(await shouldRunCron('badgeAwards'))) return;
         const result = await awardContributorBadgesCron();
         logger.info('Badges awarded successfully', { badgesCount: result?.length || 0 });
     } catch (error) {
@@ -281,7 +290,7 @@ cron.schedule('0 */6 * * *', async () => {
 cron.schedule('0 0 * * *', async () => {
     logger.info('Running daily task to award Bills and Vonettes');
     try {
-        if (!(await shouldRunCron('awardBillsAndVonettes'))) return;
+        if (!(await shouldRunCron('billAwards'))) return;
         const results = await awardBillsAndVonettes();
         logger.info('Bills and Vonettes awarded successfully', { billsCount: results?.length || 0, results });
     } catch (error) {
@@ -295,7 +304,7 @@ cron.schedule('0 0 * * *', async () => {
 cron.schedule('0 0 * * 1', async () => {
     logger.info('Running weekly task to generate challenges');
     try {
-        if (!(await shouldRunCron('generateWeeklyChallenges'))) return;
+        if (!(await shouldRunCron('challengeGen'))) return;
         const challenges = await generateWeeklyChallenges();
         logger.info('Weekly challenges generated', { count: challenges.length });
     } catch (error) {
@@ -307,7 +316,7 @@ cron.schedule('0 0 * * 1', async () => {
 cron.schedule('0 0 * * *', async () => {
     logger.info('Running daily task to check expired challenges');
     try {
-        if (!(await shouldRunCron('checkExpiredChallenges'))) return;
+        if (!(await shouldRunCron('challengeExpiry'))) return;
         const count = await checkExpiredChallenges();
         logger.info('Expired challenges checked', { updatedCount: count });
     } catch (error) {
@@ -319,7 +328,7 @@ cron.schedule('0 0 * * *', async () => {
 cron.schedule('0 0 * * *', async () => {
     logger.info('Running daily task to check quarterly reset');
     try {
-        if (!(await shouldRunCron('checkAndResetIfNewQuarter'))) return;
+        if (!(await shouldRunCron('quarterCheck'))) return;
         const result = await checkAndResetIfNewQuarter();
         if (result.quarterChanged) {
             logger.info('Quarterly stats reset completed', {
@@ -339,7 +348,7 @@ cron.schedule('0 0 * * *', async () => {
 cron.schedule('0 2 * * *', async () => {
     logger.info('Running daily task to sync DevOps team from GitHub');
     try {
-        if (!(await shouldRunCron('syncDevOpsTeam'))) return;
+        if (!(await shouldRunCron('devOpsSync'))) return;
         const result = await syncDevOpsTeamFromGitHub(false);
         if (result.success) {
             logger.info('DevOps team synced from GitHub', {
