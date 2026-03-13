@@ -6,6 +6,9 @@ import { postQuarterlyWinnersDiscussion } from './discussionService.js';
 // DevOps participation threshold: contributions (PRs + reviews) needed to earn 1 Bill
 const DEVOPS_PARTICIPATION_THRESHOLD = 50;
 
+// Minimum contributions (PRs + reviews) for non-DevOps to qualify as quarterly winner
+const NON_DEVOPS_WINNER_THRESHOLD = 10;
+
 /**
  * Get quarter configuration from database
  * @returns {Object} Quarter settings
@@ -211,11 +214,14 @@ export async function archiveQuarterWinners(quarterString = null) {
         });
 
         // Filter and sort in memory
+        // Only contributors meeting minimum participation threshold qualify for winner
         const topContributors = allContributors
-            .filter(c =>
-                c.quarterlyStats?.currentQuarter === quarter &&
-                c.quarterlyStats?.pointsThisQuarter > 0
-            )
+            .filter(c => {
+                if (c.quarterlyStats?.currentQuarter !== quarter) return false;
+                if ((c.quarterlyStats?.pointsThisQuarter || 0) <= 0) return false;
+                const contributions = (c.quarterlyStats?.prsThisQuarter || 0) + (c.quarterlyStats?.reviewsThisQuarter || 0);
+                return contributions >= NON_DEVOPS_WINNER_THRESHOLD;
+            })
             .sort((a, b) => b.quarterlyStats.pointsThisQuarter - a.quarterlyStats.pointsThisQuarter)
             .slice(0, 3);
 
@@ -1012,11 +1018,14 @@ export async function awardQuarterlyBills(quarterString) {
             }
         });
 
+        // Only contributors meeting minimum participation threshold qualify for awards
         const ranked = allContributors
-            .filter(c =>
-                c.quarterlyStats?.currentQuarter === quarter &&
-                c.quarterlyStats?.pointsThisQuarter > 0
-            )
+            .filter(c => {
+                if (c.quarterlyStats?.currentQuarter !== quarter) return false;
+                if ((c.quarterlyStats?.pointsThisQuarter || 0) <= 0) return false;
+                const contributions = (c.quarterlyStats?.prsThisQuarter || 0) + (c.quarterlyStats?.reviewsThisQuarter || 0);
+                return contributions >= NON_DEVOPS_WINNER_THRESHOLD;
+            })
             .sort((a, b) => b.quarterlyStats.pointsThisQuarter - a.quarterlyStats.pointsThisQuarter);
 
         const awards = [
