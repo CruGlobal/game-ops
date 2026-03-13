@@ -1,6 +1,7 @@
 import express from 'express';
 import { prisma } from '../lib/prisma.js';
-import { emitPRUpdate, emitBadgeAwarded, emitReviewUpdate, emitLeaderboardUpdate, emitStreakUpdate, emitAchievementUnlocked, emitPointsAwarded, emitChallengeProgress, emitChallengeCompleted } from '../utils/socketEmitter.js';
+import { awardBadges, awardBillsAndVonettes } from '../services/contributorService.js';
+import { emitPRUpdate, emitBadgeAwarded, emitBillAwarded, emitReviewUpdate, emitLeaderboardUpdate, emitStreakUpdate, emitAchievementUnlocked, emitPointsAwarded, emitChallengeProgress, emitChallengeCompleted } from '../utils/socketEmitter.js';
 import logger from '../utils/logger.js';
 
 const router = express.Router();
@@ -36,6 +37,25 @@ router.post('/test/badge-awarded', (req, res) => {
     res.json({
         success: true,
         message: 'Badge awarded event emitted',
+        data
+    });
+});
+
+// Test endpoint to emit bill awarded event
+router.post('/test/bill-awarded', (req, res) => {
+    const data = {
+        username: req.body.username || 'testuser',
+        billType: req.body.billType || 'Bill',
+        billValue: req.body.billValue || 1,
+        billImage: req.body.billImage || '1_bill_57X27.png'
+    };
+
+    logger.info('Test bill awarded event triggered', data);
+    emitBillAwarded(data);
+
+    res.json({
+        success: true,
+        message: 'Bill awarded event emitted',
         data
     });
 });
@@ -207,10 +227,19 @@ router.post('/test/simulate-pr-merge', async (req, res) => {
         emitPRUpdate({ username, prCount: Number(updated.prCount) });
         emitLeaderboardUpdate({ username });
 
+        // Award badges and bills in real-time (single-contributor mode)
+        const badgeResults = await awardBadges(null, username);
+        const billResults = await awardBillsAndVonettes(null, false, username);
+
         res.json({
             success: true,
             message: `Simulated PR merge for ${username}`,
-            data: { prCount: Number(updated.prCount), totalPoints: Number(updated.totalPoints) }
+            data: {
+                prCount: Number(updated.prCount),
+                totalPoints: Number(updated.totalPoints),
+                badgesAwarded: badgeResults,
+                billsAwarded: billResults
+            }
         });
     } catch (error) {
         logger.error('Simulate PR merge failed', { error: error.message });
