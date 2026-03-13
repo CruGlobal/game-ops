@@ -196,11 +196,13 @@ router.post('/test/simulate-pr-merge', async (req, res) => {
             where: { username },
             data: {
                 prCount: { increment: 1 },
+                reviewCount: { increment: 1 },
                 totalPoints: { increment: 10 },
+                currentStreak: { increment: 1 },
             },
         });
 
-        logger.info('Simulated PR merge for test', { username, prCount: Number(updated.prCount), totalPoints: Number(updated.totalPoints) });
+        logger.info('Simulated PR merge for test', { username, prCount: Number(updated.prCount), totalPoints: Number(updated.totalPoints), currentStreak: Number(updated.currentStreak) });
 
         emitPRUpdate({ username, prCount: Number(updated.prCount) });
         emitLeaderboardUpdate({ username });

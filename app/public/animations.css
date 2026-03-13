@@ -539,10 +539,10 @@
 /* Card glow pulse when updated */
 @keyframes liveUpdateGlow {
     0% {
-        box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.5);
+        box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4);
     }
-    30% {
-        box-shadow: 0 0 12px 4px rgba(59, 130, 246, 0.3);
+    20% {
+        box-shadow: 0 0 20px 6px rgba(59, 130, 246, 0.25);
     }
     100% {
         box-shadow: 0 0 0 0 rgba(59, 130, 246, 0);
@@ -551,31 +551,16 @@
 
 /* Card pop: scale up briefly to draw attention */
 @keyframes cardPop {
-    0% {
-        transform: scale(1);
-    }
-    40% {
-        transform: scale(1.03);
-    }
-    100% {
-        transform: scale(1);
-    }
+    0% { transform: scale(1); }
+    40% { transform: scale(1.025); }
+    100% { transform: scale(1); }
 }
 
-/* Stat value changing: brief shrink before new value */
+/* Stat value changing: gentle scale bump */
 @keyframes statPulse {
-    0% {
-        transform: scale(1);
-        opacity: 1;
-    }
-    50% {
-        transform: scale(0.8);
-        opacity: 0.5;
-    }
-    100% {
-        transform: scale(1);
-        opacity: 1;
-    }
+    0% { transform: scale(1); }
+    20% { transform: scale(1.12); }
+    100% { transform: scale(1); }
 }
 
 /* Card entering after rank reorder */
@@ -591,19 +576,17 @@
 }
 
 .live-update-highlight {
-    animation: liveUpdateGlow 2.5s ease-out;
-    outline: 2px solid rgba(59, 130, 246, 0.5);
-    outline-offset: 2px;
+    animation: liveUpdateGlow 3s ease-out;
     z-index: 1;
     position: relative;
 }
 
 [data-theme="dark"] .live-update-highlight {
-    outline-color: rgba(96, 165, 250, 0.5);
+    animation: liveUpdateGlow 3s ease-out;
 }
 
 .card-pop {
-    animation: cardPop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+    animation: cardPop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 /* Stat value mid-transition (shrinking out) */
@@ -615,7 +598,7 @@
 .stat-changed {
     color: var(--primary-color, #3b82f6) !important;
     font-weight: 700;
-    transition: color 1.5s ease, font-weight 1.5s ease;
+    transition: color 2s ease, font-weight 2s ease;
 }
 
 /* Card entering during rank reorder */
@@ -632,6 +615,26 @@
 /* Grid fade-in after rank reorder */
 .grid-entering {
     animation: fadeIn 0.3s ease-out;
+}
+
+/* Card elevation shadow during FLIP movement */
+.card-elevating {
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15), 0 4px 12px rgba(0, 0, 0, 0.1);
+    transition: box-shadow 0.5s ease-out;
+}
+
+[data-theme="dark"] .card-elevating {
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4), 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+/* Stat counting animation scale bump */
+.stat-counting {
+    transition: transform 0.3s ease-out;
+    transform: scale(1.15);
+}
+
+.stat-counting.settling {
+    transform: scale(1.0);
 }
 
 /* ============================================
