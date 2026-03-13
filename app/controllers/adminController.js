@@ -447,9 +447,12 @@ export async function startBackfillController(req, res) {
             });
         }
 
-        const result = await startBackfill(startDate, endDate, checkRateLimits !== false, verboseLogging === true);
+        // Respond immediately — backfill runs in the background
+        // (AWS ALB times out at 60s, backfill can take hours)
+        startBackfill(startDate, endDate, checkRateLimits !== false, verboseLogging === true)
+            .catch(err => console.error('Backfill background error:', err));
 
-        res.json(result);
+        res.json({ success: true, message: 'Backfill started' });
     } catch (error) {
         console.error('Error in startBackfillController:', error);
         res.status(500).json({
