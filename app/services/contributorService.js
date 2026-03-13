@@ -595,94 +595,60 @@ export const awardBadges = async (pullRequestNumber = null, username = null) => 
             if (/\[bot\]$/.test(contributor.username)) {
                 continue; // Skip bot users
             }
-            let badgeAwarded = null;
-            let badgeImage = null;
 
-            if (contributor.prCount >= 1 && !contributor.firstPrAwarded) {
-                badgeAwarded = '1st PR badge';
-                badgeImage = '1st_pr_badge.png';
-                contributor.firstPrAwarded = true;
-            } else if (contributor.reviewCount >= 1 && !contributor.firstReviewAwarded) {
-                badgeAwarded = '1st Review badge';
-                badgeImage = '1st_review_badge.png';
-                contributor.firstReviewAwarded = true;
-            } else if (contributor.prCount >= 10 && !contributor.first10PrsAwarded) {
-                badgeAwarded = '10 PR badge';
-                badgeImage = '10_prs_badge.png';
-                contributor.first10PrsAwarded = true;
-            } else if (contributor.reviewCount >= 10 && !contributor.first10ReviewsAwarded) {
-                badgeAwarded = '10 Reviews badge';
-                badgeImage = '10_reviews_badge.png';
-                contributor.first10ReviewsAwarded = true;
-            } else if (contributor.prCount >= 50 && !contributor.first50PrsAwarded) {
-                badgeAwarded = '50 PR badge';
-                badgeImage = '50_prs_badge.png';
-                contributor.first50PrsAwarded = true;
-            } else if (contributor.reviewCount >= 50 && !contributor.first50ReviewsAwarded) {
-                badgeAwarded = '50 Reviews badge';
-                badgeImage = '50_reviews_badge.png';
-                contributor.first50ReviewsAwarded = true;
-            } else if (contributor.prCount >= 100 && !contributor.first100PrsAwarded) {
-                badgeAwarded = '100 PR badge';
-                badgeImage = '100_prs_badge.png';
-                contributor.first100PrsAwarded = true;
-            } else if (contributor.reviewCount >= 100 && !contributor.first100ReviewsAwarded) {
-                badgeAwarded = '100 Reviews badge';
-                badgeImage = '100_reviews_badge.png';
-                contributor.first100ReviewsAwarded = true;
-            } else if (contributor.prCount >= 500 && !contributor.first500PrsAwarded) {
-                badgeAwarded = '500 PR badge';
-                badgeImage = '500_prs_badge.png';
-                contributor.first500PrsAwarded = true;
-            } else if (contributor.reviewCount >= 500 && !contributor.first500ReviewsAwarded) {
-                badgeAwarded = '500 Reviews badge';
-                badgeImage = '500_reviews_badge.png';
-                contributor.first500ReviewsAwarded = true;
-            } else if (contributor.prCount >= 1000 && !contributor.first1000PrsAwarded) {
-                badgeAwarded = '1000 PR badge';
-                badgeImage = '1000_prs_badge.png';
-                contributor.first1000PrsAwarded = true;
-            } else if (contributor.reviewCount >= 1000 && !contributor.first1000ReviewsAwarded) {
-                badgeAwarded = '1000 Reviews badge';
-                badgeImage = '1000_reviews_badge.png';
-                contributor.first1000ReviewsAwarded = true;
+            // Check all badge thresholds independently so multiple badges can be awarded in one pass
+            const badgesToAward = [];
+
+            const checks = [
+                { threshold: contributor.prCount >= 1 && !contributor.firstPrAwarded, badge: '1st PR badge', image: '1st_pr_badge.png', flag: 'firstPrAwarded' },
+                { threshold: contributor.reviewCount >= 1 && !contributor.firstReviewAwarded, badge: '1st Review badge', image: '1st_review_badge.png', flag: 'firstReviewAwarded' },
+                { threshold: contributor.prCount >= 10 && !contributor.first10PrsAwarded, badge: '10 PR badge', image: '10_prs_badge.png', flag: 'first10PrsAwarded' },
+                { threshold: contributor.reviewCount >= 10 && !contributor.first10ReviewsAwarded, badge: '10 Reviews badge', image: '10_reviews_badge.png', flag: 'first10ReviewsAwarded' },
+                { threshold: contributor.prCount >= 50 && !contributor.first50PrsAwarded, badge: '50 PR badge', image: '50_prs_badge.png', flag: 'first50PrsAwarded' },
+                { threshold: contributor.reviewCount >= 50 && !contributor.first50ReviewsAwarded, badge: '50 Reviews badge', image: '50_reviews_badge.png', flag: 'first50ReviewsAwarded' },
+                { threshold: contributor.prCount >= 100 && !contributor.first100PrsAwarded, badge: '100 PR badge', image: '100_prs_badge.png', flag: 'first100PrsAwarded' },
+                { threshold: contributor.reviewCount >= 100 && !contributor.first100ReviewsAwarded, badge: '100 Reviews badge', image: '100_reviews_badge.png', flag: 'first100ReviewsAwarded' },
+                { threshold: contributor.prCount >= 500 && !contributor.first500PrsAwarded, badge: '500 PR badge', image: '500_prs_badge.png', flag: 'first500PrsAwarded' },
+                { threshold: contributor.reviewCount >= 500 && !contributor.first500ReviewsAwarded, badge: '500 Reviews badge', image: '500_reviews_badge.png', flag: 'first500ReviewsAwarded' },
+                { threshold: contributor.prCount >= 1000 && !contributor.first1000PrsAwarded, badge: '1000 PR badge', image: '1000_prs_badge.png', flag: 'first1000PrsAwarded' },
+                { threshold: contributor.reviewCount >= 1000 && !contributor.first1000ReviewsAwarded, badge: '1000 Reviews badge', image: '1000_reviews_badge.png', flag: 'first1000ReviewsAwarded' },
+            ];
+
+            for (const check of checks) {
+                if (check.threshold) {
+                    badgesToAward.push(check);
+                    contributor[check.flag] = true;
+                }
             }
 
-            if (badgeAwarded) {
-                // Log the awarded badge (commented out GitHub API call)
-                console.log(`🎉 Congratulations @${contributor.username}, you've earned the ${badgeAwarded}! 🎉\n\n![Badge](${domain}/images/${badgeImage})`);
+            if (badgesToAward.length > 0) {
+                const badges = contributor.badges || [];
 
-                results.push({ username: contributor.username, badge: badgeAwarded, badgeImage: badgeImage });
+                for (const { badge, image } of badgesToAward) {
+                    console.log(`🎉 Congratulations @${contributor.username}, you've earned the ${badge}! 🎉\n\n![Badge](${domain}/images/${image})`);
+                    results.push({ username: contributor.username, badge, badgeImage: image });
+                    emitBadgeAwarded({ username: contributor.username, badgeName: badge, badgeType: 'achievement' });
+                    badges.push({ badge, date: new Date().toISOString() });
+                }
 
-                // Emit socket event for badge notification
-                emitBadgeAwarded({
-                    username: contributor.username,
-                    badgeName: badgeAwarded,
-                    badgeType: 'achievement'
+                await prisma.contributor.update({
+                    where: { username: contributor.username },
+                    data: {
+                        badges,
+                        firstPrAwarded: contributor.firstPrAwarded,
+                        firstReviewAwarded: contributor.firstReviewAwarded,
+                        first10PrsAwarded: contributor.first10PrsAwarded,
+                        first10ReviewsAwarded: contributor.first10ReviewsAwarded,
+                        first50PrsAwarded: contributor.first50PrsAwarded,
+                        first50ReviewsAwarded: contributor.first50ReviewsAwarded,
+                        first100PrsAwarded: contributor.first100PrsAwarded,
+                        first100ReviewsAwarded: contributor.first100ReviewsAwarded,
+                        first500PrsAwarded: contributor.first500PrsAwarded,
+                        first500ReviewsAwarded: contributor.first500ReviewsAwarded,
+                        first1000PrsAwarded: contributor.first1000PrsAwarded,
+                        first1000ReviewsAwarded: contributor.first1000ReviewsAwarded
+                    }
                 });
-
-
-                    const badges = contributor.badges || [];
-                    badges.push({ badge: badgeAwarded, date: new Date().toISOString() });
-                    await prisma.contributor.update({
-                        where: { username: contributor.username },
-                        data: {
-                            badges,
-                            firstPrAwarded: contributor.firstPrAwarded,
-                            firstReviewAwarded: contributor.firstReviewAwarded,
-                            first10PrsAwarded: contributor.first10PrsAwarded,
-                            first10ReviewsAwarded: contributor.first10ReviewsAwarded,
-                            first50PrsAwarded: contributor.first50PrsAwarded,
-                            first50ReviewsAwarded: contributor.first50ReviewsAwarded,
-                            first100PrsAwarded: contributor.first100PrsAwarded,
-                            first100ReviewsAwarded: contributor.first100ReviewsAwarded,
-                            first500PrsAwarded: contributor.first500PrsAwarded,
-                            first500ReviewsAwarded: contributor.first500ReviewsAwarded,
-                            first1000PrsAwarded: contributor.first1000PrsAwarded,
-                            first1000ReviewsAwarded: contributor.first1000ReviewsAwarded
-                        }
-                    });
-                
             }
         }
     } catch (err) {

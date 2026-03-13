@@ -902,17 +902,17 @@ export async function resetContributorDataController(req, res) {
             case 'points':
                 updateData = { totalPoints: 0 };
                 // Also delete points history
-                await prisma.pointsHistory.deleteMany({ where: { contributorId: contributor.id } });
+                await prisma.pointHistory.deleteMany({ where: { contributorId: contributor.id } });
                 break;
             case 'streaks':
                 updateData = {
                     currentStreak: 0,
                     longestStreak: 0,
                     lastContributionDate: null,
-                    sevenDayStreakAwarded: false,
-                    thirtyDayStreakAwarded: false,
-                    ninetyDayStreakAwarded: false,
-                    yearLongStreakAwarded: false
+                    sevenDayBadge: false,
+                    thirtyDayBadge: false,
+                    ninetyDayBadge: false,
+                    yearLongBadge: false
                 };
                 break;
             case 'bills':
@@ -1023,7 +1023,7 @@ export async function bulkResetController(req, res) {
         switch (field) {
             case 'points':
                 updateData = { totalPoints: 0 };
-                await prisma.pointsHistory.deleteMany({});
+                await prisma.pointHistory.deleteMany({});
                 extra = ' and cleared all points history';
                 break;
             case 'bills':
