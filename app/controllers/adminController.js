@@ -1,7 +1,7 @@
 // adminController.js
 import { prisma } from '../lib/prisma.js';
 import { body, validationResult } from 'express-validator';
-import { getPRRangeInfo, checkForDuplicates, fixDuplicates, awardBadges, awardBillsAndVonettes } from '../services/contributorService.js';
+import { getPRRangeInfo, checkForDuplicates, fixDuplicates, awardBadges } from '../services/contributorService.js';
 import { emitBadgeAwarded } from '../utils/socketEmitter.js';
 import { startBackfill, stopBackfill, getBackfillStatus } from '../services/backfillService.js';
 import {
@@ -815,21 +815,21 @@ export async function backfillBadgesController(req, res) {
 }
 
 /**
- * Run batch badge and bill scan for all contributors
+ * Run batch badge scan for all contributors
  * POST /api/admin/run-badge-bill-scan
+ * Note: Bills/vonettes are now awarded quarterly, not via scan
  */
 export async function runBadgeBillScanController(req, res) {
     try {
         const badges = await awardBadges();
-        const bills = await awardBillsAndVonettes();
         res.json({
             success: true,
-            message: `Awarded ${badges.length} badge(s) and ${bills.length} bill(s)`,
+            message: `Awarded ${badges.length} badge(s). Bills are now awarded quarterly.`,
             badges,
-            bills
+            bills: []
         });
     } catch (error) {
-        console.error('Error running badge/bill scan:', error);
+        console.error('Error running badge scan:', error);
         res.status(500).json({ success: false, message: error.message });
     }
 }

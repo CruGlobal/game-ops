@@ -352,9 +352,9 @@ export const processSingleMergedPR = async (prData) => {
     // Check and award achievements
     await checkAndAwardAchievements(contributor);
 
-    // Award badges and bills in real-time (single-contributor mode)
+    // Award badges in real-time (single-contributor mode)
+    // Bills/vonettes are now awarded quarterly, not per-contribution
     await awardBadges(number, username);
-    await awardBillsAndVonettes(number, false, username);
 
     return { processed: true, reason: 'success' };
 };
@@ -447,9 +447,9 @@ export const processSingleReview = async (reviewData) => {
     // Check achievements
     await checkAndAwardAchievements(reviewer);
 
-    // Award badges and bills in real-time (single-contributor mode)
+    // Award badges in real-time (single-contributor mode)
+    // Bills/vonettes are now awarded quarterly, not per-contribution
     await awardBadges(prNumber, username);
-    await awardBillsAndVonettes(prNumber, false, username);
 
     return { processed: true, reason: 'success' };
 };
