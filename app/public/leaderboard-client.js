@@ -829,11 +829,20 @@ function showError(message) {
      */
     async function smartRefresh(changedUsernames) {
         try {
+            // Helper: merge contributors + reviewers (deduped) for points/streaks tabs
+            function mergeAllUsers(contributors, reviewers) {
+                return [...contributors, ...reviewers].reduce((acc, user) => {
+                    if (!acc.find(u => u.username === user.username)) acc.push(user);
+                    return acc;
+                }, []);
+            }
+
             // Snapshot the old data for comparison
             const oldAllTime = [...allTimeLeaderboard];
             const oldQuarterly = [...quarterlyLeaderboard];
             const oldContributors = [...allContributors];
             const oldReviewers = [...allReviewers];
+            const oldAllUsers = mergeAllUsers(oldContributors, oldReviewers);
 
             // Fetch fresh data (same as loadLeaderboardData but without showLoading)
             const [contributorsData, reviewersData, allTimeData, quarterlyData, hallOfFameData, quarterInfoData] = await Promise.all([
@@ -861,12 +870,16 @@ function showError(message) {
                 updateQuarterInfoDisplay();
             }
 
+            const newAllUsers = mergeAllUsers(allContributors, allReviewers);
+
             // Determine which grids need a full re-render vs. in-place update
             const gridConfigs = [
                 { gridId: 'all-time-grid', oldData: oldAllTime, newData: allTimeLeaderboard, sortKey: currentSort, type: 'all-time' },
                 { gridId: 'quarterly-grid', oldData: oldQuarterly, newData: quarterlyLeaderboard, sortKey: 'pointsThisQuarter', type: 'quarterly' },
                 { gridId: 'contributors-grid', oldData: oldContributors, newData: allContributors, sortKey: 'prCount', type: 'contributors' },
                 { gridId: 'reviewers-grid', oldData: oldReviewers, newData: allReviewers, sortKey: 'reviewCount', type: 'reviewers' },
+                { gridId: 'points-grid', oldData: oldAllUsers, newData: newAllUsers, sortKey: 'totalPoints', type: 'points' },
+                { gridId: 'streaks-grid', oldData: oldAllUsers, newData: newAllUsers, sortKey: 'currentStreak', type: 'streaks' },
             ];
 
             // Collect grid analysis before animating
