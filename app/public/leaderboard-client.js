@@ -749,13 +749,19 @@ function generateBadgesHTML(user) {
     }
 
     // PR/Review badges
+    const streakBadgeImages = {
+        'Week Warrior': '/images/badges/50_prs_badge.png',
+        'Monthly Master': '/images/badges/100_prs_badge.png',
+        'Quarter Champion': '/images/badges/500_prs_badge.png',
+        'Year-Long Hero': '/images/badges/1000_prs_badge.png'
+    };
     if (user.badges && user.badges.length > 0) {
         const badgeImages = user.badges
             .slice(0, 5) // Limit to 5 badges for display
             .map(badge => {
                 const badgeName = typeof badge === 'string' ? badge : badge.badge;
-                const imageName = badgeName.replace(/ /g, '_').toLowerCase();
-                return `<img src="/images/badges/${imageName}.png" alt="${badgeName}" class="badge-item" title="${badgeName}">`;
+                const src = streakBadgeImages[badgeName] || `/images/badges/${badgeName.replace(/ /g, '_').toLowerCase()}.png`;
+                return `<img src="${src}" alt="${badgeName}" class="badge-item" title="${badgeName}">`;
             })
             .join('');
 
