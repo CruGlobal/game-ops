@@ -808,19 +808,31 @@ function showError(message) {
         return window.realtimeSocket;
     }
 
-    // Debounce: coalesce rapid events into a single smart refresh
+    // Trailing debounce: resets on each event, waits for 2s of quiet before refreshing.
+    // This ensures we capture the final state after rapid-fire updates.
     let refreshTimer = null;
     let pendingUsernames = new Set();
+    let isAnimating = false; // Lock to prevent concurrent animations
 
     function debouncedSmartRefresh(username) {
         if (username) pendingUsernames.add(username);
-        if (refreshTimer) return;
+        window.leaderboardPending = true;
+
+        // Reset timer on every event — fires 2s after the LAST event
+        clearTimeout(refreshTimer);
         refreshTimer = setTimeout(async () => {
-            const usernamesToHighlight = new Set(pendingUsernames);
             refreshTimer = null;
+            const usernamesToHighlight = new Set(pendingUsernames);
             pendingUsernames.clear();
+
+            // If an animation is already running, defer until it finishes
+            if (isAnimating) {
+                debouncedSmartRefresh();
+                return;
+            }
+
             await smartRefresh(usernamesToHighlight);
-        }, 500);
+        }, 2000);
     }
 
     /**
@@ -828,6 +840,8 @@ function showError(message) {
      * Falls back to full re-render only if the grid structure changed (new/removed users, rank reorder).
      */
     async function smartRefresh(changedUsernames) {
+        isAnimating = true;
+        window.leaderboardAnimating = true;
         try {
             // Helper: merge contributors + reviewers (deduped) for points/streaks tabs
             function mergeAllUsers(contributors, reviewers) {
@@ -908,6 +922,16 @@ function showError(message) {
                 await wait(400); // Pause so user can see the card
             }
 
+            // Capture old ranks from DOM BEFORE Phase 2 updates them
+            const preUpdateRanks = new Map();
+            for (const { grid } of gridUpdates) {
+                grid.querySelectorAll('[data-username]').forEach(card => {
+                    const username = card.getAttribute('data-username');
+                    const rank = parseInt(card.getAttribute('data-rank'), 10);
+                    if (!preUpdateRanks.has(username)) preUpdateRanks.set(username, rank);
+                });
+            }
+
             // Phase 2: Update stats in-place (number change animation)
             for (const { grid, newSorted } of gridUpdates) {
                 updateStatsInPlace(grid, newSorted, changedUsernames);
@@ -919,13 +943,13 @@ function showError(message) {
                 await wait(1000); // Let stat animation finish
 
                 for (const { grid, newSorted, type } of pendingRerenders) {
-                    smoothRerender(grid, newSorted, type, changedUsernames);
+                    smoothRerender(grid, newSorted, type, changedUsernames, preUpdateRanks);
                 }
 
                 // Phase 4: Follow the card as it slides up during FLIP
                 const movingCard = findFirstChangedCard(gridUpdates, changedUsernames);
                 if (movingCard) {
-                    await followCardDuringFlip(movingCard, 3500);
+                    await followCardDuringFlip(movingCard, 4300);
 
                     // Phase 5: Blue highlight at destination
                     movingCard.classList.add('live-update-highlight');
@@ -950,6 +974,10 @@ function showError(message) {
         } catch (error) {
             console.error('Smart refresh failed, falling back to full reload:', error);
             await loadLeaderboardData();
+        } finally {
+            isAnimating = false;
+            window.leaderboardAnimating = false;
+            window.leaderboardPending = false;
         }
     }
 
@@ -965,15 +993,12 @@ function showError(message) {
 
             let hasChanges = false;
 
-            // Update rank number if it changed
+            // Update rank number if it changed (with micro-animation)
             const rankEl = card.querySelector('[data-rank-display]');
             const oldRank = parseInt(card.getAttribute('data-rank'));
             if (rankEl && oldRank !== newRank) {
-                const medalEmoji = newRank === 1 ? '🥇 ' : newRank === 2 ? '🥈 ' : newRank === 3 ? '🥉 ' : '';
-                rankEl.textContent = `${medalEmoji}#${newRank}`;
+                animateRankChange(rankEl, oldRank, newRank);
                 card.setAttribute('data-rank', newRank);
-
-                // Update rank badge styling
                 rankEl.className = newRank <= 3 ? `rank-badge rank-${newRank}` : 'rank-badge';
             }
 
@@ -1226,7 +1251,7 @@ function showError(message) {
      * FLIP animation: cards physically slide to their new rank positions.
      * (First, Last, Invert, Play)
      */
-    function smoothRerender(grid, newData, type, changedUsernames) {
+    function smoothRerender(grid, newData, type, changedUsernames, oldRanks) {
         const existingCards = grid.querySelectorAll('[data-username]');
 
         // FIRST: record current positions of all cards
@@ -1236,10 +1261,13 @@ function showError(message) {
             const rect = card.getBoundingClientRect();
             firstPositions.set(username, { top: rect.top, left: rect.left });
         });
+        // oldRanks is passed in from smartRefresh (captured before Phase 2 updates data-rank)
 
-        // Rebuild the grid with new order and updated rank numbers
+        // Rebuild the grid with new order — hide during rebuild to prevent flash
+        grid.style.visibility = 'hidden';
         grid.innerHTML = '';
         if (newData.length === 0) {
+            grid.style.visibility = '';
             grid.innerHTML = `
                 <div class="empty-state">
                     <div class="empty-state-icon">🔍</div>
@@ -1255,6 +1283,10 @@ function showError(message) {
             newData.forEach((user, index) => grid.appendChild(createLeaderboardCard(user, index + 1, type)));
         }
 
+        // Force layout calculation while hidden, then reveal
+        grid.getBoundingClientRect();
+        grid.style.visibility = '';
+
         // LAST: record new positions
         const newCards = grid.querySelectorAll('[data-username]');
 
@@ -1264,6 +1296,7 @@ function showError(message) {
         }
 
         // INVERT + PLAY: animate each card from old position to new
+        const flipPromises = [];
         let staggerIndex = 0;
         newCards.forEach(card => {
             const username = card.getAttribute('data-username');
@@ -1288,19 +1321,128 @@ function showError(message) {
                 { transform: `translate(${deltaX}px, ${deltaY}px)` },
                 { transform: 'none' }
             ], {
-                duration: 3200,
-                easing: 'cubic-bezier(0.25, 0.1, 0.25, 1.0)',
+                duration: 4000,
+                easing: 'cubic-bezier(0.4, 0.0, 0.2, 1.0)',
                 fill: 'both',
                 delay: staggerIndex * 100
             });
 
-            animation.finished.then(() => {
+            flipPromises.push(animation.finished.then(() => {
                 card.style.willChange = '';
                 card.style.zIndex = '';
                 card.style.boxShadow = '';
-            });
+            }));
 
             staggerIndex++;
+        });
+
+        if (!prefersReducedMotion) {
+            // Dim non-moving cards and highlight hero
+            newCards.forEach(card => {
+                const username = card.getAttribute('data-username');
+                const oldPos = firstPositions.get(username);
+                if (!oldPos) return;
+
+                const newRect = card.getBoundingClientRect();
+                const deltaY = oldPos.top - newRect.top;
+                const moved = Math.abs(deltaY) > 2;
+
+                if (moved && changedUsernames.has(username)) {
+                    card.classList.add('flip-hero');
+                } else if (!moved) {
+                    card.classList.add('flip-dimmed');
+                }
+            });
+
+            // Remove dim/hero after FLIP completes (3.2s base + stagger buffer)
+            const cleanupDelay = 4000 + (staggerIndex * 100) + 200;
+            setTimeout(() => {
+                grid.querySelectorAll('.flip-dimmed').forEach(c => c.classList.remove('flip-dimmed'));
+                grid.querySelectorAll('.flip-hero').forEach(c => c.classList.remove('flip-hero'));
+            }, cleanupDelay);
+
+            // Confetti for big rank jumps (10+ positions)
+            newCards.forEach(card => {
+                const username = card.getAttribute('data-username');
+                if (!changedUsernames.has(username)) return;
+
+                const newRank = parseInt(card.getAttribute('data-rank'), 10);
+                const oldRank = oldRanks.get(username);
+                if (oldRank === undefined || isNaN(oldRank)) return;
+
+                const rankJump = oldRank - newRank;
+                if (rankJump >= 10 && window.confetti) {
+                    const arrivalDelay = Math.min(4000 + (staggerIndex * 100), 5000);
+                    setTimeout(() => {
+                        const rect = card.getBoundingClientRect();
+                        window.confetti.burst({
+                            x: rect.left + rect.width / 2,
+                            y: rect.top + rect.height / 2,
+                            count: Math.min(30 + rankJump * 2, 80),
+                            spread: 360
+                        });
+                    }, arrivalDelay);
+                }
+            });
+        }
+
+        // Return promise that resolves when all FLIP animations complete
+        return flipPromises.length > 0 ? Promise.all(flipPromises) : Promise.resolve();
+    }
+
+    /**
+     * Animate a rank badge number transitioning from old to new with a slide effect.
+     */
+    function animateRankChange(rankBadge, oldRank, newRank) {
+        if (prefersReducedMotion || oldRank === newRank) return;
+
+        const oldText = rankBadge.textContent;
+        const medal = newRank === 1 ? '🥇 ' : newRank === 2 ? '🥈 ' : newRank === 3 ? '🥉 ' : '';
+        const newText = `${medal}#${newRank}`;
+
+        const { width, height } = rankBadge.getBoundingClientRect();
+        rankBadge.style.width = width + 'px';
+        rankBadge.style.height = height + 'px';
+
+        rankBadge.innerHTML = '';
+        rankBadge.classList.add('rank-transitioning');
+
+        const oldSpan = document.createElement('span');
+        oldSpan.className = 'rank-old';
+        oldSpan.textContent = oldText;
+
+        const newSpan = document.createElement('span');
+        newSpan.className = 'rank-new';
+        newSpan.textContent = newText;
+
+        rankBadge.appendChild(oldSpan);
+        rankBadge.appendChild(newSpan);
+
+        const direction = newRank < oldRank ? -1 : 1;
+
+        oldSpan.animate([
+            { transform: 'translateY(0)', opacity: 1 },
+            { transform: `translateY(${direction * -100}%)`, opacity: 0 }
+        ], { duration: 600, easing: 'cubic-bezier(0.16, 0.7, 0.3, 1)', fill: 'forwards' });
+
+        const enterAnim = newSpan.animate([
+            { transform: `translateY(${direction * 100}%)`, opacity: 0 },
+            { transform: 'translateY(0)', opacity: 1 }
+        ], { duration: 600, easing: 'cubic-bezier(0.16, 0.7, 0.3, 1)', fill: 'forwards' });
+
+        enterAnim.finished.then(() => {
+            rankBadge.classList.remove('rank-transitioning');
+            rankBadge.textContent = newText;
+            rankBadge.style.width = '';
+            rankBadge.style.height = '';
+
+            if (Math.abs(newRank - oldRank) >= 5) {
+                rankBadge.animate([
+                    { transform: 'scale(1)' },
+                    { transform: 'scale(1.3)' },
+                    { transform: 'scale(1)' }
+                ], { duration: 400, easing: 'cubic-bezier(0.34, 1.56, 0.64, 1)' });
+            }
         });
     }
 
@@ -1311,42 +1453,16 @@ function showError(message) {
             return;
         }
 
-        socket.on('leaderboard-update', (data) => {
-            console.log('Leaderboard update received:', data);
-            debouncedSmartRefresh(data?.username);
-        });
-
-        socket.on('badge-awarded', (data) => {
-            console.log('Badge awarded:', data);
-            debouncedSmartRefresh(data?.username);
-        });
-
-        socket.on('pr-update', (data) => {
-            console.log('PR update:', data);
-            debouncedSmartRefresh(data?.username);
-        });
-
-        socket.on('review-update', (data) => {
-            console.log('Review update:', data);
-            debouncedSmartRefresh(data?.username);
-        });
-
-        socket.on('streak-update', (data) => {
-            console.log('Streak update:', data);
-            debouncedSmartRefresh(data?.username);
-        });
-
-        socket.on('points-awarded', (data) => {
-            console.log('Points awarded:', data);
-            debouncedSmartRefresh(data?.username);
-        });
+        socket.on('leaderboard-update', (data) => debouncedSmartRefresh(data?.username));
+        socket.on('badge-awarded', (data) => debouncedSmartRefresh(data?.username));
+        socket.on('pr-update', (data) => debouncedSmartRefresh(data?.username));
+        socket.on('review-update', (data) => debouncedSmartRefresh(data?.username));
+        socket.on('streak-update', (data) => debouncedSmartRefresh(data?.username));
+        socket.on('points-awarded', (data) => debouncedSmartRefresh(data?.username));
 
         // Full refresh on reconnect to pick up any missed events
         socket.on('connect', () => {
-            if (allTimeLeaderboard.length > 0) {
-                console.log('Socket reconnected, refreshing leaderboard...');
-                loadLeaderboardData();
-            }
+            if (allTimeLeaderboard.length > 0) loadLeaderboardData();
         });
     }
 
