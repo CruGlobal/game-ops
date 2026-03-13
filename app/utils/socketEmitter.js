@@ -129,6 +129,19 @@ export const emitChallengeProgress = (data) => {
     });
 };
 
+// Emit bill/vonette awarded event
+export const emitBillAwarded = (data) => {
+    if (!ioInstance) return;
+
+    ioInstance.to('game-ops-updates').emit(SOCKET_EVENTS.BILL_AWARDED, {
+        username: data.username,
+        billType: data.billType,
+        billValue: data.billValue,
+        billImage: data.billImage,
+        timestamp: new Date()
+    });
+};
+
 // Emit challenge completed event
 export const emitChallengeCompleted = (data) => {
     if (!ioInstance) return;

@@ -1,7 +1,7 @@
 import { Octokit } from '@octokit/rest';
 import { prisma } from '../lib/prisma.js';
 import fetch from 'node-fetch';
-import { emitPRUpdate, emitBadgeAwarded, emitLeaderboardUpdate, emitReviewUpdate } from '../utils/socketEmitter.js';
+import { emitPRUpdate, emitBadgeAwarded, emitBillAwarded, emitLeaderboardUpdate, emitReviewUpdate } from '../utils/socketEmitter.js';
 import { updateStreak, checkStreakBadges } from './streakService.js';
 import { calculatePoints, awardPoints, awardReviewPoints } from './pointsService.js';
 import { POINT_REASONS } from '../config/points-config.js';
@@ -352,6 +352,10 @@ export const processSingleMergedPR = async (prData) => {
     // Check and award achievements
     await checkAndAwardAchievements(contributor);
 
+    // Award badges and bills in real-time (single-contributor mode)
+    await awardBadges(number, username);
+    await awardBillsAndVonettes(number, false, username);
+
     return { processed: true, reason: 'success' };
 };
 
@@ -442,6 +446,10 @@ export const processSingleReview = async (reviewData) => {
 
     // Check achievements
     await checkAndAwardAchievements(reviewer);
+
+    // Award badges and bills in real-time (single-contributor mode)
+    await awardBadges(prNumber, username);
+    await awardBillsAndVonettes(prNumber, false, username);
 
     return { processed: true, reason: 'success' };
 };
@@ -569,13 +577,19 @@ export const fetchPullRequests = async () => {
 };
 
 // Award badges to contributors based on their contributions
-export const awardBadges = async (pullRequestNumber = null) => {
+// When username is provided, only checks that single contributor (real-time webhook mode)
+// When username is null, checks all contributors (cron batch mode)
+export const awardBadges = async (pullRequestNumber = null, username = null) => {
     const results = [];
     try {
         let contributors;
 
+        if (username) {
+            const single = await prisma.contributor.findUnique({ where: { username } });
+            contributors = single ? [single] : [];
+        } else {
             contributors = await prisma.contributor.findMany();
-        
+        }
 
         for (const contributor of contributors) {
             if (/\[bot\]$/.test(contributor.username)) {
@@ -954,13 +968,19 @@ export const getContributorByUsername = async (username) => {
 };
 
 // Award bills and vonettes to contributors based on their contributions
-export const awardBillsAndVonettes = async (pullRequestNumber = null, test = false) => {
+// When username is provided, only checks that single contributor (real-time webhook mode)
+// When username is null, checks all contributors (cron batch mode)
+export const awardBillsAndVonettes = async (pullRequestNumber = null, test = false, username = null) => {
     const results = [];
     try {
         let contributors;
 
+        if (username) {
+            const single = await prisma.contributor.findUnique({ where: { username } });
+            contributors = single ? [single] : [];
+        } else {
             contributors = await prisma.contributor.findMany();
-        
+        }
 
         for (const contributor of contributors) {
             if (/\[bot\]$/.test(contributor.username)) {
@@ -1017,6 +1037,14 @@ export const awardBillsAndVonettes = async (pullRequestNumber = null, test = fal
                 console.log(`🎉 Congratulations @${contributor.username}, you've earned ${billsValue} ${billsAwarded}(s)! 🎉\n\n![${billsAwarded}](${domain}/images/${billsImage})`);
 
                 results.push({ username: contributor.username, bills: billsAwarded, billsImage: billsImage });
+
+                // Emit socket event for bill notification
+                emitBillAwarded({
+                    username: contributor.username,
+                    billType: billsAwarded,
+                    billValue: billsValue,
+                    billImage: billsImage
+                });
 
                 // Update database
                 await prisma.contributor.update({

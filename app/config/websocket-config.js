@@ -27,6 +27,7 @@ export const SOCKET_EVENTS = {
     POINTS_AWARDED: 'points-awarded',
     CHALLENGE_PROGRESS: 'challenge-progress',
     CHALLENGE_COMPLETED: 'challenge-completed',
+    BILL_AWARDED: 'bill-awarded',
 
     // Client -> Server events
     SUBSCRIBE_UPDATES: 'subscribe-updates',

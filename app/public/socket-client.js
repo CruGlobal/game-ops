@@ -77,6 +77,12 @@
         }
     });
 
+    // Bill/Vonette awarded event
+    socket.on('bill-awarded', (data) => {
+        const plural = data.billValue > 1 ? `${data.billType}s` : data.billType;
+        showToast(`💵 ${data.username} earned ${data.billValue} ${plural}!`, 'success', 5000);
+    });
+
     // Review update event
     socket.on('review-update', (data) => {
         updateContributorReviewCount(data.username, data.reviewCount);
