@@ -1,6 +1,7 @@
 import { prisma } from '../lib/prisma.js';
 import { POINT_REASONS, POINT_VALUES } from '../config/points-config.js';
 import { emitBillAwarded } from '../utils/socketEmitter.js';
+import { postQuarterlyWinnersDiscussion } from './discussionService.js';
 
 // DevOps participation threshold: contributions (PRs + reviews) needed to earn 1 Bill
 const DEVOPS_PARTICIPATION_THRESHOLD = 50;
@@ -119,10 +120,10 @@ export async function getQuarterDateRange(quarterString) {
  * @param {String} systemType - 'calendar', 'fiscal-us', 'academic', 'custom'
  * @param {Number} q1StartMonth - 1-12
  * @param {String} modifiedBy - Username
- * @param {Boolean} enableAchievementComments - Whether to post achievement comments to GitHub PRs
+ * @param {Boolean} enableGitHubDiscussions - Whether to post quarterly winner announcements as GitHub Discussions
  * @returns {Object} { config, quarterChanged, oldQuarter, newQuarter }
  */
-export async function updateQuarterConfig(systemType, q1StartMonth, modifiedBy, enableAchievementComments = false, enableBillsComments = false) {
+export async function updateQuarterConfig(systemType, q1StartMonth, modifiedBy, enableGitHubDiscussions = false) {
     // Get old config and quarter
     const oldConfig = await getQuarterConfig();
     const oldQuarter = await getCurrentQuarter();
@@ -143,8 +144,7 @@ export async function updateQuarterConfig(systemType, q1StartMonth, modifiedBy, 
         update: {
             systemType,
             q1StartMonth: actualStartMonth,
-            enableAchievementComments,
-            enableBillsComments,
+            enableGitHubDiscussions,
             lastModified: new Date(),
             modifiedBy
         },
@@ -152,8 +152,7 @@ export async function updateQuarterConfig(systemType, q1StartMonth, modifiedBy, 
             id: 'quarter-config',
             systemType,
             q1StartMonth: actualStartMonth,
-            enableAchievementComments,
-            enableBillsComments,
+            enableGitHubDiscussions,
             lastModified: new Date(),
             modifiedBy
         }
@@ -166,7 +165,9 @@ export async function updateQuarterConfig(systemType, q1StartMonth, modifiedBy, 
     if (quarterChanged) {
         console.log(`Quarter changed from ${oldQuarter} to ${newQuarter} due to config update`);
         // Archive old quarter and reset
-        await archiveQuarterWinners(oldQuarter);
+        const quarterlyWinner = await archiveQuarterWinners(oldQuarter);
+        const billResults = await awardQuarterlyBills(oldQuarter);
+        await postQuarterlyWinnersDiscussion(oldQuarter, billResults, quarterlyWinner);
         await resetQuarterlyStats(newQuarter);
     }
 
@@ -1134,9 +1135,10 @@ export async function checkAndResetIfNewQuarter() {
 
         if (contributorQuarter !== currentQuarter) {
             console.log(`New quarter detected: ${contributorQuarter} → ${currentQuarter}`);
-            await archiveQuarterWinners(contributorQuarter);
+            const quarterlyWinner = await archiveQuarterWinners(contributorQuarter);
             // Award bills/vonettes based on final standings before resetting
             const billResults = await awardQuarterlyBills(contributorQuarter);
+            await postQuarterlyWinnersDiscussion(contributorQuarter, billResults, quarterlyWinner);
             await resetQuarterlyStats(currentQuarter);
             return {
                 quarterChanged: true,

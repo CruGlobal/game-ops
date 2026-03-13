@@ -18,6 +18,8 @@ A gamified GitHub Pull Request tracking and leaderboard system with real-time up
 - **👥 Multi-Timeframe Leaderboards** - All-Time, Quarterly, and 4 category views (PRs, reviews, points, streaks)
 - **🏆 Quarterly Competition** - Fresh quarterly leaderboards with automatic reset and winner archiving
 - **📜 Hall of Fame** - Historical archive of past quarterly champions and top 3 contributors
+- **📢 GitHub Discussion Announcements** - Optional quarterly winner announcements posted as GitHub Discussions (toggle in admin)
+- **🎉 Winners Banner** - Celebration banner on leaderboard for 7 days after quarter ends, showing champion and podium
 
 ### ⚡ Real-time Features (Socket.IO)
 - **Live Updates** - Leaderboard updates without page refresh

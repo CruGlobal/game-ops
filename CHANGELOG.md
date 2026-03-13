@@ -13,13 +13,25 @@ All notable changes to Game Ops are documented in this file.
   - DevOps team members: 1 Bill for 50+ contributions per quarter
   - `totalBillsAwarded` is a lifetime accumulator (never reset)
 - Quarterly points reset alongside stats at quarter boundaries
+- **GitHub Discussion Announcements** - Optional quarterly winner announcements posted as GitHub Discussions
+  - Toggle in admin settings (off by default)
+  - Posts champion, podium, and DevOps participation details via GraphQL API
+  - Requires Discussions to be enabled on the repository
+- **Winners Banner** - In-app celebration banner on the leaderboard page
+  - Shows for 7 days after a quarter ends
+  - Displays champion avatar, stats, and top 3 podium
+  - Dismissible with localStorage persistence per quarter
 
 ### Changed
 - Badge awarding now uses independent checks instead of else-if chain, allowing multiple badges to be awarded in a single scan
-- Quarter boundary sequence: archive winners -> award bills -> reset stats/points
+- Quarter boundary sequence: archive winners -> award bills -> post discussion -> reset stats/points
 - Removed daily bill/vonette cron job (replaced by quarterly awards)
 - Removed per-contribution bill awarding from PR merge and review processing
 - Removed `billAwards` from cron task defaults
+
+### Removed
+- `enableAchievementComments` and `enableBillsComments` settings (dead code from old PR comment system)
+- `postAchievementComment` function and Octokit dependency from achievement service
 
 ### Fixed
 - Prisma error on streaks reset: corrected field names (`sevenDayBadge` instead of `sevenDayStreakAwarded`, etc.)
