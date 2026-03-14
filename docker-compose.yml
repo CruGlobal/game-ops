@@ -13,6 +13,7 @@ services:
       DATABASE_URL: postgresql://gameops:gameops@postgres:5432/game_ops
       NODE_ENV: development
       ADMIN_PASSWORD: admin
+      DISABLE_AUTH: "true"
     env_file:
       - .env
     depends_on:

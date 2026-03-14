@@ -122,7 +122,7 @@ describe('Quarterly API Endpoints', () => {
                         username: 'user1',
                         totalPoints: BigInt(1000),
                         quarterlyStats: {
-                            currentQuarter: '2025-Q4',
+                            currentQuarter: '2026-Q1',
                             pointsThisQuarter: 125,
                             prsThisQuarter: 40,
                             reviewsThisQuarter: 20
@@ -132,7 +132,7 @@ describe('Quarterly API Endpoints', () => {
                         username: 'user2',
                         totalPoints: BigInt(800),
                         quarterlyStats: {
-                            currentQuarter: '2025-Q4',
+                            currentQuarter: '2026-Q1',
                             pointsThisQuarter: 190,
                             prsThisQuarter: 25,
                             reviewsThisQuarter: 10
@@ -142,7 +142,7 @@ describe('Quarterly API Endpoints', () => {
                         username: 'user3',
                         totalPoints: BigInt(600),
                         quarterlyStats: {
-                            currentQuarter: '2025-Q4',
+                            currentQuarter: '2026-Q1',
                             pointsThisQuarter: 100,
                             prsThisQuarter: 10,
                             reviewsThisQuarter: 5
@@ -171,10 +171,10 @@ describe('Quarterly API Endpoints', () => {
                 data: createTestContributor({
                     username: 'testuser',
                     quarterlyStats: {
-                        currentQuarter: '2025-Q1',
+                        currentQuarter: '2026-Q1',
                         pointsThisQuarter: 100,
-                        quarterStartDate: new Date('2025-01-01'),
-                        quarterEndDate: new Date('2025-03-31')
+                        quarterStartDate: new Date('2026-01-01'),
+                        quarterEndDate: new Date('2026-03-31')
                     }
                 })
             });
@@ -194,14 +194,14 @@ describe('Quarterly API Endpoints', () => {
                     createTestContributor({
                         username: 'active',
                         quarterlyStats: {
-                            currentQuarter: '2025-Q4',
+                            currentQuarter: '2026-Q1',
                             pointsThisQuarter: 50
                         }
                     }),
                     createTestContributor({
                         username: 'inactive',
                         quarterlyStats: {
-                            currentQuarter: '2025-Q4',
+                            currentQuarter: '2026-Q1',
                             pointsThisQuarter: 0
                         }
                     })
@@ -492,7 +492,7 @@ describe('Quarterly API Endpoints', () => {
                 data: createTestContributor({
                     username: 'testuser',
                     quarterlyStats: {
-                        currentQuarter: '2025-Q1',
+                        currentQuarter: '2026-Q1',
                         pointsThisQuarter: BigInt(100)
                     }
                 })

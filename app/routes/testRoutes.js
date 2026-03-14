@@ -1,6 +1,6 @@
 import express from 'express';
 import { prisma } from '../lib/prisma.js';
-import { awardBadges, awardBillsAndVonettes } from '../services/contributorService.js';
+import { awardBadges } from '../services/contributorService.js';
 import { emitPRUpdate, emitBadgeAwarded, emitBillAwarded, emitReviewUpdate, emitLeaderboardUpdate, emitStreakUpdate, emitAchievementUnlocked, emitPointsAwarded, emitChallengeProgress, emitChallengeCompleted } from '../utils/socketEmitter.js';
 import logger from '../utils/logger.js';
 
@@ -227,9 +227,9 @@ router.post('/test/simulate-pr-merge', async (req, res) => {
         emitPRUpdate({ username, prCount: Number(updated.prCount) });
         emitLeaderboardUpdate({ username });
 
-        // Award badges and bills in real-time (single-contributor mode)
+        // Award badges in real-time (bills are now quarterly)
         const badgeResults = await awardBadges(null, username);
-        const billResults = await awardBillsAndVonettes(null, false, username);
+        const billResults = [];
 
         res.json({
             success: true,

@@ -1,7 +1,7 @@
 // adminController.js
 import { prisma } from '../lib/prisma.js';
 import { body, validationResult } from 'express-validator';
-import { getPRRangeInfo, checkForDuplicates, fixDuplicates, awardBadges, awardBillsAndVonettes } from '../services/contributorService.js';
+import { getPRRangeInfo, checkForDuplicates, fixDuplicates, awardBadges } from '../services/contributorService.js';
 import { emitBadgeAwarded } from '../utils/socketEmitter.js';
 import { startBackfill, stopBackfill, getBackfillStatus } from '../services/backfillService.js';
 import {
@@ -238,7 +238,7 @@ export async function getQuarterConfigController(req, res) {
  */
 export async function updateQuarterConfigController(req, res) {
     try {
-        const { systemType, q1StartMonth, enableAchievementComments, enableBillsComments } = req.body;
+        const { systemType, q1StartMonth, enableGitHubDiscussions, enableSlackNotifications, slackWebhookUrl } = req.body;
         const modifiedBy = req.user?.username || 'admin';
 
         // Validation expected by tests
@@ -254,8 +254,9 @@ export async function updateQuarterConfigController(req, res) {
             systemType,
             q1StartMonth,
             modifiedBy,
-            enableAchievementComments,
-            enableBillsComments
+            enableGitHubDiscussions,
+            enableSlackNotifications || false,
+            slackWebhookUrl || null
         );
 
         res.json({
@@ -815,21 +816,21 @@ export async function backfillBadgesController(req, res) {
 }
 
 /**
- * Run batch badge and bill scan for all contributors
+ * Run batch badge scan for all contributors
  * POST /api/admin/run-badge-bill-scan
+ * Note: Bills/vonettes are now awarded quarterly, not via scan
  */
 export async function runBadgeBillScanController(req, res) {
     try {
         const badges = await awardBadges();
-        const bills = await awardBillsAndVonettes();
         res.json({
             success: true,
-            message: `Awarded ${badges.length} badge(s) and ${bills.length} bill(s)`,
+            message: `Awarded ${badges.length} badge(s). Bills are now awarded quarterly.`,
             badges,
-            bills
+            bills: []
         });
     } catch (error) {
-        console.error('Error running badge/bill scan:', error);
+        console.error('Error running badge scan:', error);
         res.status(500).json({ success: false, message: error.message });
     }
 }

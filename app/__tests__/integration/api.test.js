@@ -252,12 +252,13 @@ describe('API Integration Tests', () => {
 
   describe('GET /api/award-badges', () => {
     it('should award badges with valid token', async () => {
-      // Create test contributor
+      // Create test contributor with only PRs (no reviews) to get a single badge
       await prisma.contributor.create({
-        data: createTestContributor({ 
-          username: 'newuser', 
-          prCount: BigInt(1), 
-          badges: [] 
+        data: createTestContributor({
+          username: 'newuser',
+          prCount: BigInt(1),
+          reviewCount: BigInt(0),
+          badges: []
         })
       });
 
@@ -276,8 +277,8 @@ describe('API Integration Tests', () => {
   describe('GET /api/award-bills-vonettes', () => {
     it('should award bills with valid token', async () => {
       await prisma.contributor.create({
-        data: createTestContributor({ 
-          username: 'productive', 
+        data: createTestContributor({
+          username: 'productive',
           prCount: BigInt(10),
           totalBillsAwarded: BigInt(0),
           first10PrsAwarded: false
@@ -289,10 +290,8 @@ describe('API Integration Tests', () => {
         .set('Authorization', `Bearer ${authToken}`)
         .expect(200);
 
-      expect(response.body.message).toBe('Bills and Vonettes awarded successfully.');
-      expect(response.body.results).toHaveLength(1);
-      expect(response.body.results[0].username).toBe('productive');
-      expect(response.body.results[0].bills).toBe('Bill');
+      // Bills are now awarded quarterly, not via this endpoint
+      expect(response.body.message).toBe('Bills and Vonettes are now awarded quarterly. Use the quarterly reset system instead.');
     });
   });
 

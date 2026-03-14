@@ -87,17 +87,18 @@ describe('ContributorService', () => {
 
   describe('awardBadges', () => {
     it('should award 1st PR badge to new contributors', async () => {
-      // Create a contributor with 1 PR but no badges
+      // Create a contributor with 1 PR but no badges (reviewCount: 0 to isolate PR badge)
       await prisma.contributor.create({
-        data: createTestContributor({ 
-          username: 'newuser', 
-          prCount: 1, 
-          badges: [] 
+        data: createTestContributor({
+          username: 'newuser',
+          prCount: 1,
+          reviewCount: 0,
+          badges: []
         })
       });
 
       const result = await awardBadges();
-      
+
       expect(result).toHaveLength(1);
       expect(result[0].username).toBe('newuser');
       expect(result[0].badge).toBe('1st PR badge');

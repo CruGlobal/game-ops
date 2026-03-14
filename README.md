@@ -13,11 +13,13 @@ A gamified GitHub Pull Request tracking and leaderboard system with real-time up
 ### Core Tracking
 - **📊 PR & Review Tracking** - Automatic daily fetching of merged PRs and code reviews
 - **🏅 Progressive Badge System** - Awards at 1, 10, 50, 100, 500, 1000 milestones
-- **💵 Bill/Vonette Awards** - Custom reward system for top contributors
+- **💵 Quarterly Bill/Vonette Rewards** - Quarterly competition rewards (1st place: Vonette, 2nd/3rd: Bill, DevOps participation awards)
 - **📈 Historical Data** - Time-series contribution and review tracking
 - **👥 Multi-Timeframe Leaderboards** - All-Time, Quarterly, and 4 category views (PRs, reviews, points, streaks)
 - **🏆 Quarterly Competition** - Fresh quarterly leaderboards with automatic reset and winner archiving
 - **📜 Hall of Fame** - Historical archive of past quarterly champions and top 3 contributors
+- **📢 GitHub Discussion Announcements** - Optional quarterly winner announcements posted as GitHub Discussions (toggle in admin)
+- **🎉 Winners Banner** - Celebration banner on leaderboard for 7 days after quarter ends, showing champion and podium
 
 ### ⚡ Real-time Features (Socket.IO)
 - **Live Updates** - Leaderboard updates without page refresh
@@ -347,6 +349,22 @@ export const POINTS = {
 };
 ```
 
+### Bill/Vonette Reward System
+
+Bills and Vonettes are quarterly competition rewards (40 Bills = 1 day off work):
+
+**Non-DevOps Contributors:**
+| Place | Reward | Value |
+|-------|--------|-------|
+| 1st   | Vonette | 5 Bills |
+| 2nd   | Bill    | 1 Bill  |
+| 3rd   | Bill    | 1 Bill  |
+
+**DevOps Team Members:**
+- 1 Bill for reaching 50+ contributions (PRs + reviews) in the quarter
+
+Awards are issued automatically at quarter boundaries before stats reset. The `totalBillsAwarded` field is a lifetime accumulator and is never reset.
+
 ---
 
 ## 📡 API Documentation
@@ -399,21 +417,25 @@ For detailed API documentation, see [docs/API.md](docs/API.md) (coming soon).
 
 ## ⏰ Automated Tasks
 
+### Every 6 Hours
+1. Fetch merged PRs and code reviews from GitHub
+2. Award milestone badges (PR and review milestones)
+
 ### Daily (00:00 UTC)
-1. Fetch yesterday's merged PRs
-2. Award milestone badges
-3. Verify and update contributor streaks
-4. Award streak badges
-5. Check for new quarter and reset if needed
+1. Verify and update contributor streaks
+2. Award streak badges
+3. Check for new quarter boundary:
    - Archive top 3 contributors to Hall of Fame
-   - Reset all quarterly stats to 0
+   - **Award quarterly bills/vonettes** (1st: Vonette, 2nd/3rd: Bill, DevOps participation)
+   - Reset all quarterly stats and points to 0
    - Broadcast quarter change notifications
+4. Expire completed challenges
+
+### Daily (02:00 UTC)
+1. Sync DevOps team members from GitHub Teams API
 
 ### Weekly (Monday 00:00 UTC)
 1. Generate 3 new weekly challenges
-
-### Hourly
-1. Mark expired challenges
 
 ---
 
@@ -474,7 +496,7 @@ it('should award streak badge', async () => {
 - [x] PR range visibility and duplicate detection
 - [x] Data integrity validation and repair tools
 
-### Phase 2: Quarterly Leaderboard System ✅ (Complete)
+### Phase 2: Quarterly Leaderboard & Rewards ✅ (Complete)
 - [x] Multi-timeframe leaderboards (All-Time, Quarterly, Hall of Fame)
 - [x] Configurable quarter calculation (Calendar, Fiscal, Academic, Custom)
 - [x] Automatic quarter boundary detection and reset
@@ -483,6 +505,9 @@ it('should award streak badge', async () => {
 - [x] Modern Hall of Fame UI with compact cards
 - [x] Quarterly stats tracking per contributor
 - [x] Admin quarter configuration panel
+- [x] Quarterly bill/vonette rewards (1st: Vonette, 2nd/3rd: Bill)
+- [x] DevOps participation threshold awards (50+ contributions)
+- [x] DevOps team filter system with GitHub Teams API sync
 
 ### Phase 3: Analytics & Advanced Features (Planned)
 - [ ] Team challenges
@@ -558,4 +583,4 @@ For questions, issues, or feature requests:
 
 **Built with ❤️ by Luis Rodriguez and Claude Code**
 
-Last Updated: January 2025 - Migrated to Prisma/PostgreSQL (Neon)
+Last Updated: March 2026 - Quarterly bill/vonette reward system

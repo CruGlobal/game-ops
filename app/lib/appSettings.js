@@ -34,7 +34,6 @@ const CRON_TASKS_KEY = 'cron_tasks';
 export const CRON_TASK_DEFAULTS = {
   prReviewSync:     { enabled: false, label: 'PR/Review Sync',       schedule: 'Every 6 hours' },
   badgeAwards:      { enabled: false, label: 'Badge Awards',         schedule: 'Every 6 hours' },
-  billAwards:       { enabled: false, label: 'Bill/Vonette Awards',  schedule: 'Daily midnight' },
   challengeGen:     { enabled: false, label: 'Challenge Generation', schedule: 'Weekly (Monday)' },
   challengeExpiry:  { enabled: false, label: 'Challenge Expiry',     schedule: 'Daily midnight' },
   quarterCheck:     { enabled: false, label: 'Quarter Boundary Check', schedule: 'Daily midnight' },
