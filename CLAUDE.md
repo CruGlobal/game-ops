@@ -178,6 +178,10 @@ npx prisma migrate reset
 - systemType: calendar, fiscal-us, academic, custom
 - q1StartMonth: 1-12 (defines quarter start)
 - Modified timestamp and modifiedBy tracking
+- **Notification Settings**:
+  - enableGitHubDiscussions: Toggle GitHub Discussion announcements for quarterly winners
+  - enableSlackNotifications: Toggle Slack webhook announcements for quarterly winners
+  - slackWebhookUrl: Slack Incoming Webhook URL (optional, falls back to `SLACK_WEBHOOK_URL` env var)
 - **DevOps Team Filter Settings**:
   - devOpsTeamMembers: Cached GitHub team members (JSON array)
   - excludeDevOpsFromLeaderboards: Toggle to filter DevOps from leaderboards
@@ -208,6 +212,7 @@ npx prisma migrate reset
 - **NEW:** `challengeService.js`: Challenge lifecycle management, weekly auto-generation
 - **NEW:** `analyticsService.js`: Time-series data, heatmaps, growth metrics, CSV generation
 - **PHASE 2:** `quarterlyService.js`: Quarter calculation, quarterly stats management, leaderboards, winner archiving, reset automation
+- **Slack Notifications:** `slackService.js`: Slack Incoming Webhook posting for quarterly winner announcements
 - **DevOps Filter:** `devOpsTeamService.js`: GitHub Teams API integration, automatic sync, leaderboard filtering
 
 **Routes** (`app/routes/`):
@@ -691,8 +696,9 @@ Bills and Vonettes are real-world rewards: **40 Bills = 1 day off work**.
 **Quarterly Reset Sequence:**
 1. Archive quarter winners (Hall of Fame)
 2. Award quarterly bills/vonettes based on final standings
-3. Reset `totalPoints` and `quarterlyStats` for all contributors
-4. `totalBillsAwarded` is NOT reset (lifetime accumulator)
+3. Post announcements (GitHub Discussion + Slack webhook, if enabled)
+4. Reset `totalPoints` and `quarterlyStats` for all contributors
+5. `totalBillsAwarded` is NOT reset (lifetime accumulator)
 
 **Key Design Decisions:**
 - Old milestone-based bill system (10 PRs = 1 bill, every 100 = 1 bill) has been removed
@@ -733,6 +739,7 @@ Bills and Vonettes are real-world rewards: **40 Bills = 1 day off work**.
 - `GITHUB_CLIENT_ID` - For GitHub OAuth
 - `GITHUB_CLIENT_SECRET` - For GitHub OAuth
 - `GITHUB_CALLBACK_URL` - OAuth callback URL
+- `SLACK_WEBHOOK_URL` - Slack Incoming Webhook URL for quarterly winner announcements (can also be set in admin UI)
 
 ---
 

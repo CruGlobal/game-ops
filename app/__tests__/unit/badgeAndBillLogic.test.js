@@ -25,15 +25,16 @@ describe('Badge and Bill Awarding Logic', () => {
     describe('PR Badges', () => {
       it('should award 1st PR badge for first contribution', async () => {
         await prisma.contributor.create({
-          data: createTestContributor({ 
-            username: 'newcomer', 
-            prCount: BigInt(1), 
-            badges: [] 
+          data: createTestContributor({
+            username: 'newcomer',
+            prCount: BigInt(1),
+            reviewCount: BigInt(0),
+            badges: []
           })
         });
 
         const results = await awardBadges();
-        
+
         expect(results).toHaveLength(1);
         expect(results[0]).toEqual({
           username: 'newcomer',
@@ -116,20 +117,26 @@ describe('Badge and Bill Awarding Logic', () => {
         }
       });
 
-      it('should not award higher tier badges without prerequisite badges', async () => {
+      it('should award all eligible badges in one pass', async () => {
         await prisma.contributor.create({
-          data: createTestContributor({ 
-            username: 'jumper', 
-            prCount: BigInt(100), 
+          data: createTestContributor({
+            username: 'jumper',
+            prCount: BigInt(100),
+            reviewCount: BigInt(0),
             badges: [] // No prerequisite badges
           })
         });
 
         const results = await awardBadges();
-        
-        // Should only get 1st PR badge
-        expect(results).toHaveLength(1);
-        expect(results[0].badge).toBe('1st PR badge');
+
+        // Awards all eligible PR badges in one pass (1, 10, 50, 100)
+        expect(results).toHaveLength(4);
+        expect(results.map(r => r.badge)).toEqual([
+          '1st PR badge',
+          '10 PR badge',
+          '50 PR badge',
+          '100 PR badge'
+        ]);
       });
     });
 
@@ -224,15 +231,17 @@ describe('Badge and Bill Awarding Logic', () => {
           })
         });
 
-        // First call awards 1st PR badge
-        const results1 = await awardBadges();
-        expect(results1).toHaveLength(1);
-        expect(results1[0].badge).toBe('1st PR badge');
+        // Single call awards both 1st PR and 1st Review badges
+        const results = await awardBadges();
+        expect(results).toHaveLength(2);
+        expect(results.map(r => r.badge)).toEqual([
+          '1st PR badge',
+          '1st Review badge'
+        ]);
 
-        // Second call awards 1st Review badge
+        // Second call awards nothing (already awarded)
         const results2 = await awardBadges();
-        expect(results2).toHaveLength(1);
-        expect(results2[0].badge).toBe('1st Review badge');
+        expect(results2).toHaveLength(0);
       });
     });
 
@@ -247,21 +256,21 @@ describe('Badge and Bill Awarding Logic', () => {
           })
         });
 
-        // First call awards 1st PR badge
+        // Awards both 1st PR and 10 PR badges in one pass
         await awardBadges();
 
         let updatedContributor = await prisma.contributor.findUnique({ where: { username: 'persistent_user' } });
-        expect(updatedContributor.badges).toHaveLength(1);
+        expect(updatedContributor.badges).toHaveLength(2);
         expect(updatedContributor.badges[0].badge).toBe('1st PR badge');
         expect(updatedContributor.badges[0].date).toBeDefined();
+        expect(updatedContributor.badges[1].badge).toBe('10 PR badge');
+        expect(updatedContributor.badges[1].date).toBeDefined();
 
-        // Second call awards 10 PR badge
+        // Second call awards nothing (already awarded)
         await awardBadges();
 
         updatedContributor = await prisma.contributor.findUnique({ where: { username: 'persistent_user' } });
         expect(updatedContributor.badges).toHaveLength(2);
-        expect(updatedContributor.badges[1].badge).toBe('10 PR badge');
-        expect(updatedContributor.badges[1].date).toBeDefined();
       });
     });
   });

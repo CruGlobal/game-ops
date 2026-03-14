@@ -223,6 +223,8 @@ model QuarterSettings {
   modifiedBy                    String    @default("system") @map("modified_by")
   createdAt                     DateTime  @default(now()) @map("created_at")
   enableGitHubDiscussions       Boolean   @default(false) @map("enable_github_discussions")
+  enableSlackNotifications      Boolean   @default(false) @map("enable_slack_notifications")
+  slackWebhookUrl               String?   @map("slack_webhook_url")
   devOpsTeamMembers             Json      @default("[]") @map("devops_team_members")
   excludeDevOpsFromLeaderboards Boolean   @default(false) @map("exclude_devops_from_leaderboards")
   devOpsTeamSlug                String    @default("devops-engineering-team") @map("devops_team_slug")

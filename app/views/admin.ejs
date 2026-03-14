@@ -172,6 +172,20 @@
                                 </p>
                             </label>
                         </div>
+
+                        <div class="form-group" style="display: flex; align-items: flex-start; gap: 0.75rem; margin-top: 1rem;">
+                            <input type="checkbox" id="enable-slack-notifications" class="form-check-input" style="width: 20px; height: 20px; margin-top: 2px; cursor: pointer;">
+                            <label for="enable-slack-notifications" style="margin: 0; cursor: pointer; user-select: none;">
+                                <strong>Enable Slack Winner Announcements</strong>
+                                <p style="margin: 0.25rem 0 0 0; color: var(--text-muted, #6c757d); font-size: 0.875rem;">
+                                    Posts quarterly winner announcements to a Slack channel. Create an Incoming Webhook at <a href="https://api.slack.com/apps" target="_blank" rel="noopener">api.slack.com/apps</a>.
+                                </p>
+                            </label>
+                        </div>
+                        <div id="slack-webhook-url-group" style="display: none; margin-top: 0.75rem; margin-left: 2rem;">
+                            <label for="slack-webhook-url" style="font-size: 0.875rem; font-weight: 600;">Slack Webhook URL</label>
+                            <input type="url" id="slack-webhook-url" class="form-control" placeholder="https://hooks.slack.com/services/T.../B.../..." style="margin-top: 0.25rem; max-width: 500px;">
+                        </div>
                     </div>
 
                     <!-- Save Button -->
@@ -937,6 +951,20 @@ async function loadQuarterConfig() {
                 discussionsCheckbox.checked = config.enableGitHubDiscussions || false;
             }
 
+            const slackCheckbox = document.getElementById('enable-slack-notifications');
+            const slackUrlGroup = document.getElementById('slack-webhook-url-group');
+            const slackUrlInput = document.getElementById('slack-webhook-url');
+            if (slackCheckbox) {
+                slackCheckbox.checked = config.enableSlackNotifications || false;
+                slackUrlGroup.style.display = slackCheckbox.checked ? 'block' : 'none';
+                slackCheckbox.addEventListener('change', () => {
+                    slackUrlGroup.style.display = slackCheckbox.checked ? 'block' : 'none';
+                });
+            }
+            if (slackUrlInput && config.slackWebhookUrl) {
+                slackUrlInput.value = config.slackWebhookUrl;
+            }
+
             // Show custom config if needed
             if (config.systemType === 'custom') {
                 document.getElementById('custom-quarter-config').style.display = 'block';
@@ -961,6 +989,8 @@ async function saveQuarterConfig() {
     const systemType = document.getElementById('quarter-system').value;
     const q1StartMonth = parseInt(document.getElementById('q1-start-month').value);
     const enableGitHubDiscussions = document.getElementById('enable-github-discussions')?.checked || false;
+    const enableSlackNotifications = document.getElementById('enable-slack-notifications')?.checked || false;
+    const slackWebhookUrl = document.getElementById('slack-webhook-url')?.value?.trim() || null;
 
     button.disabled = true;
     button.innerHTML = '<span>⏳ Saving...</span>';
@@ -969,7 +999,7 @@ async function saveQuarterConfig() {
         const response = await fetch('/api/admin/quarter-config', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ systemType, q1StartMonth, enableGitHubDiscussions })
+            body: JSON.stringify({ systemType, q1StartMonth, enableGitHubDiscussions, enableSlackNotifications, slackWebhookUrl })
         });
 
         const result = await response.json();

@@ -238,7 +238,7 @@ export async function getQuarterConfigController(req, res) {
  */
 export async function updateQuarterConfigController(req, res) {
     try {
-        const { systemType, q1StartMonth, enableGitHubDiscussions } = req.body;
+        const { systemType, q1StartMonth, enableGitHubDiscussions, enableSlackNotifications, slackWebhookUrl } = req.body;
         const modifiedBy = req.user?.username || 'admin';
 
         // Validation expected by tests
@@ -254,7 +254,9 @@ export async function updateQuarterConfigController(req, res) {
             systemType,
             q1StartMonth,
             modifiedBy,
-            enableGitHubDiscussions
+            enableGitHubDiscussions,
+            enableSlackNotifications || false,
+            slackWebhookUrl || null
         );
 
         res.json({
