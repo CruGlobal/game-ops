@@ -149,7 +149,7 @@ npx prisma migrate reset
 - Username, PR/review counts, avatar URL
 - Badge tracking flags for milestones (1, 10, 50, 100, 500, 1000)
 - Time-series contribution and review arrays
-- Bill/Vonette award tracking
+- Bill/Vonette award tracking (totalBillsAwarded — lifetime accumulator, awarded quarterly)
 - **NEW: Streak tracking** (currentStreak, longestStreak, lastContributionDate)
 - **NEW: Points system** (totalPoints, pointsHistory with timestamps)
 - **NEW: Challenge participation** (activeChallenges, completedChallenges)
@@ -178,6 +178,10 @@ npx prisma migrate reset
 - systemType: calendar, fiscal-us, academic, custom
 - q1StartMonth: 1-12 (defines quarter start)
 - Modified timestamp and modifiedBy tracking
+- **Notification Settings**:
+  - enableGitHubDiscussions: Toggle GitHub Discussion announcements for quarterly winners
+  - enableSlackNotifications: Toggle Slack webhook announcements for quarterly winners
+  - slackWebhookUrl: Slack Incoming Webhook URL (optional, falls back to `SLACK_WEBHOOK_URL` env var)
 - **DevOps Team Filter Settings**:
   - devOpsTeamMembers: Cached GitHub team members (JSON array)
   - excludeDevOpsFromLeaderboards: Toggle to filter DevOps from leaderboards
@@ -208,6 +212,7 @@ npx prisma migrate reset
 - **NEW:** `challengeService.js`: Challenge lifecycle management, weekly auto-generation
 - **NEW:** `analyticsService.js`: Time-series data, heatmaps, growth metrics, CSV generation
 - **PHASE 2:** `quarterlyService.js`: Quarter calculation, quarterly stats management, leaderboards, winner archiving, reset automation
+- **Slack Notifications:** `slackService.js`: Slack Incoming Webhook posting for quarterly winner announcements
 - **DevOps Filter:** `devOpsTeamService.js`: GitHub Teams API integration, automatic sync, leaderboard filtering
 
 **Routes** (`app/routes/`):
@@ -228,7 +233,7 @@ npx prisma migrate reset
 ### Automation
 - Daily cron job fetches merged PRs and reviews using GitHub API
 - Automatic badge awarding system with GitHub comment notifications
-- Bill/Vonette awards for top contributors (custom reward system)
+- **Quarterly Bill/Vonette awards**: 1st place → 1 Vonette (5 Bills), 2nd/3rd → 1 Bill each; DevOps members earn 1 Bill for 50+ contributions
 - **NEW:** Daily streak verification and badge awarding (runs at midnight)
 - **NEW:** Weekly challenge generation (runs Monday 00:00)
 - **NEW:** Hourly expired challenge cleanup
@@ -671,16 +676,47 @@ Defined in `app/config/points-config.js`:
 - **Medium:** 200-250 points
 - **Hard:** 300-500 points
 
+### Bill/Vonette Reward System (Quarterly)
+Bills and Vonettes are real-world rewards: **40 Bills = 1 day off work**.
+
+**How they are awarded:**
+- Bills/Vonettes are awarded **only at quarter boundaries** (not per-contribution)
+- The daily `checkAndResetIfNewQuarter` cron detects new quarters and triggers awards
+- `totalBillsAwarded` is a lifetime accumulator that persists across quarters (never reset)
+
+**Non-DevOps Contributors** (from the DevOps-filtered leaderboard):
+- **1st place:** 1 Vonette (worth 5 Bills)
+- **2nd place:** 1 Bill
+- **3rd place:** 1 Bill
+
+**DevOps Team Members** (participation-based):
+- Any DevOps member with **50+ contributions** (PRs + reviews) in the quarter earns **1 Bill**
+- This encourages consistent participation without competing against non-DevOps teams
+
+**Quarterly Reset Sequence:**
+1. Archive quarter winners (Hall of Fame)
+2. Award quarterly bills/vonettes based on final standings
+3. Post announcements (GitHub Discussion + Slack webhook, if enabled)
+4. Reset `totalPoints` and `quarterlyStats` for all contributors
+5. `totalBillsAwarded` is NOT reset (lifetime accumulator)
+
+**Key Design Decisions:**
+- Old milestone-based bill system (10 PRs = 1 bill, every 100 = 1 bill) has been removed
+- DevOps team is excluded from the main competition to encourage non-DevOps participation
+- The DevOps participation threshold (50 contributions) is defined in `quarterlyService.js`
+
 ---
 
 ## Cron Jobs Schedule
 
+### Every 6 Hours
+1. **Fetch PRs:** `fetchPRsCron()` - Catch-up fetch for merged PRs and reviews (safety net for webhooks)
+2. **Award Badges:** `awardContributorBadgesCron()` - Check and award milestone badges
+
 ### Daily Jobs (runs at 00:00 UTC)
-1. **Fetch PRs:** `fetchAndStorePRs()` - Fetch yesterday's merged PRs
-2. **Award Badges:** `awardBadgesAndBills()` - Check and award milestone badges
-3. **Check Streaks:** Verify contributor streaks, award streak badges
-4. **Check Quarterly Reset:** `checkAndResetIfNewQuarter()` - Detect quarter boundaries, archive winners, reset stats
-5. **Sync DevOps Team** (at 2 AM UTC): `syncDevOpsTeamFromGitHub()` - Sync DevOps team members from GitHub Teams API
+1. **Check Streaks:** Verify contributor streaks, award streak badges
+2. **Check Quarterly Reset:** `checkAndResetIfNewQuarter()` - Detect quarter boundaries, award quarterly bills/vonettes, archive winners, reset stats and points
+3. **Sync DevOps Team** (at 2 AM UTC): `syncDevOpsTeamFromGitHub()` - Sync DevOps team members from GitHub Teams API
 
 ### Weekly Jobs (runs Monday 00:00 UTC)
 1. **Generate Challenges:** `generateWeeklyChallenges()` - Create 3 new weekly challenges
@@ -703,6 +739,7 @@ Defined in `app/config/points-config.js`:
 - `GITHUB_CLIENT_ID` - For GitHub OAuth
 - `GITHUB_CLIENT_SECRET` - For GitHub OAuth
 - `GITHUB_CALLBACK_URL` - OAuth callback URL
+- `SLACK_WEBHOOK_URL` - Slack Incoming Webhook URL for quarterly winner announcements (can also be set in admin UI)
 
 ---
 

@@ -7,7 +7,7 @@ import { POINT_REASONS, POINT_VALUES } from '../config/points-config.js';
 import { updateQuarterlyStats, recomputeHallOfFameAll, recomputeCurrentQuarterStats } from './quarterlyService.js';
 import { checkAndAwardAchievements } from './achievementService.js';
 import { updateStreak, checkStreakBadges } from './streakService.js';
-import { awardBadges, awardBillsAndVonettes } from './contributorService.js';
+import { awardBadges } from './contributorService.js';
 
 const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
 const repoOwner = process.env.REPO_OWNER || 'CruGlobal';
@@ -573,19 +573,18 @@ export async function startBackfill(startDate, endDate, checkRateLimits = true, 
                 hofSummary = ' (HoF recompute encountered an error; you can retry from Admin UI).';
             }
 
-            // Award badges and bills for all contributors (batch mode)
-            backfillState.progress.status = 'Awarding badges and bills...';
+            // Award badges for all contributors (batch mode)
+            // Bills/vonettes are now awarded quarterly, not during backfill
+            backfillState.progress.status = 'Awarding badges...';
             emitBackfillProgress();
             try {
                 const badgeResults = await awardBadges();
-                const billResults = await awardBillsAndVonettes();
                 const badgeCount = badgeResults.length;
-                const billCount = billResults.length;
-                if (badgeCount > 0 || billCount > 0) {
-                    logger.info(`Backfill awarded ${badgeCount} badge(s) and ${billCount} bill(s)`);
+                if (badgeCount > 0) {
+                    logger.info(`Backfill awarded ${badgeCount} badge(s)`);
                 }
             } catch (awardErr) {
-                logger.error('Error awarding badges/bills after backfill:', awardErr);
+                logger.error('Error awarding badges after backfill:', awardErr);
             }
 
             backfillState.progress.status = 'Completed';

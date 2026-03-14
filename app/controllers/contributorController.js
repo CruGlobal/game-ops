@@ -1,4 +1,4 @@
-import { awardBillsAndVonettes, fetchActivityData, fetchPullRequests, awardBadges, getTopContributors, getTopReviewers, getTopContributorsDateRange, getTopReviewersDateRange, initializeDatabase, getContributorByUsername } from '../services/contributorService.js';
+import { fetchActivityData, fetchPullRequests, awardBadges, getTopContributors, getTopReviewers, getTopContributorsDateRange, getTopReviewersDateRange, initializeDatabase, getContributorByUsername } from '../services/contributorService.js';
 import { prisma } from '../lib/prisma.js';
 import { getStreakStats, getStreakLeaderboard } from '../services/streakService.js';
 import { getPointsLeaderboard, getPointsHistory, getPointsSummary } from '../services/pointsService.js';
@@ -137,14 +137,12 @@ export const topReviewers = async (req, res) => {
 
 // Controller to award bills and vonettes to contributors based on their contributions
 export const awardBillsAndVonettesController = async (req, res) => {
-    const pullRequestNumber = req.query.pull_request_number; // Get pull request number from query
-    const test = req.query.test === 'true'; // Check if test mode is enabled
-    try {
-        const results = await awardBillsAndVonettes(pullRequestNumber, test); // Award bills and vonettes
-        res.status(200).json({ message: 'Bills and Vonettes awarded successfully.', results });
-    } catch (err) {
-        res.status(500).json({ message: 'Error awarding Bills and Vonettes.' }); // Handle errors
-    }
+    // Bills/Vonettes are now awarded quarterly at quarter boundaries.
+    // This endpoint is deprecated.
+    res.status(200).json({
+        message: 'Bills and Vonettes are now awarded quarterly. Use the quarterly reset system instead.',
+        results: []
+    });
 };
 
 // Controller to fetch activity data

@@ -1,5 +1,14 @@
 import { prisma } from '../lib/prisma.js';
 import { POINT_REASONS, POINT_VALUES } from '../config/points-config.js';
+import { emitBillAwarded } from '../utils/socketEmitter.js';
+import { postQuarterlyWinnersDiscussion } from './discussionService.js';
+import { postQuarterlyWinnersSlack } from './slackService.js';
+
+// DevOps participation threshold: contributions (PRs + reviews) needed to earn 1 Bill
+const DEVOPS_PARTICIPATION_THRESHOLD = 50;
+
+// Minimum contributions (PRs + reviews) for non-DevOps to qualify as quarterly winner
+const NON_DEVOPS_WINNER_THRESHOLD = 10;
 
 /**
  * Get quarter configuration from database
@@ -115,10 +124,10 @@ export async function getQuarterDateRange(quarterString) {
  * @param {String} systemType - 'calendar', 'fiscal-us', 'academic', 'custom'
  * @param {Number} q1StartMonth - 1-12
  * @param {String} modifiedBy - Username
- * @param {Boolean} enableAchievementComments - Whether to post achievement comments to GitHub PRs
+ * @param {Boolean} enableGitHubDiscussions - Whether to post quarterly winner announcements as GitHub Discussions
  * @returns {Object} { config, quarterChanged, oldQuarter, newQuarter }
  */
-export async function updateQuarterConfig(systemType, q1StartMonth, modifiedBy, enableAchievementComments = false, enableBillsComments = false) {
+export async function updateQuarterConfig(systemType, q1StartMonth, modifiedBy, enableGitHubDiscussions = false, enableSlackNotifications = false, slackWebhookUrl = null) {
     // Get old config and quarter
     const oldConfig = await getQuarterConfig();
     const oldQuarter = await getCurrentQuarter();
@@ -139,8 +148,9 @@ export async function updateQuarterConfig(systemType, q1StartMonth, modifiedBy, 
         update: {
             systemType,
             q1StartMonth: actualStartMonth,
-            enableAchievementComments,
-            enableBillsComments,
+            enableGitHubDiscussions,
+            enableSlackNotifications,
+            slackWebhookUrl,
             lastModified: new Date(),
             modifiedBy
         },
@@ -148,8 +158,9 @@ export async function updateQuarterConfig(systemType, q1StartMonth, modifiedBy, 
             id: 'quarter-config',
             systemType,
             q1StartMonth: actualStartMonth,
-            enableAchievementComments,
-            enableBillsComments,
+            enableGitHubDiscussions,
+            enableSlackNotifications,
+            slackWebhookUrl,
             lastModified: new Date(),
             modifiedBy
         }
@@ -162,7 +173,10 @@ export async function updateQuarterConfig(systemType, q1StartMonth, modifiedBy, 
     if (quarterChanged) {
         console.log(`Quarter changed from ${oldQuarter} to ${newQuarter} due to config update`);
         // Archive old quarter and reset
-        await archiveQuarterWinners(oldQuarter);
+        const quarterlyWinner = await archiveQuarterWinners(oldQuarter);
+        const billResults = await awardQuarterlyBills(oldQuarter);
+        await postQuarterlyWinnersDiscussion(oldQuarter, billResults, quarterlyWinner);
+        await postQuarterlyWinnersSlack(oldQuarter, billResults, quarterlyWinner);
         await resetQuarterlyStats(newQuarter);
     }
 
@@ -206,11 +220,14 @@ export async function archiveQuarterWinners(quarterString = null) {
         });
 
         // Filter and sort in memory
+        // Only contributors meeting minimum participation threshold qualify for winner
         const topContributors = allContributors
-            .filter(c =>
-                c.quarterlyStats?.currentQuarter === quarter &&
-                c.quarterlyStats?.pointsThisQuarter > 0
-            )
+            .filter(c => {
+                if (c.quarterlyStats?.currentQuarter !== quarter) return false;
+                if ((c.quarterlyStats?.pointsThisQuarter || 0) <= 0) return false;
+                const contributions = (c.quarterlyStats?.prsThisQuarter || 0) + (c.quarterlyStats?.reviewsThisQuarter || 0);
+                return contributions >= NON_DEVOPS_WINNER_THRESHOLD;
+            })
             .sort((a, b) => b.quarterlyStats.pointsThisQuarter - a.quarterlyStats.pointsThisQuarter)
             .slice(0, 3);
 
@@ -976,6 +993,129 @@ export async function recomputeHallOfFameAll() {
 }
 
 /**
+ * Award quarterly bills/vonettes based on leaderboard placement.
+ *
+ * Non-DevOps contributors (filtered leaderboard):
+ *   1st place → 1 Vonette (worth 5 Bills)
+ *   2nd place → 1 Bill
+ *   3rd place → 1 Bill
+ *
+ * DevOps contributors (participation-based):
+ *   Any DevOps member with >= DEVOPS_PARTICIPATION_THRESHOLD contributions earns 1 Bill
+ *
+ * @param {String} quarterString - Quarter being closed (e.g., "2025-Q1")
+ * @returns {Object} { nonDevOpsAwards, devOpsAwards }
+ */
+export async function awardQuarterlyBills(quarterString) {
+    const results = { nonDevOpsAwards: [], devOpsAwards: [] };
+
+    try {
+        const quarter = quarterString || await getCurrentQuarter();
+        console.log(`Awarding quarterly bills for ${quarter}`);
+
+        // --- Non-DevOps awards (top 3 from filtered leaderboard) ---
+        const allContributors = await prisma.contributor.findMany({
+            where: { isDevOps: false },
+            select: {
+                username: true,
+                avatarUrl: true,
+                quarterlyStats: true,
+                totalBillsAwarded: true
+            }
+        });
+
+        // Only contributors meeting minimum participation threshold qualify for awards
+        const ranked = allContributors
+            .filter(c => {
+                if (c.quarterlyStats?.currentQuarter !== quarter) return false;
+                if ((c.quarterlyStats?.pointsThisQuarter || 0) <= 0) return false;
+                const contributions = (c.quarterlyStats?.prsThisQuarter || 0) + (c.quarterlyStats?.reviewsThisQuarter || 0);
+                return contributions >= NON_DEVOPS_WINNER_THRESHOLD;
+            })
+            .sort((a, b) => b.quarterlyStats.pointsThisQuarter - a.quarterlyStats.pointsThisQuarter);
+
+        const awards = [
+            { rank: 1, type: 'Vonette', value: 5, image: '5_vonett_57_25.png' },
+            { rank: 2, type: 'Bill',    value: 1, image: '1_bill_57X27.png' },
+            { rank: 3, type: 'Bill',    value: 1, image: '1_bill_57X27.png' }
+        ];
+
+        for (let i = 0; i < Math.min(ranked.length, 3); i++) {
+            const contributor = ranked[i];
+            const award = awards[i];
+
+            await prisma.contributor.update({
+                where: { username: contributor.username },
+                data: { totalBillsAwarded: { increment: award.value } }
+            });
+
+            emitBillAwarded({
+                username: contributor.username,
+                billType: award.type,
+                billValue: award.value,
+                billImage: award.image
+            });
+
+            results.nonDevOpsAwards.push({
+                username: contributor.username,
+                rank: award.rank,
+                type: award.type,
+                value: award.value,
+                points: contributor.quarterlyStats.pointsThisQuarter
+            });
+
+            console.log(`Quarterly award: ${contributor.username} (rank #${award.rank}) → ${award.value} ${award.type}`);
+        }
+
+        // --- DevOps participation awards ---
+        const devOpsContributors = await prisma.contributor.findMany({
+            where: { isDevOps: true },
+            select: {
+                username: true,
+                avatarUrl: true,
+                quarterlyStats: true,
+                totalBillsAwarded: true
+            }
+        });
+
+        for (const contributor of devOpsContributors) {
+            if (contributor.quarterlyStats?.currentQuarter !== quarter) continue;
+            const contributions =
+                (contributor.quarterlyStats?.prsThisQuarter || 0) +
+                (contributor.quarterlyStats?.reviewsThisQuarter || 0);
+
+            if (contributions >= DEVOPS_PARTICIPATION_THRESHOLD) {
+                await prisma.contributor.update({
+                    where: { username: contributor.username },
+                    data: { totalBillsAwarded: { increment: 1 } }
+                });
+
+                emitBillAwarded({
+                    username: contributor.username,
+                    billType: 'Bill',
+                    billValue: 1,
+                    billImage: '1_bill_57X27.png'
+                });
+
+                results.devOpsAwards.push({
+                    username: contributor.username,
+                    contributions,
+                    value: 1
+                });
+
+                console.log(`DevOps participation award: ${contributor.username} (${contributions} contributions) → 1 Bill`);
+            }
+        }
+
+        console.log(`Quarterly bills awarded: ${results.nonDevOpsAwards.length} non-DevOps, ${results.devOpsAwards.length} DevOps`);
+        return results;
+    } catch (error) {
+        console.error('Error awarding quarterly bills:', error);
+        throw error;
+    }
+}
+
+/**
  * Check if we're in a new quarter and trigger reset if needed
  * @returns {Object} { quarterChanged, oldQuarter, newQuarter }
  */
@@ -1010,12 +1150,17 @@ export async function checkAndResetIfNewQuarter() {
 
         if (contributorQuarter !== currentQuarter) {
             console.log(`New quarter detected: ${contributorQuarter} → ${currentQuarter}`);
-            await archiveQuarterWinners(contributorQuarter);
+            const quarterlyWinner = await archiveQuarterWinners(contributorQuarter);
+            // Award bills/vonettes based on final standings before resetting
+            const billResults = await awardQuarterlyBills(contributorQuarter);
+            await postQuarterlyWinnersDiscussion(contributorQuarter, billResults, quarterlyWinner);
+            await postQuarterlyWinnersSlack(contributorQuarter, billResults, quarterlyWinner);
             await resetQuarterlyStats(currentQuarter);
             return {
                 quarterChanged: true,
                 oldQuarter: contributorQuarter,
-                newQuarter: currentQuarter
+                newQuarter: currentQuarter,
+                billsAwarded: billResults
             };
         }
 

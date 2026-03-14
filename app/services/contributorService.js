@@ -352,9 +352,9 @@ export const processSingleMergedPR = async (prData) => {
     // Check and award achievements
     await checkAndAwardAchievements(contributor);
 
-    // Award badges and bills in real-time (single-contributor mode)
+    // Award badges in real-time (single-contributor mode)
+    // Bills/vonettes are now awarded quarterly, not per-contribution
     await awardBadges(number, username);
-    await awardBillsAndVonettes(number, false, username);
 
     return { processed: true, reason: 'success' };
 };
@@ -447,9 +447,9 @@ export const processSingleReview = async (reviewData) => {
     // Check achievements
     await checkAndAwardAchievements(reviewer);
 
-    // Award badges and bills in real-time (single-contributor mode)
+    // Award badges in real-time (single-contributor mode)
+    // Bills/vonettes are now awarded quarterly, not per-contribution
     await awardBadges(prNumber, username);
-    await awardBillsAndVonettes(prNumber, false, username);
 
     return { processed: true, reason: 'success' };
 };
@@ -1026,8 +1026,6 @@ export const awardBillsAndVonettes = async (pullRequestNumber = null, test = fal
                     }
                 });
 
-                // Post comment to GitHub if enabled
-                await postBillsComment(contributor, billsAwarded, billsValue, billsImage);
             }
         }
     } catch (err) {
@@ -1035,76 +1033,6 @@ export const awardBillsAndVonettes = async (pullRequestNumber = null, test = fal
     }
     return results;
 };
-
-/**
- * Post bills/vonettes notification as GitHub comment
- * @param {Object} contributor - Contributor document
- * @param {String} billType - 'Bill' or 'Vonette'
- * @param {Number} billValue - Number of bills/vonettes awarded
- * @param {String} billImage - Image filename
- */
-async function postBillsComment(contributor, billType, billValue, billImage) {
-    try {
-        // Check if bills comments are enabled in settings
-        const settings = await prisma.quarterSettings.findUnique({
-            where: { id: 'quarter-config' }
-        });
-
-        if (!settings?.enableBillsComments) {
-            console.log('Bills comments disabled in settings');
-            return;
-        }
-
-        // Get repo config
-        const owner = process.env.REPO_OWNER || process.env.GITHUB_OWNER;
-        const repo = process.env.REPO_NAME || process.env.GITHUB_REPO;
-
-        // Skip if owner/repo not configured
-        if (!owner || !repo) {
-            console.log('Skipping bills comment - REPO_OWNER/REPO_NAME not configured');
-            return;
-        }
-
-        // Find the most recent PR by this contributor
-        const { data: prs } = await octokit.pulls.list({
-            owner,
-            repo,
-            state: 'all',
-            per_page: 10,
-            sort: 'updated',
-            direction: 'desc'
-        });
-
-        const userPR = prs.find(pr => pr.user.login === contributor.username);
-
-        if (userPR) {
-            const imageUrl = `${domain}/images/${billImage}`;
-            const pluralType = billValue > 1 ? `${billType}s` : billType;
-            
-            const comment = `💵 **${billType} Awarded!**
-
-Congratulations @${contributor.username}! You've earned **${billValue} ${pluralType}**! 🎉
-
-![${billType}](${imageUrl})
-
-Keep up the excellent work! Your contributions make a difference! 🌟`;
-
-            await octokit.issues.createComment({
-                owner,
-                repo,
-                issue_number: userPR.number,
-                body: comment
-            });
-
-            console.log(`Bills comment posted for ${contributor.username} on PR #${userPR.number}`);
-        } else {
-            console.log(`No recent PR found for ${contributor.username} to post bills comment`);
-        }
-    } catch (error) {
-        // Don't throw - this is a nice-to-have feature
-        console.log(`Could not post bills comment for ${contributor.username}: ${error.message}`);
-    }
-}
 
 // function to fetch activity data
 export const fetchActivityData = async (prFrom, prTo) => {

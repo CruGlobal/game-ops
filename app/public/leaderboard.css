@@ -429,3 +429,138 @@
     cursor: pointer;
     accent-color: var(--primary-color);
 }
+
+/* Winners Banner */
+.winners-banner {
+    position: relative;
+    background: linear-gradient(135deg, #FFD700 0%, #FFA500 50%, #FF8C00 100%);
+    border-radius: var(--border-radius, 12px);
+    padding: 1.5rem 2rem;
+    margin-bottom: 1.5rem;
+    color: #3d2200;
+    box-shadow: 0 4px 20px rgba(255, 165, 0, 0.3);
+    animation: bannerSlideDown 0.5s ease-out;
+    overflow: hidden;
+}
+
+.winners-banner::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: repeating-linear-gradient(
+        45deg,
+        transparent,
+        transparent 20px,
+        rgba(255, 255, 255, 0.05) 20px,
+        rgba(255, 255, 255, 0.05) 40px
+    );
+    pointer-events: none;
+}
+
+@keyframes bannerSlideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.winners-banner-dismiss {
+    position: absolute;
+    top: 0.75rem;
+    right: 0.75rem;
+    background: rgba(0, 0, 0, 0.15);
+    border: none;
+    color: #3d2200;
+    font-size: 1.25rem;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s;
+    z-index: 1;
+}
+
+.winners-banner-dismiss:hover {
+    background: rgba(0, 0, 0, 0.25);
+}
+
+.winners-banner-content {
+    position: relative;
+    z-index: 1;
+}
+
+.winners-banner-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    margin-bottom: 1rem;
+}
+
+.winners-banner-champion {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.winners-banner-champion img {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    border: 3px solid rgba(255, 255, 255, 0.6);
+}
+
+.winners-banner-champion-info {
+    display: flex;
+    flex-direction: column;
+}
+
+.winners-banner-champion-name {
+    font-size: 1.125rem;
+    font-weight: 700;
+}
+
+.winners-banner-champion-stats {
+    font-size: 0.875rem;
+    opacity: 0.85;
+}
+
+.winners-banner-podium {
+    display: flex;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+}
+
+.winners-banner-podium-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+.winners-banner-podium-item img {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.5);
+}
+
+@media (max-width: 768px) {
+    .winners-banner {
+        padding: 1rem 1.25rem;
+    }
+    .winners-banner-podium {
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+}

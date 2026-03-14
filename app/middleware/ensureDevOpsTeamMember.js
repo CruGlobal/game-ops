@@ -6,8 +6,8 @@ import fetch from 'node-fetch';
  * Requires both authentication AND DevOps team membership
  */
 export const ensureDevOpsTeamMember = async (req, res, next) => {
-    // In tests, bypass external auth checks to keep integration tests deterministic
-    if (process.env.NODE_ENV === 'test') {
+    // In tests or local dev with auth disabled, bypass external auth checks
+    if (process.env.NODE_ENV === 'test' || process.env.DISABLE_AUTH === 'true') {
         return next();
     }
 

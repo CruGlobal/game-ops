@@ -5,8 +5,8 @@ import fetch from 'node-fetch';
  * Checks if user is authenticated and has read access to the configured repository
  */
 export const ensureRepositoryAccess = async (req, res, next) => {
-    // In tests, bypass external auth checks
-    if (process.env.NODE_ENV === 'test') {
+    // In tests or local dev with auth disabled, bypass external auth checks
+    if (process.env.NODE_ENV === 'test' || process.env.DISABLE_AUTH === 'true') {
         return next();
     }
 

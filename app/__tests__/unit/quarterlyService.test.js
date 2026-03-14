@@ -66,7 +66,7 @@ describe('QuarterlyService', () => {
             const quarter = await getCurrentQuarter();
 
             expect(quarter).toMatch(/^\d{4}-Q[1-4]$/);
-            expect(quarter).toContain('2025');
+            expect(quarter).toContain('2026');
         });
 
         it('should calculate quarter based on fiscal year config', async () => {

@@ -15,6 +15,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     await checkDevOpsStatus();
     initializeEventListeners();
     await loadLeaderboardData();
+    checkAndShowWinnersBanner();
 });
 
 /**
@@ -246,6 +247,75 @@ function updateQuarterInfoDisplay() {
         const startDate = new Date(currentQuarterInfo.quarterDates.start).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
         const endDate = new Date(currentQuarterInfo.quarterDates.end).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
         datesEl.textContent = `${startDate} - ${endDate}`;
+    }
+}
+
+/**
+ * Show a winners banner if the most recent Hall of Fame entry was archived within the last 7 days.
+ * Respects localStorage dismissal keyed by quarter.
+ */
+function checkAndShowWinnersBanner() {
+    if (!hallOfFame || hallOfFame.length === 0) return;
+
+    // Sort descending by year then quarterNumber to get most recent
+    const sorted = [...hallOfFame].sort((a, b) => {
+        if (b.year !== a.year) return b.year - a.year;
+        return b.quarterNumber - a.quarterNumber;
+    });
+
+    const recent = sorted[0];
+    if (!recent || !recent.archivedDate) return;
+
+    const archivedDate = new Date(recent.archivedDate);
+    const daysSinceArchived = (Date.now() - archivedDate.getTime()) / (1000 * 60 * 60 * 24);
+    if (daysSinceArchived > 7) return;
+
+    // Check if user dismissed this banner
+    const dismissKey = `dismissed-banner-${recent.quarter}`;
+    if (localStorage.getItem(dismissKey)) return;
+
+    const banner = document.getElementById('winners-banner');
+    const content = document.getElementById('winners-banner-content');
+    if (!banner || !content) return;
+
+    const winner = recent.winner || {};
+    const top3 = recent.top3 || [];
+    const medals = ['🥇', '🥈', '🥉'];
+
+    let podiumHTML = '';
+    if (top3.length > 0) {
+        podiumHTML = `<div class="winners-banner-podium">
+            ${top3.slice(0, 3).map((c, i) => `
+                <div class="winners-banner-podium-item">
+                    ${medals[i] || ''}
+                    <img src="${c.avatarUrl || '/images/default-avatar.png'}" alt="${c.username}">
+                    ${c.username} — ${c.pointsThisQuarter || 0} pts
+                </div>
+            `).join('')}
+        </div>`;
+    }
+
+    content.innerHTML = `
+        <div class="winners-banner-title">👑 ${recent.quarter} Quarter Champions</div>
+        <div class="winners-banner-champion">
+            <img src="${winner.avatarUrl || '/images/default-avatar.png'}" alt="${winner.username}">
+            <div class="winners-banner-champion-info">
+                <div class="winners-banner-champion-name">${winner.username || 'N/A'}</div>
+                <div class="winners-banner-champion-stats">${winner.pointsThisQuarter || 0} pts | ${winner.prsThisQuarter || 0} PRs | ${winner.reviewsThisQuarter || 0} Reviews</div>
+            </div>
+        </div>
+        ${podiumHTML}
+    `;
+
+    banner.style.display = 'block';
+
+    // Dismiss handler
+    const dismissBtn = banner.querySelector('.winners-banner-dismiss');
+    if (dismissBtn) {
+        dismissBtn.addEventListener('click', () => {
+            banner.style.display = 'none';
+            localStorage.setItem(dismissKey, 'true');
+        });
     }
 }
 

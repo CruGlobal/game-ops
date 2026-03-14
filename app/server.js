@@ -14,7 +14,6 @@ import challengeRoutes from './routes/challengeRoutes.js';
 import analyticsRoutes from './routes/analyticsRoutes.js';
 import webhookRoutes from './routes/webhookRoutes.js';
 import { fetchPRsCron, awardContributorBadgesCron } from './controllers/contributorController.js';
-import { awardBillsAndVonettes } from './services/contributorService.js';
 import { generateWeeklyChallenges, checkExpiredChallenges } from './services/challengeService.js';
 import { checkAndResetIfNewQuarter } from './services/quarterlyService.js';
 import { syncDevOpsTeamFromGitHub } from './services/devOpsTeamService.js';
@@ -287,16 +286,8 @@ cron.schedule('0 */6 * * *', async () => {
     }
 });
 
-cron.schedule('0 0 * * *', async () => {
-    logger.info('Running daily task to award Bills and Vonettes');
-    try {
-        if (!(await shouldRunCron('billAwards'))) return;
-        const results = await awardBillsAndVonettes();
-        logger.info('Bills and Vonettes awarded successfully', { billsCount: results?.length || 0, results });
-    } catch (error) {
-        logger.error('Error awarding Bills and Vonettes', { error: error.message });
-    }
-});
+// Bills/Vonettes are now awarded quarterly (at quarter boundary via checkAndResetIfNewQuarter)
+// The old daily bill cron job has been removed.
 
 // Gamification Cron Jobs
 
