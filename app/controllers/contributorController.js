@@ -357,9 +357,10 @@ export const getQuarterlyLeaderboardController = async (req, res) => {
 export const getHallOfFameController = async (req, res) => {
     try {
         const limit = parseInt(req.query.limit) || 20;
-        // Show DevOps winners to DevOps members, general winners to everyone else
+        // DevOps members see DevOps winners unless they toggled to view non-DevOps
         const userIsDevOps = req.user?.isDevOps || false;
-        const category = userIsDevOps ? 'devops' : 'general';
+        const userShowDevOps = req.session?.showDevOpsMembers ?? true;
+        const category = (userIsDevOps && userShowDevOps) ? 'devops' : 'general';
         const hallOfFame = await getHallOfFame(limit, category);
         res.json({ success: true, data: hallOfFame });
     } catch (err) {
