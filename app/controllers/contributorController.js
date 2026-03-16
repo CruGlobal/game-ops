@@ -282,7 +282,7 @@ export const getStreakStatsController = async (req, res) => {
     }
 };
 
-// Get a single contributor by username
+// Get a single contributor by username (public API — filtered fields only)
 export const getContributorController = async (req, res) => {
     try {
         const { username } = req.params;
@@ -292,7 +292,23 @@ export const getContributorController = async (req, res) => {
             return res.status(404).json({ error: 'Contributor not found' });
         }
 
-        res.json(contributor);
+        // Return only public fields — omit internal DB id, isDevOps, timestamps, etc.
+        res.json({
+            username: contributor.username,
+            avatarUrl: contributor.avatarUrl,
+            prCount: contributor.prCount,
+            reviewCount: contributor.reviewCount,
+            totalPoints: contributor.totalPoints,
+            currentStreak: contributor.currentStreak,
+            longestStreak: contributor.longestStreak,
+            totalBillsAwarded: contributor.totalBillsAwarded,
+            badges: contributor.badges,
+            quarterlyStats: contributor.quarterlyStats,
+            sevenDayBadge: contributor.sevenDayBadge,
+            thirtyDayBadge: contributor.thirtyDayBadge,
+            ninetyDayBadge: contributor.ninetyDayBadge,
+            yearLongBadge: contributor.yearLongBadge,
+        });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
