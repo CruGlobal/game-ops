@@ -350,7 +350,12 @@ export async function getQuarterlyLeaderboardByQuarterController(req, res) {
         if (!/^\d{4}-Q[1-4]$/.test(quarter)) {
             return res.status(400).json({ success: false, message: 'Invalid quarter format' });
         }
-        const winner = await prisma.quarterlyWinner.findUnique({ where: { quarter } });
+        // Show DevOps winners to DevOps members, general winners to everyone else
+        const userIsDevOps = req.user?.isDevOps || false;
+        const category = userIsDevOps ? 'devops' : 'general';
+        const winner = await prisma.quarterlyWinner.findUnique({
+            where: { quarter_category: { quarter, category } }
+        });
         if (!winner) {
             return res.status(404).json({ success: false, message: `Quarter ${quarter} not found` });
         }
@@ -368,7 +373,10 @@ export async function getQuarterlyLeaderboardByQuarterController(req, res) {
 export async function getHallOfFameController(req, res) {
     try {
         const limit = parseInt(req.query.limit) || 10;
-        const hallOfFame = await getHallOfFame(limit);
+        // Show DevOps winners to DevOps members, general winners to everyone else
+        const userIsDevOps = req.user?.isDevOps || false;
+        const category = userIsDevOps ? 'devops' : 'general';
+        const hallOfFame = await getHallOfFame(limit, category);
 
         res.json({
             success: true,

@@ -273,7 +273,7 @@ function checkAndShowWinnersBanner() {
     if (daysSinceArchived > 7) return;
 
     // Check if user dismissed this banner
-    const dismissKey = `dismissed-banner-${recent.quarter}`;
+    const dismissKey = `dismissed-banner-${recent.quarter}-${recent.category || 'general'}`;
     if (localStorage.getItem(dismissKey)) return;
 
     const banner = document.getElementById('winners-banner');
@@ -297,8 +297,10 @@ function checkAndShowWinnersBanner() {
         </div>`;
     }
 
+    const categoryLabel = recent.category === 'devops' ? 'DevOps ' : '';
+
     content.innerHTML = `
-        <div class="winners-banner-title">👑 ${recent.quarter} Quarter Champions</div>
+        <div class="winners-banner-title">👑 ${recent.quarter} ${categoryLabel}Quarter Champions</div>
         <div class="winners-banner-champion">
             <img src="${winner.avatarUrl || '/images/default-avatar.png'}" alt="${winner.username}">
             <div class="winners-banner-champion-info">
@@ -576,9 +578,11 @@ function createHallOfFameCard(winner, index) {
         return `<span class="rank-badge">${rank}</span>`;
     };
 
+    const categoryLabel = winner.category === 'devops' ? ' (DevOps)' : '';
+
     card.innerHTML = `
         <div class="hall-card-header">
-            <div class="quarter-badge">${winner.quarter}</div>
+            <div class="quarter-badge">${winner.quarter}${categoryLabel}</div>
             <div class="quarter-date">${new Date(winner.quarterStart).toLocaleDateString()} - ${new Date(winner.quarterEnd).toLocaleDateString()}</div>
         </div>
 
