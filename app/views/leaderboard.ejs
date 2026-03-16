@@ -41,7 +41,7 @@
             </select>
         </div>
         <!-- DevOps Filter Toggle (only visible to DevOps members) -->
-        <div id="devops-filter-container" style="display: none;" class="devops-filter-toggle">
+        <div id="devops-filter-container" style="display: <%= user && user.isDevOps ? 'flex' : 'none' %>;" class="devops-filter-toggle">
             <label for="show-devops-toggle">
                 <input type="checkbox" id="show-devops-toggle" checked />
                 Show DevOps Members

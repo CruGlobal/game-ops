@@ -675,23 +675,24 @@ export async function checkUserDevOpsStatusController(req, res) {
             select: { isDevOps: true }
         });
 
+        // Get global filter setting
+        const settings = await prisma.quarterSettings.findUnique({
+            where: { id: 'quarter-config' },
+            select: { excludeDevOpsFromLeaderboards: true }
+        });
+
         // Get user's preference for showing DevOps members (default: true for DevOps members)
         const showDevOpsMembers = req.session?.showDevOpsMembers ?? true;
 
-        console.log('[DEBUG] User DevOps status check:', {
-            username,
-            'req.user.isDevOps': req.user.isDevOps,
-            'contributor.isDevOps': contributor?.isDevOps,
-            showDevOpsMembers,
-            sessionID: req.sessionID
-        });
+        const isDevOps = contributor?.isDevOps || req.user.isDevOps || false;
 
         res.json({
             success: true,
-            isDevOps: contributor?.isDevOps || false,
+            isDevOps,
             isAuthenticated: true,
             username,
-            showDevOpsMembers
+            showDevOpsMembers,
+            excludeDevOpsFromLeaderboards: settings?.excludeDevOpsFromLeaderboards || false
         });
     } catch (error) {
         console.error('Error in checkUserDevOpsStatusController:', error);

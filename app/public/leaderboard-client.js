@@ -33,13 +33,15 @@ async function checkDevOpsStatus() {
                 isAuthenticated: data.isAuthenticated || false
             };
 
-            // Show toggle if user is DevOps member
-            if (userDevOpsStatus.isDevOps) {
-                const container = document.getElementById('devops-filter-container');
-                const toggle = document.getElementById('show-devops-toggle');
-                if (container && toggle) {
-                    container.style.display = 'block';
+            // Show toggle if user is DevOps member and sync checkbox state
+            const container = document.getElementById('devops-filter-container');
+            const toggle = document.getElementById('show-devops-toggle');
+            if (container && toggle) {
+                if (userDevOpsStatus.isDevOps) {
+                    container.style.display = 'flex';
                     toggle.checked = userDevOpsStatus.showDevOpsMembers;
+                } else {
+                    container.style.display = 'none';
                 }
             }
         }
