@@ -268,6 +268,10 @@ function checkAndShowWinnersBanner() {
     const recent = sorted[0];
     if (!recent || !recent.archivedDate) return;
 
+    // Only show banner after the quarter has actually ended
+    const quarterEnd = new Date(recent.quarterEnd);
+    if (quarterEnd > new Date()) return;
+
     const archivedDate = new Date(recent.archivedDate);
     const daysSinceArchived = (Date.now() - archivedDate.getTime()) / (1000 * 60 * 60 * 24);
     if (daysSinceArchived > 7) return;
