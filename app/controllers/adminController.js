@@ -350,7 +350,13 @@ export async function getQuarterlyLeaderboardByQuarterController(req, res) {
         if (!/^\d{4}-Q[1-4]$/.test(quarter)) {
             return res.status(400).json({ success: false, message: 'Invalid quarter format' });
         }
-        const winner = await prisma.quarterlyWinner.findUnique({ where: { quarter } });
+        // DevOps members see DevOps winners unless they toggled to view non-DevOps
+        const userIsDevOps = req.user?.isDevOps || false;
+        const userShowDevOps = req.session?.showDevOpsMembers ?? true;
+        const category = (userIsDevOps && userShowDevOps) ? 'devops' : 'general';
+        const winner = await prisma.quarterlyWinner.findUnique({
+            where: { quarter_category: { quarter, category } }
+        });
         if (!winner) {
             return res.status(404).json({ success: false, message: `Quarter ${quarter} not found` });
         }
@@ -368,7 +374,11 @@ export async function getQuarterlyLeaderboardByQuarterController(req, res) {
 export async function getHallOfFameController(req, res) {
     try {
         const limit = parseInt(req.query.limit) || 10;
-        const hallOfFame = await getHallOfFame(limit);
+        // DevOps members see DevOps winners unless they toggled to view non-DevOps
+        const userIsDevOps = req.user?.isDevOps || false;
+        const userShowDevOps = req.session?.showDevOpsMembers ?? true;
+        const category = (userIsDevOps && userShowDevOps) ? 'devops' : 'general';
+        const hallOfFame = await getHallOfFame(limit, category);
 
         res.json({
             success: true,

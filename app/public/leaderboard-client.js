@@ -268,12 +268,16 @@ function checkAndShowWinnersBanner() {
     const recent = sorted[0];
     if (!recent || !recent.archivedDate) return;
 
+    // Only show banner after the quarter has actually ended
+    const quarterEnd = new Date(recent.quarterEnd);
+    if (quarterEnd > new Date()) return;
+
     const archivedDate = new Date(recent.archivedDate);
     const daysSinceArchived = (Date.now() - archivedDate.getTime()) / (1000 * 60 * 60 * 24);
     if (daysSinceArchived > 7) return;
 
     // Check if user dismissed this banner
-    const dismissKey = `dismissed-banner-${recent.quarter}`;
+    const dismissKey = `dismissed-banner-${recent.quarter}-${recent.category || 'general'}`;
     if (localStorage.getItem(dismissKey)) return;
 
     const banner = document.getElementById('winners-banner');
@@ -297,8 +301,10 @@ function checkAndShowWinnersBanner() {
         </div>`;
     }
 
+    const categoryLabel = recent.category === 'devops' ? 'DevOps ' : '';
+
     content.innerHTML = `
-        <div class="winners-banner-title">👑 ${recent.quarter} Quarter Champions</div>
+        <div class="winners-banner-title">👑 ${recent.quarter} ${categoryLabel}Quarter Champions</div>
         <div class="winners-banner-champion">
             <img src="${winner.avatarUrl || '/images/default-avatar.png'}" alt="${winner.username}">
             <div class="winners-banner-champion-info">
@@ -576,9 +582,11 @@ function createHallOfFameCard(winner, index) {
         return `<span class="rank-badge">${rank}</span>`;
     };
 
+    const categoryLabel = winner.category === 'devops' ? ' (DevOps)' : '';
+
     card.innerHTML = `
         <div class="hall-card-header">
-            <div class="quarter-badge">${winner.quarter}</div>
+            <div class="quarter-badge">${winner.quarter}${categoryLabel}</div>
             <div class="quarter-date">${new Date(winner.quarterStart).toLocaleDateString()} - ${new Date(winner.quarterEnd).toLocaleDateString()}</div>
         </div>
 

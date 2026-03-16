@@ -380,8 +380,8 @@ describe('QuarterlyService', () => {
 
             await archiveQuarterWinners('2025-Q1');
 
-            const winner = await prisma.quarterlyWinner.findUnique({ 
-                where: { quarter: '2025-Q1' }
+            const winner = await prisma.quarterlyWinner.findUnique({
+                where: { quarter_category: { quarter: '2025-Q1', category: 'general' } }
             });
 
             expect(winner).toBeDefined();

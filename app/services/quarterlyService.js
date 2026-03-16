@@ -196,105 +196,115 @@ export async function archiveQuarterWinners(quarterString = null) {
     try {
         const quarter = quarterString || await getCurrentQuarter();
         const quarterDates = await getQuarterDateRange(quarter);
+        const [year, quarterNum] = quarter.split('-Q');
 
         console.log(`Archiving winners for ${quarter}`);
 
-        // Check if DevOps filter is enabled
-        const settings = await prisma.quarterSettings.findUnique({
-            where: { id: 'quarter-config' }
-        });
-        const excludeDevOps = settings?.excludeDevOpsFromLeaderboards || false;
-
-        // Get top 3 contributors by points this quarter
-        // Note: Prisma doesn't support ordering by JSON field directly, so we fetch all and sort in memory
+        // Fetch ALL contributors (we'll split into DevOps vs non-DevOps in memory)
         const allContributors = await prisma.contributor.findMany({
-            where: {
-                // Exclude DevOps team members if filter is enabled
-                ...(excludeDevOps && { isDevOps: false })
-            },
             select: {
                 username: true,
                 avatarUrl: true,
-                quarterlyStats: true
+                quarterlyStats: true,
+                isDevOps: true
             }
         });
 
-        // Filter and sort in memory
-        // Only contributors meeting minimum participation threshold qualify for winner
-        const topContributors = allContributors
-            .filter(c => {
-                if (c.quarterlyStats?.currentQuarter !== quarter) return false;
-                if ((c.quarterlyStats?.pointsThisQuarter || 0) <= 0) return false;
-                const contributions = (c.quarterlyStats?.prsThisQuarter || 0) + (c.quarterlyStats?.reviewsThisQuarter || 0);
-                return contributions >= NON_DEVOPS_WINNER_THRESHOLD;
-            })
-            .sort((a, b) => b.quarterlyStats.pointsThisQuarter - a.quarterlyStats.pointsThisQuarter)
-            .slice(0, 3);
+        // Helper: filter, rank, and build winner data for a set of contributors
+        const buildWinnerRecord = (contributors, category, threshold) => {
+            const topContributors = contributors
+                .filter(c => {
+                    if (c.quarterlyStats?.currentQuarter !== quarter) return false;
+                    if ((c.quarterlyStats?.pointsThisQuarter || 0) <= 0) return false;
+                    const contributions = (c.quarterlyStats?.prsThisQuarter || 0) + (c.quarterlyStats?.reviewsThisQuarter || 0);
+                    return contributions >= threshold;
+                })
+                .sort((a, b) => b.quarterlyStats.pointsThisQuarter - a.quarterlyStats.pointsThisQuarter)
+                .slice(0, 3);
 
-        if (topContributors.length === 0) {
+            if (topContributors.length === 0) return null;
+
+            const winner = topContributors[0];
+            const top3 = topContributors.map((contributor, index) => ({
+                rank: index + 1,
+                username: contributor.username,
+                avatarUrl: contributor.avatarUrl,
+                prsThisQuarter: contributor.quarterlyStats.prsThisQuarter,
+                reviewsThisQuarter: contributor.quarterlyStats.reviewsThisQuarter,
+                pointsThisQuarter: contributor.quarterlyStats.pointsThisQuarter
+            }));
+
+            const totalParticipants = contributors.filter(c =>
+                c.quarterlyStats?.currentQuarter === quarter &&
+                (c.quarterlyStats?.prsThisQuarter > 0 || c.quarterlyStats?.reviewsThisQuarter > 0)
+            ).length;
+
+            return {
+                category,
+                winner: {
+                    username: winner.username,
+                    avatarUrl: winner.avatarUrl,
+                    prsThisQuarter: winner.quarterlyStats.prsThisQuarter,
+                    reviewsThisQuarter: winner.quarterlyStats.reviewsThisQuarter,
+                    pointsThisQuarter: winner.quarterlyStats.pointsThisQuarter
+                },
+                top3,
+                totalParticipants
+            };
+        };
+
+        // Build winner records for both categories
+        const nonDevOpsContributors = allContributors.filter(c => !c.isDevOps);
+        const devOpsContributors = allContributors.filter(c => c.isDevOps);
+
+        const generalRecord = buildWinnerRecord(nonDevOpsContributors, 'general', NON_DEVOPS_WINNER_THRESHOLD);
+        const devOpsRecord = buildWinnerRecord(devOpsContributors, 'devops', NON_DEVOPS_WINNER_THRESHOLD);
+
+        const results = [];
+
+        // Upsert each category record
+        for (const record of [generalRecord, devOpsRecord]) {
+            if (!record) continue;
+
+            const quarterlyWinner = await prisma.quarterlyWinner.upsert({
+                where: {
+                    quarter_category: { quarter, category: record.category }
+                },
+                update: {
+                    year: parseInt(year),
+                    quarterNumber: parseInt(quarterNum),
+                    quarterStart: quarterDates.start,
+                    quarterEnd: quarterDates.end,
+                    winner: record.winner,
+                    top3: record.top3,
+                    totalParticipants: record.totalParticipants,
+                    archivedDate: new Date()
+                },
+                create: {
+                    quarter,
+                    category: record.category,
+                    year: parseInt(year),
+                    quarterNumber: parseInt(quarterNum),
+                    quarterStart: quarterDates.start,
+                    quarterEnd: quarterDates.end,
+                    winner: record.winner,
+                    top3: record.top3,
+                    totalParticipants: record.totalParticipants,
+                    archivedDate: new Date()
+                }
+            });
+
+            console.log(`Archived ${quarter} ${record.category} winner: ${record.winner.username} with ${record.winner.pointsThisQuarter} points`);
+            results.push(quarterlyWinner);
+        }
+
+        if (results.length === 0) {
             console.log(`No contributors with points in ${quarter}, skipping archive`);
             return null;
         }
 
-        const winner = topContributors[0];
-        const top3 = topContributors.map((contributor, index) => ({
-            rank: index + 1,
-            username: contributor.username,
-            avatarUrl: contributor.avatarUrl,
-            prsThisQuarter: contributor.quarterlyStats.prsThisQuarter,
-            reviewsThisQuarter: contributor.quarterlyStats.reviewsThisQuarter,
-            pointsThisQuarter: contributor.quarterlyStats.pointsThisQuarter
-        }));
-
-        // Count total participants (contributors with any activity)
-        const totalParticipants = allContributors.filter(c =>
-            c.quarterlyStats?.currentQuarter === quarter &&
-            (c.quarterlyStats?.prsThisQuarter > 0 || c.quarterlyStats?.reviewsThisQuarter > 0)
-        ).length;
-
-        const [year, quarterNum] = quarter.split('-Q');
-
-        // Create or update quarterly winner record
-        const quarterlyWinner = await prisma.quarterlyWinner.upsert({
-            where: { quarter },
-            update: {
-                year: parseInt(year),
-                quarterNumber: parseInt(quarterNum),
-                quarterStart: quarterDates.start,
-                quarterEnd: quarterDates.end,
-                winner: {
-                    username: winner.username,
-                    avatarUrl: winner.avatarUrl,
-                    prsThisQuarter: winner.quarterlyStats.prsThisQuarter,
-                    reviewsThisQuarter: winner.quarterlyStats.reviewsThisQuarter,
-                    pointsThisQuarter: winner.quarterlyStats.pointsThisQuarter
-                },
-                top3,
-                totalParticipants,
-                archivedDate: new Date()
-            },
-            create: {
-                quarter,
-                year: parseInt(year),
-                quarterNumber: parseInt(quarterNum),
-                quarterStart: quarterDates.start,
-                quarterEnd: quarterDates.end,
-                winner: {
-                    username: winner.username,
-                    avatarUrl: winner.avatarUrl,
-                    prsThisQuarter: winner.quarterlyStats.prsThisQuarter,
-                    reviewsThisQuarter: winner.quarterlyStats.reviewsThisQuarter,
-                    pointsThisQuarter: winner.quarterlyStats.pointsThisQuarter
-                },
-                top3,
-                totalParticipants,
-                archivedDate: new Date()
-            }
-        });
-
-        console.log(`Archived ${quarter} winner: ${winner.username} with ${winner.quarterlyStats.pointsThisQuarter} points`);
-
-        return quarterlyWinner;
+        // Return the general (non-DevOps) winner for backward compatibility
+        return results.find(r => r.category === 'general') || results[0];
     } catch (error) {
         console.error('Error archiving quarter winners:', error);
         throw error;
@@ -585,9 +595,12 @@ export async function getAllTimeLeaderboard(limit = 50, options = {}) {
  * @param {Number} limit - Maximum number of quarters to return
  * @returns {Array} List of quarterly winners
  */
-export async function getHallOfFame(limit = 20) {
+export async function getHallOfFame(limit = 20, category = null) {
     try {
         const winners = await prisma.quarterlyWinner.findMany({
+            where: {
+                ...(category && { category })
+            },
             orderBy: [
                 { year: 'desc' },
                 { quarterNumber: 'desc' }
@@ -821,11 +834,11 @@ export async function recomputeHallOfFame(quarterString) {
         });
     }
 
-    // Fetch contributor profiles
+    // Fetch contributor profiles (including isDevOps flag for category split)
     const ids = rankings.map(t => t.contributorId);
     const profiles = await prisma.contributor.findMany({
         where: { id: { in: ids } },
-        select: { id: true, username: true, avatarUrl: true }
+        select: { id: true, username: true, avatarUrl: true, isDevOps: true }
     });
     const profileMap = new Map(profiles.map(p => [String(p.id), p]));
 
@@ -858,77 +871,93 @@ export async function recomputeHallOfFame(quarterString) {
         reviewCountsMap = new Map(rvCounts.map(c => [String(c.contributorId), Number(c._count._all || 0)]));
     }
 
-    const top3 = ranked.slice(0, 3).map((r, idx) => {
-        const p = profileMap.get(r.id);
-        let prsThisQuarter = 0;
-        let reviewsThisQuarter = 0;
+    // Helper to get PR/review counts for a contributor
+    const getCounts = (id) => {
         if (fallbackUsed) {
-            // Derive counts from computed rankings (attached in fallback)
-            const rRaw = rankings.find(x => String(x.contributorId) === r.id);
-            if (rRaw && rRaw.__counts) {
-                prsThisQuarter = rRaw.__counts.prs || 0;
-                reviewsThisQuarter = rRaw.__counts.reviews || 0;
-            }
-        } else {
-            prsThisQuarter = prCountsMap.get(r.id) || 0;
-            reviewsThisQuarter = reviewCountsMap.get(r.id) || 0;
+            const rRaw = rankings.find(x => String(x.contributorId) === id);
+            return {
+                prsThisQuarter: rRaw?.__counts?.prs || 0,
+                reviewsThisQuarter: rRaw?.__counts?.reviews || 0
+            };
         }
         return {
-            rank: idx + 1,
-            username: p?.username || 'unknown',
-            avatarUrl: p?.avatarUrl || null,
-            prsThisQuarter,
-            reviewsThisQuarter,
-            pointsThisQuarter: r.points
+            prsThisQuarter: prCountsMap.get(id) || 0,
+            reviewsThisQuarter: reviewCountsMap.get(id) || 0
         };
-    });
-
-    const winnerProfile = profileMap.get(ranked[0].id);
-    const winner = {
-        username: winnerProfile?.username || 'unknown',
-        avatarUrl: winnerProfile?.avatarUrl || null,
-        prsThisQuarter: fallbackUsed
-            ? (ranked[0] && (rankings.find(x => String(x.contributorId) === ranked[0].id)?.__counts?.prs || 0))
-            : (prCountsMap.get(ranked[0].id) || 0),
-        reviewsThisQuarter: fallbackUsed
-            ? (ranked[0] && (rankings.find(x => String(x.contributorId) === ranked[0].id)?.__counts?.reviews || 0))
-            : (reviewCountsMap.get(ranked[0].id) || 0),
-        pointsThisQuarter: ranked[0].points
     };
-
-    // Participants: contributors with any points in the quarter
-    const totalParticipants = ranked.length;
 
     const [yearStr, qPart] = quarter.split('-Q');
     const year = parseInt(yearStr);
     const quarterNumber = parseInt(qPart);
 
-    await prisma.quarterlyWinner.upsert({
-        where: { quarter },
-        update: {
-            year,
-            quarterNumber,
-            quarterStart: start,
-            quarterEnd: end,
-            winner,
-            top3,
-            totalParticipants,
-            archivedDate: new Date()
-        },
-        create: {
-            quarter,
-            year,
-            quarterNumber,
-            quarterStart: start,
-            quarterEnd: end,
-            winner,
-            top3,
-            totalParticipants,
-            archivedDate: new Date()
-        }
-    });
+    // Split ranked into DevOps and non-DevOps categories
+    const rankedByCategory = {
+        general: ranked.filter(r => !profileMap.get(r.id)?.isDevOps),
+        devops: ranked.filter(r => profileMap.get(r.id)?.isDevOps)
+    };
 
-    return { quarter, updated: true };
+    let updated = false;
+
+    for (const [category, categoryRanked] of Object.entries(rankedByCategory)) {
+        if (categoryRanked.length === 0) continue;
+
+        const top3 = categoryRanked.slice(0, 3).map((r, idx) => {
+            const p = profileMap.get(r.id);
+            const counts = getCounts(r.id);
+            return {
+                rank: idx + 1,
+                username: p?.username || 'unknown',
+                avatarUrl: p?.avatarUrl || null,
+                prsThisQuarter: counts.prsThisQuarter,
+                reviewsThisQuarter: counts.reviewsThisQuarter,
+                pointsThisQuarter: r.points
+            };
+        });
+
+        const winnerProfile = profileMap.get(categoryRanked[0].id);
+        const winnerCounts = getCounts(categoryRanked[0].id);
+        const winner = {
+            username: winnerProfile?.username || 'unknown',
+            avatarUrl: winnerProfile?.avatarUrl || null,
+            prsThisQuarter: winnerCounts.prsThisQuarter,
+            reviewsThisQuarter: winnerCounts.reviewsThisQuarter,
+            pointsThisQuarter: categoryRanked[0].points
+        };
+
+        const totalParticipants = categoryRanked.length;
+
+        await prisma.quarterlyWinner.upsert({
+            where: {
+                quarter_category: { quarter, category }
+            },
+            update: {
+                year,
+                quarterNumber,
+                quarterStart: start,
+                quarterEnd: end,
+                winner,
+                top3,
+                totalParticipants,
+                archivedDate: new Date()
+            },
+            create: {
+                quarter,
+                category,
+                year,
+                quarterNumber,
+                quarterStart: start,
+                quarterEnd: end,
+                winner,
+                top3,
+                totalParticipants,
+                archivedDate: new Date()
+            }
+        });
+
+        updated = true;
+    }
+
+    return { quarter, updated };
 }
 
 /**

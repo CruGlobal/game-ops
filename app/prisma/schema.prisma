@@ -236,7 +236,8 @@ model QuarterSettings {
 
 model QuarterlyWinner {
   id                String   @id @default(cuid())
-  quarter           String   @unique
+  quarter           String
+  category          String   @default("general")
   year              Int      @map("year")
   quarterNumber     Int      @map("quarter_number")
   quarterStart      DateTime @map("quarter_start")
@@ -247,6 +248,7 @@ model QuarterlyWinner {
   archivedDate      DateTime @default(now()) @map("archived_date")
   createdAt         DateTime @default(now()) @map("created_at")
 
+  @@unique([quarter, category])
   @@index([year(sort: Desc), quarterNumber(sort: Desc)])
   @@map("quarterly_winners")
 }
