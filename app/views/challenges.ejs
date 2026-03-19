@@ -52,6 +52,10 @@
     </main>
 </div>
 
+<script>
+    // Pass authenticated user info to client JS
+    window.__currentUser = <%= user ? JSON.stringify({ username: user.username }) : 'null' %>;
+</script>
 <script src="/socket.io/socket.io.js"></script>
 <script src="/notification-settings.js"></script>
 <script nonce="lexicostatistics" src="/socket-client.js"></script>
