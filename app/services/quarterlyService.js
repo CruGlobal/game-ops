@@ -201,7 +201,15 @@ export async function archiveQuarterWinners(quarterString = null) {
         console.log(`Archiving winners for ${quarter}`);
 
         // Fetch ALL contributors (we'll split into DevOps vs non-DevOps in memory)
+        // Exclude bot accounts (e.g., github-actions[bot])
         const allContributors = await prisma.contributor.findMany({
+            where: {
+                username: {
+                    not: {
+                        endsWith: '[bot]'
+                    }
+                }
+            },
             select: {
                 username: true,
                 avatarUrl: true,
@@ -835,17 +843,25 @@ export async function recomputeHallOfFame(quarterString) {
     }
 
     // Fetch contributor profiles (including isDevOps flag for category split)
+    // Exclude bot accounts (e.g., github-actions[bot])
     const ids = rankings.map(t => t.contributorId);
     const profiles = await prisma.contributor.findMany({
-        where: { id: { in: ids } },
+        where: {
+            id: { in: ids },
+            username: {
+                not: {
+                    endsWith: '[bot]'
+                }
+            }
+        },
         select: { id: true, username: true, avatarUrl: true, isDevOps: true }
     });
     const profileMap = new Map(profiles.map(p => [String(p.id), p]));
 
-    // Build sorted list
+    // Build sorted list (only include contributors with profiles — bots are excluded)
     const ranked = rankings
         .map(t => ({ id: String(t.contributorId), points: Number(t._sum.points || 0n) }))
-        .filter(t => t.points > 0)
+        .filter(t => t.points > 0 && profileMap.has(t.id))
         .sort((a, b) => b.points - a.points);
 
     if (ranked.length === 0) {
@@ -1044,7 +1060,14 @@ export async function awardQuarterlyBills(quarterString) {
 
         // --- Non-DevOps awards (top 3 from filtered leaderboard) ---
         const allContributors = await prisma.contributor.findMany({
-            where: { isDevOps: false },
+            where: {
+                isDevOps: false,
+                username: {
+                    not: {
+                        endsWith: '[bot]'
+                    }
+                }
+            },
             select: {
                 username: true,
                 avatarUrl: true,
@@ -1098,7 +1121,14 @@ export async function awardQuarterlyBills(quarterString) {
 
         // --- DevOps participation awards ---
         const devOpsContributors = await prisma.contributor.findMany({
-            where: { isDevOps: true },
+            where: {
+                isDevOps: true,
+                username: {
+                    not: {
+                        endsWith: '[bot]'
+                    }
+                }
+            },
             select: {
                 username: true,
                 avatarUrl: true,
