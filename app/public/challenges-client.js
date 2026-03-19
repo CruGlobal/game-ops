@@ -3,7 +3,7 @@
  * Handles challenge display, join functionality, and real-time updates
  */
 
-// Store current username (from localStorage or session)
+// Store current username (from authenticated session)
 let currentUsername = null;
 
 // Initialize on page load
@@ -16,14 +16,9 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Get username from localStorage or prompt
-    currentUsername = localStorage.getItem('github_username');
-
-    if (!currentUsername) {
-        currentUsername = prompt('Enter your GitHub username to join challenges:');
-        if (currentUsername) {
-            localStorage.setItem('github_username', currentUsername);
-        }
+    // Get username from authenticated session (set by server in EJS template)
+    if (window.__currentUser && window.__currentUser.username) {
+        currentUsername = window.__currentUser.username;
     }
 
     // Load challenges
@@ -168,9 +163,10 @@ function createChallengeCard(challenge) {
  */
 async function joinChallenge(challengeId) {
     if (!currentUsername) {
-        currentUsername = prompt('Enter your GitHub username to join this challenge:');
-        if (!currentUsername) return;
-        localStorage.setItem('github_username', currentUsername);
+        if (typeof showToast === 'function') {
+            showToast('Please log in with GitHub to join challenges.', 'error');
+        }
+        return;
     }
 
     try {
