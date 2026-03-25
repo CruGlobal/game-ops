@@ -271,6 +271,89 @@ export const updateChallengeProgress = async (username, challengeId, increment =
 };
 
 /**
+ * Set challenge progress to an absolute value (used for streak challenges
+ * where progress = current streak, not an increment)
+ */
+export const setChallengeProgressAbsolute = async (username, challengeId, absoluteValue) => {
+    try {
+        const contributor = await prisma.contributor.findUnique({
+            where: { username },
+            select: { id: true }
+        });
+
+        if (!contributor) return null;
+
+        const challenge = await prisma.challenge.findUnique({
+            where: { id: challengeId }
+        });
+
+        const participant = await prisma.challengeParticipant.findUnique({
+            where: {
+                challengeId_contributorId: {
+                    challengeId,
+                    contributorId: contributor.id
+                }
+            }
+        });
+
+        if (!challenge || !participant) return null;
+
+        const newProgress = Math.max(0, absoluteValue);
+
+        if (newProgress >= challenge.target && !participant.completed) {
+            await prisma.challengeParticipant.update({
+                where: {
+                    challengeId_contributorId: {
+                        challengeId,
+                        contributorId: contributor.id
+                    }
+                },
+                data: { progress: newProgress, completed: true }
+            });
+            await completeChallenge(username, challengeId);
+        } else {
+            await prisma.challengeParticipant.update({
+                where: {
+                    challengeId_contributorId: {
+                        challengeId,
+                        contributorId: contributor.id
+                    }
+                },
+                data: { progress: newProgress }
+            });
+
+            emitChallengeProgress({
+                username,
+                challengeId: challenge.id,
+                challengeName: challenge.title,
+                progress: newProgress,
+                target: challenge.target,
+                percentComplete: (newProgress / challenge.target) * 100
+            });
+        }
+
+        logger.info('Challenge progress set (absolute)', {
+            username,
+            challengeId,
+            newProgress
+        });
+
+        return {
+            progress: newProgress,
+            target: challenge.target,
+            completed: newProgress >= challenge.target
+        };
+    } catch (error) {
+        logger.error('Error setting challenge progress', {
+            username,
+            challengeId,
+            error: error.message
+        });
+        throw error;
+    }
+};
+
+/**
  * Complete a challenge for a user
  * @param {String} username - GitHub username
  * @param {String} challengeId - Challenge ID
