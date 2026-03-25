@@ -312,7 +312,7 @@ export const processSingleMergedPR = async (prData) => {
     }
 
     // Update streak
-    await updateStreak(contributor, mergedAt);
+    const streakResult = await updateStreak(contributor, mergedAt);
     await checkStreakBadges(contributor);
 
     // Award points based on PR labels
@@ -327,7 +327,7 @@ export const processSingleMergedPR = async (prData) => {
 
     // Update challenge progress
     if (contributor.activeChallenges && contributor.activeChallenges.length > 0) {
-        const { checkLabelMatch } = await import('./challengeService.js');
+        const { checkLabelMatch, setChallengeProgressAbsolute } = await import('./challengeService.js');
 
         for (const activeChallenge of contributor.activeChallenges) {
             const challenge = await prisma.challenge.findUnique({
@@ -336,15 +336,16 @@ export const processSingleMergedPR = async (prData) => {
 
             if (!challenge) continue;
 
-            let shouldIncrement = false;
             if (challenge.type === 'pr-merge') {
-                shouldIncrement = true;
-            } else if (challenge.type === 'okr-label') {
-                shouldIncrement = checkLabelMatch(labels, challenge.labelFilters);
-            }
-
-            if (shouldIncrement) {
                 await updateChallengeProgress(username, challenge.id, 1);
+            } else if (challenge.type === 'okr-label') {
+                if (checkLabelMatch(labels, challenge.labelFilters)) {
+                    await updateChallengeProgress(username, challenge.id, 1);
+                }
+            } else if (challenge.type === 'points') {
+                await updateChallengeProgress(username, challenge.id, pointsData.points);
+            } else if (challenge.type === 'streak') {
+                await setChallengeProgressAbsolute(username, challenge.id, streakResult.currentStreak);
             }
         }
     }
@@ -428,21 +429,30 @@ export const processSingleReview = async (reviewData) => {
         points: award?.points || 0
     }, submittedAt);
 
+    // Update streak (reviews count as contributions) - must happen before challenge progress
+    const reviewStreakResult = await updateStreak(reviewer, submittedAt);
+    await checkStreakBadges(reviewer);
+
     // Update challenge progress for reviews
     if (reviewer.activeChallenges && reviewer.activeChallenges.length > 0) {
+        const { setChallengeProgressAbsolute } = await import('./challengeService.js');
+        const reviewPoints = award?.points || 0;
+
         for (const activeChallenge of reviewer.activeChallenges) {
             const challenge = await prisma.challenge.findUnique({
                 where: { id: activeChallenge.challengeId }
             });
-            if (challenge && challenge.type === 'review') {
+            if (!challenge) continue;
+
+            if (challenge.type === 'review') {
                 await updateChallengeProgress(username, challenge.id, 1);
+            } else if (challenge.type === 'points') {
+                await updateChallengeProgress(username, challenge.id, reviewPoints);
+            } else if (challenge.type === 'streak') {
+                await setChallengeProgressAbsolute(username, challenge.id, reviewStreakResult.currentStreak);
             }
         }
     }
-
-    // Update streak (reviews count as contributions)
-    await updateStreak(reviewer, submittedAt);
-    await checkStreakBadges(reviewer);
 
     // Check achievements
     await checkAndAwardAchievements(reviewer);
