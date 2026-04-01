@@ -463,7 +463,13 @@ export const getUserChallenges = async (username) => {
         });
 
         if (!contributor) {
-            throw new Error('Contributor not found');
+            return {
+                username,
+                activeChallenges: [],
+                completedChallenges: [],
+                expiredIncomplete: [],
+                totalCompleted: 0
+            };
         }
 
         // Separate participations into active vs expired based on challenge status
