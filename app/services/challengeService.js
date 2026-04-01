@@ -1,5 +1,6 @@
 import { prisma } from '../lib/prisma.js';
 import { emitChallengeProgress, emitChallengeCompleted } from '../utils/socketEmitter.js';
+import { updateQuarterlyStats } from './quarterlyService.js';
 import logger from '../utils/logger.js';
 
 /**
@@ -410,6 +411,11 @@ export const completeChallenge = async (username, challengeId) => {
                 }
             })
         ]);
+
+        // Update quarterly stats with challenge reward points
+        await updateQuarterlyStats(username, {
+            points: challenge.reward
+        });
 
         // Emit completion event
         emitChallengeCompleted({
