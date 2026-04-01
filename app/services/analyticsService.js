@@ -239,6 +239,7 @@ export const getTopContributorsComparison = async (limit = 10) => {
                 prCount: true,
                 reviewCount: true,
                 totalPoints: true,
+                allTimePoints: true,
                 currentStreak: true,
                 avatarUrl: true
             }
@@ -250,7 +251,8 @@ export const getTopContributorsComparison = async (limit = 10) => {
                 avatarUrl: c.avatarUrl,
                 prCount: Number(c.prCount),
                 reviewCount: Number(c.reviewCount),
-                totalPoints: Number(c.totalPoints),
+                totalPoints: Number(c.allTimePoints),
+                allTimePoints: Number(c.allTimePoints),
                 currentStreak: Number(c.currentStreak),
                 totalContributions: Number(c.prCount) + Number(c.reviewCount)
             }))
@@ -441,7 +443,7 @@ export const exportToCSV = async (type, options = {}) => {
                     username: true,
                     prCount: true,
                     reviewCount: true,
-                    totalPoints: true,
+                    allTimePoints: true,
                     currentStreak: true,
                     longestStreak: true,
                     totalBillsAwarded: true,
@@ -450,12 +452,12 @@ export const exportToCSV = async (type, options = {}) => {
             });
 
             // CSV Header
-            csvData = 'Username,PR Count,Review Count,Total Points,Current Streak,Longest Streak,Total Bills,Badges\n';
+            csvData = 'Username,PR Count,Review Count,All-Time Points,Current Streak,Longest Streak,Total Bills,Badges\n';
 
             // CSV Rows
             contributors.forEach(c => {
                 const badgeCount = c.badges ? c.badges.length : 0;
-                csvData += `"${c.username}",${Number(c.prCount)},${Number(c.reviewCount)},${Number(c.totalPoints)},${Number(c.currentStreak)},${Number(c.longestStreak)},${Number(c.totalBillsAwarded)},${badgeCount}\n`;
+                csvData += `"${c.username}",${Number(c.prCount)},${Number(c.reviewCount)},${Number(c.allTimePoints)},${Number(c.currentStreak)},${Number(c.longestStreak)},${Number(c.totalBillsAwarded)},${badgeCount}\n`;
             });
 
         } else if (type === 'challenges') {

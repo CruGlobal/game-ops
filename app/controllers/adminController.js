@@ -36,6 +36,7 @@ export const getContributors = async (req, res) => {
             prCount: c.prCount.toString(),
             reviewCount: c.reviewCount.toString(),
             totalPoints: c.totalPoints.toString(),
+            allTimePoints: c.allTimePoints.toString(),
             currentStreak: c.currentStreak.toString(),
             longestStreak: c.longestStreak.toString(),
             totalBillsAwarded: c.totalBillsAwarded.toString()
@@ -912,7 +913,7 @@ export async function resetContributorDataController(req, res) {
 
         switch (field) {
             case 'points':
-                updateData = { totalPoints: 0 };
+                updateData = { totalPoints: 0, allTimePoints: 0 };
                 // Also delete points history
                 await prisma.pointHistory.deleteMany({ where: { contributorId: contributor.id } });
                 break;
@@ -1034,7 +1035,7 @@ export async function bulkResetController(req, res) {
         let extra = '';
         switch (field) {
             case 'points':
-                updateData = { totalPoints: 0 };
+                updateData = { totalPoints: 0, allTimePoints: 0 };
                 await prisma.pointHistory.deleteMany({});
                 extra = ' and cleared all points history';
                 break;
@@ -1047,6 +1048,50 @@ export async function bulkResetController(req, res) {
         res.json({ success: true, message: `Reset ${field} for ${result.count} contributor(s)${extra}` });
     } catch (error) {
         console.error('Error in bulk reset:', error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+}
+
+/**
+ * Recalculate allTimePoints for all contributors from point_history.
+ * Safe to run multiple times (idempotent).
+ */
+export async function recalculateAllTimePointsController(req, res) {
+    try {
+        // SUM points from point_history grouped by contributor
+        const totals = await prisma.pointHistory.groupBy({
+            by: ['contributorId'],
+            _sum: { points: true }
+        });
+
+        let updated = 0;
+        for (const entry of totals) {
+            const sum = entry._sum.points || BigInt(0);
+            await prisma.contributor.update({
+                where: { id: entry.contributorId },
+                data: { allTimePoints: sum }
+            });
+            updated++;
+        }
+
+        // Zero out contributors with no point history
+        const contributorIdsWithHistory = totals.map(t => t.contributorId);
+        const zeroResult = await prisma.contributor.updateMany({
+            where: {
+                id: { notIn: contributorIdsWithHistory }
+            },
+            data: { allTimePoints: 0 }
+        });
+
+        console.log(`Recalculated allTimePoints for ${updated} contributors (${zeroResult.count} zeroed)`);
+        res.json({
+            success: true,
+            message: `Recalculated all-time points for ${updated} contributors`,
+            updated,
+            zeroed: zeroResult.count
+        });
+    } catch (error) {
+        console.error('Error recalculating all-time points:', error);
         res.status(500).json({ success: false, message: error.message });
     }
 }

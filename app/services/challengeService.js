@@ -391,11 +391,14 @@ export const completeChallenge = async (username, challengeId) => {
                     reward: challenge.reward
                 }
             }),
-            // Update contributor points
+            // Update contributor points (both quarterly and all-time)
             prisma.contributor.update({
                 where: { username },
                 data: {
                     totalPoints: newTotalPoints,
+                    allTimePoints: {
+                        increment: BigInt(challenge.reward)
+                    },
                     pointsHistory: {
                         create: {
                             points: challenge.reward,

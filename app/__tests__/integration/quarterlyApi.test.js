@@ -50,18 +50,21 @@ describe('Quarterly API Endpoints', () => {
                     createTestContributor({
                         username: 'topuser',
                         totalPoints: BigInt(500),
+                        allTimePoints: BigInt(500),
                         prCount: BigInt(40),
                         reviewCount: BigInt(20)
                     }),
                     createTestContributor({
                         username: 'seconduser',
                         totalPoints: BigInt(300),
+                        allTimePoints: BigInt(300),
                         prCount: BigInt(25),
                         reviewCount: BigInt(10)
                     }),
                     createTestContributor({
                         username: 'thirduser',
                         totalPoints: BigInt(150),
+                        allTimePoints: BigInt(150),
                         prCount: BigInt(10),
                         reviewCount: BigInt(10)
                     })
@@ -122,7 +125,7 @@ describe('Quarterly API Endpoints', () => {
                         username: 'user1',
                         totalPoints: BigInt(1000),
                         quarterlyStats: {
-                            currentQuarter: '2026-Q1',
+                            currentQuarter: `${new Date().getFullYear()}-Q${Math.ceil((new Date().getMonth() + 1) / 3)}`,
                             pointsThisQuarter: 125,
                             prsThisQuarter: 40,
                             reviewsThisQuarter: 20
@@ -132,7 +135,7 @@ describe('Quarterly API Endpoints', () => {
                         username: 'user2',
                         totalPoints: BigInt(800),
                         quarterlyStats: {
-                            currentQuarter: '2026-Q1',
+                            currentQuarter: `${new Date().getFullYear()}-Q${Math.ceil((new Date().getMonth() + 1) / 3)}`,
                             pointsThisQuarter: 190,
                             prsThisQuarter: 25,
                             reviewsThisQuarter: 10
@@ -142,7 +145,7 @@ describe('Quarterly API Endpoints', () => {
                         username: 'user3',
                         totalPoints: BigInt(600),
                         quarterlyStats: {
-                            currentQuarter: '2026-Q1',
+                            currentQuarter: `${new Date().getFullYear()}-Q${Math.ceil((new Date().getMonth() + 1) / 3)}`,
                             pointsThisQuarter: 100,
                             prsThisQuarter: 10,
                             reviewsThisQuarter: 5
@@ -171,7 +174,7 @@ describe('Quarterly API Endpoints', () => {
                 data: createTestContributor({
                     username: 'testuser',
                     quarterlyStats: {
-                        currentQuarter: '2026-Q1',
+                        currentQuarter: `${new Date().getFullYear()}-Q${Math.ceil((new Date().getMonth() + 1) / 3)}`,
                         pointsThisQuarter: 100,
                         quarterStartDate: new Date('2026-01-01'),
                         quarterEndDate: new Date('2026-03-31')
@@ -194,14 +197,14 @@ describe('Quarterly API Endpoints', () => {
                     createTestContributor({
                         username: 'active',
                         quarterlyStats: {
-                            currentQuarter: '2026-Q1',
+                            currentQuarter: `${new Date().getFullYear()}-Q${Math.ceil((new Date().getMonth() + 1) / 3)}`,
                             pointsThisQuarter: 50
                         }
                     }),
                     createTestContributor({
                         username: 'inactive',
                         quarterlyStats: {
-                            currentQuarter: '2026-Q1',
+                            currentQuarter: `${new Date().getFullYear()}-Q${Math.ceil((new Date().getMonth() + 1) / 3)}`,
                             pointsThisQuarter: 0
                         }
                     })
@@ -492,7 +495,7 @@ describe('Quarterly API Endpoints', () => {
                 data: createTestContributor({
                     username: 'testuser',
                     quarterlyStats: {
-                        currentQuarter: '2026-Q1',
+                        currentQuarter: `${new Date().getFullYear()}-Q${Math.ceil((new Date().getMonth() + 1) / 3)}`,
                         pointsThisQuarter: BigInt(100)
                     }
                 })

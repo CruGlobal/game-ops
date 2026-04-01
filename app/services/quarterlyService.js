@@ -330,8 +330,34 @@ export async function resetQuarterlyStats(newQuarter = null) {
 
         console.log(`Resetting quarterly stats for ${quarter}`);
 
-        // Reset all contributors' quarterly stats and totalPoints
+        // Only reset contributors NOT already on the new quarter.
+        // This prevents a concurrent/duplicate reset from wiping points
+        // that started accumulating in the new quarter.
+        const staleContributors = await prisma.contributor.findMany({
+            where: {
+                OR: [
+                    { quarterlyStats: { equals: null } },
+                    { quarterlyStats: { path: ['currentQuarter'], not: quarter } }
+                ]
+            },
+            select: { id: true }
+        });
+
+        if (staleContributors.length === 0) {
+            console.log(`All contributors already on ${quarter}, skipping reset`);
+            return {
+                quarter,
+                contributorsReset: 0,
+                quarterStart: quarterDates.start,
+                quarterEnd: quarterDates.end
+            };
+        }
+
+        // Reset quarterly totalPoints only — allTimePoints is never reset
         const result = await prisma.contributor.updateMany({
+            where: {
+                id: { in: staleContributors.map(c => c.id) }
+            },
             data: {
                 totalPoints: 0,
                 quarterlyStats: {
@@ -346,7 +372,7 @@ export async function resetQuarterlyStats(newQuarter = null) {
             }
         });
 
-        console.log(`Reset quarterly stats and totalPoints for ${result.count} contributors`);
+        console.log(`Reset quarterly stats and totalPoints for ${result.count} contributors (allTimePoints preserved)`);
 
         return {
             quarter,
@@ -562,7 +588,7 @@ export async function getAllTimeLeaderboard(limit = 50, options = {}) {
                 ...(excludeDevOps && { isDevOps: false })
             },
             orderBy: {
-                totalPoints: 'desc'
+                allTimePoints: 'desc'
             },
             take: limit,
             select: {
@@ -571,6 +597,7 @@ export async function getAllTimeLeaderboard(limit = 50, options = {}) {
                 prCount: true,
                 reviewCount: true,
                 totalPoints: true,
+                allTimePoints: true,
                 quarterlyStats: true,
                 currentStreak: true,
                 longestStreak: true,
@@ -587,7 +614,8 @@ export async function getAllTimeLeaderboard(limit = 50, options = {}) {
             ...c,
             prCount: Number(c.prCount),
             reviewCount: Number(c.reviewCount),
-            totalPoints: Number(c.totalPoints),
+            totalPoints: Number(c.allTimePoints),
+            allTimePoints: Number(c.allTimePoints),
             currentStreak: Number(c.currentStreak),
             longestStreak: Number(c.longestStreak),
             totalBillsAwarded: Number(c.totalBillsAwarded)

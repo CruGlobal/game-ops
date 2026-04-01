@@ -527,10 +527,13 @@ describe('ChallengeService', () => {
             expect(result.totalCompleted).toBe(1);
         });
 
-        it('should throw error for non-existent contributor', async () => {
-            await expect(getUserChallenges('nonexistent')).rejects.toThrow(
-                'Contributor not found'
-            );
+        it('should return empty data for non-existent contributor', async () => {
+            const result = await getUserChallenges('nonexistent');
+            expect(result.username).toBe('nonexistent');
+            expect(result.activeChallenges).toHaveLength(0);
+            expect(result.completedChallenges).toHaveLength(0);
+            expect(result.expiredIncomplete).toHaveLength(0);
+            expect(result.totalCompleted).toBe(0);
         });
     });
 

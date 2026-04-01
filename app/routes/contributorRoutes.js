@@ -57,7 +57,8 @@ import {
     getCronTaskSettingsController,
     toggleCronTaskController,
     searchContributorsController,
-    bulkResetController
+    bulkResetController,
+    recalculateAllTimePointsController
 } from '../controllers/adminController.js';
 import { authenticate } from '../middleware/authMiddleware.js';
 import { login } from '../controllers/authController.js';
@@ -136,6 +137,7 @@ router.post('/user/preferences/show-devops', setShowDevOpsPreferenceController);
 router.post('/admin/leaderboard/recompute/current-quarter', ensureDevOpsTeamMember, recomputeCurrentQuarterController);
 router.post('/admin/leaderboard/recompute/hall-of-fame', ensureDevOpsTeamMember, recomputeHallOfFameController);
 router.post('/admin/leaderboard/recompute/hall-of-fame/all', ensureDevOpsTeamMember, recomputeHallOfFameAllController);
+router.post('/admin/leaderboard/recompute/all-time-points', ensureDevOpsTeamMember, recalculateAllTimePointsController);
 
 // Leaderboard Routes
 router.get('/leaderboard/all-time', getAllTimeLeaderboardController);
