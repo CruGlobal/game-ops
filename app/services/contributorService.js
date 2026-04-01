@@ -201,6 +201,7 @@ export const updateContributor = async (username, type, date, merged = false) =>
             prCount: true,
             reviewCount: true,
             totalPoints: true,
+            allTimePoints: true,
             avatarUrl: true
         }
     });
@@ -223,7 +224,7 @@ export const updateContributor = async (username, type, date, merged = false) =>
         username: updated.username,
         pullRequestCount: Number(updated.prCount),
         reviewCount: Number(updated.reviewCount),
-        totalPoints: Number(updated.totalPoints),
+        totalPoints: Number(updated.allTimePoints),
         avatarUrl: updated.avatarUrl
     });
 };
@@ -838,6 +839,7 @@ export const getTopContributors = async (options = {}) => {
                 badges: true,
                 totalBillsAwarded: true,
                 totalPoints: true,
+                allTimePoints: true,
                 currentStreak: true,
                 longestStreak: true,
                 sevenDayBadge: true,
@@ -846,17 +848,18 @@ export const getTopContributors = async (options = {}) => {
                 yearLongBadge: true
             }
         });
-        
+
         contributors = contributors.map(c => ({
             ...c,
             prCount: Number(c.prCount),
             reviewCount: Number(c.reviewCount),
             totalBillsAwarded: Number(c.totalBillsAwarded),
-            totalPoints: Number(c.totalPoints),
+            totalPoints: Number(c.allTimePoints),
+            allTimePoints: Number(c.allTimePoints),
             currentStreak: Number(c.currentStreak),
             longestStreak: Number(c.longestStreak)
         }));
-    
+
     return contributors;
 };
 
@@ -900,6 +903,7 @@ export const getTopReviewers = async (options = {}) => {
                 badges: true,
                 totalBillsAwarded: true,
                 totalPoints: true,
+                allTimePoints: true,
                 currentStreak: true,
                 longestStreak: true,
                 sevenDayBadge: true,
@@ -908,13 +912,14 @@ export const getTopReviewers = async (options = {}) => {
                 yearLongBadge: true
             }
         });
-        
+
         reviewers = reviewers.map(r => ({
             ...r,
             prCount: Number(r.prCount),
             reviewCount: Number(r.reviewCount),
             totalBillsAwarded: Number(r.totalBillsAwarded),
-            totalPoints: Number(r.totalPoints),
+            totalPoints: Number(r.allTimePoints),
+            allTimePoints: Number(r.allTimePoints),
             currentStreak: Number(r.currentStreak),
             longestStreak: Number(r.longestStreak)
         }));
@@ -935,7 +940,9 @@ export const getContributorByUsername = async (username) => {
             ...contributor,
             prCount: Number(contributor.prCount),
             reviewCount: Number(contributor.reviewCount),
-            totalPoints: Number(contributor.totalPoints),
+            totalPoints: Number(contributor.allTimePoints),
+            allTimePoints: Number(contributor.allTimePoints),
+            quarterlyPoints: Number(contributor.totalPoints),
             currentStreak: Number(contributor.currentStreak),
             longestStreak: Number(contributor.longestStreak),
             totalBillsAwarded: Number(contributor.totalBillsAwarded)

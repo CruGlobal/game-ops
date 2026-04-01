@@ -41,11 +41,14 @@ export const calculatePoints = (prData, contributor) => {
  */
 export const awardPoints = async (contributor, points, reason, prNumber = null, timestamp = null) => {
     try {
-        // Update contributor with new points
+        // Update contributor with new points (both quarterly and all-time)
         const updatedContributor = await prisma.contributor.update({
             where: { id: contributor.id },
             data: {
                 totalPoints: {
+                    increment: BigInt(points)
+                },
+                allTimePoints: {
                     increment: BigInt(points)
                 },
                 pointsHistory: {
@@ -150,12 +153,13 @@ export const getPointsLeaderboard = async (limit = 10, options = {}) => {
                 // Exclude DevOps team members if filter is enabled
                 ...(excludeDevOps && { isDevOps: false })
             },
-            orderBy: { totalPoints: 'desc' },
+            orderBy: { allTimePoints: 'desc' },
             take: limit,
             select: {
                 username: true,
                 avatarUrl: true,
                 totalPoints: true,
+                allTimePoints: true,
                 prCount: true,
                 reviewCount: true
             }
@@ -164,7 +168,8 @@ export const getPointsLeaderboard = async (limit = 10, options = {}) => {
         // Convert BigInt to Number for JSON serialization
         return contributors.map(c => ({
             ...c,
-            totalPoints: Number(c.totalPoints),
+            totalPoints: Number(c.allTimePoints),
+            allTimePoints: Number(c.allTimePoints),
             prCount: Number(c.prCount),
             reviewCount: Number(c.reviewCount)
         }));
@@ -189,6 +194,7 @@ export const getPointsHistory = async (username, limit = 50) => {
             select: {
                 username: true,
                 totalPoints: true,
+                allTimePoints: true,
                 pointsHistory: {
                     orderBy: { timestamp: 'desc' },
                     take: limit,
@@ -209,6 +215,7 @@ export const getPointsHistory = async (username, limit = 50) => {
         return {
             username: contributor.username,
             totalPoints: Number(contributor.totalPoints),
+            allTimePoints: Number(contributor.allTimePoints),
             history: contributor.pointsHistory.map(h => ({
                 points: Number(h.points),
                 reason: h.reason,
@@ -237,6 +244,7 @@ export const getPointsSummary = async (username) => {
             select: {
                 username: true,
                 totalPoints: true,
+                allTimePoints: true,
                 pointsHistory: {
                     select: {
                         points: true,
@@ -263,6 +271,7 @@ export const getPointsSummary = async (username) => {
         return {
             username: contributor.username,
             totalPoints: Number(contributor.totalPoints),
+            allTimePoints: Number(contributor.allTimePoints),
             pointsByReason,
             totalEntries: contributor.pointsHistory.length
         };

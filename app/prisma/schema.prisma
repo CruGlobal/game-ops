@@ -32,6 +32,7 @@ model Contributor {
   lastContributionDate    DateTime?              @map("last_contribution_date")
   longestStreak           BigInt                 @default(0) @map("longest_streak")
   totalPoints             BigInt                 @default(0) @map("total_points")
+  allTimePoints           BigInt                 @default(0) @map("all_time_points")
   quarterlyStats          Json?                  @map("quarterly_stats")
   sevenDayBadge           Boolean                @default(false) @map("seven_day_badge")
   thirtyDayBadge          Boolean                @default(false) @map("thirty_day_badge")
@@ -52,6 +53,7 @@ model Contributor {
 
   @@index([username])
   @@index([totalPoints(sort: Desc)])
+  @@index([allTimePoints(sort: Desc)])
   @@index([currentStreak(sort: Desc)])
   @@index([isDevOps])
   @@map("contributors")

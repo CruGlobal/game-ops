@@ -58,12 +58,15 @@ export const awardAchievement = async (contributor, achievement) => {
             }
         });
 
-        // Award bonus points
+        // Award bonus points (both quarterly and all-time)
         await prisma.$transaction([
             prisma.contributor.update({
                 where: { id: contributor.id },
                 data: {
                     totalPoints: {
+                        increment: BigInt(achievement.points)
+                    },
+                    allTimePoints: {
                         increment: BigInt(achievement.points)
                     }
                 }
@@ -132,7 +135,7 @@ export const getAchievementProgress = async (username) => {
         const prCount = Number(contributor.prCount);
         const reviewCount = Number(contributor.reviewCount);
         const currentStreak = Number(contributor.currentStreak);
-        const totalPoints = Number(contributor.totalPoints);
+        const totalPoints = Number(contributor.allTimePoints);
         const completedChallengesCount = contributor.completedChallenges?.length || 0;
 
         // Check progress for all achievements
