@@ -225,6 +225,9 @@ async function loadMyChallenges(username) {
         } else {
             document.getElementById('my-challenges').style.display = 'none';
         }
+
+        // Render past challenges (completed + expired incomplete)
+        renderPastChallenges(data.completedChallenges || [], data.expiredIncomplete || []);
     } catch (error) {
         console.error('Error loading user challenges:', error);
         if (typeof showToast === 'function') {
@@ -247,20 +250,113 @@ function renderMyChallenges(challenges) {
 
         const progress = userChallenge.progress || 0;
         const target = userChallenge.target || 0;
-        const percentage = target > 0 ? (progress / target * 100) : 0;
+        const percentage = target > 0 ? Math.min(progress / target * 100, 100) : 0;
+        const remaining = Math.max(target - progress, 0);
+
+        // Calculate days remaining
+        const endDate = new Date(userChallenge.endDate);
+        const now = new Date();
+        const daysRemaining = Math.ceil((endDate - now) / (1000 * 60 * 60 * 24));
 
         item.innerHTML = `
             <div class="my-challenge-header">
-                <h4>Challenge Progress</h4>
-                <span class="my-challenge-progress-text">${progress} / ${target}</span>
+                <h4>${escapeHtml(userChallenge.title)}</h4>
+                <span class="challenge-difficulty challenge-difficulty-${userChallenge.difficulty}">${userChallenge.difficulty}</span>
             </div>
-            <div class="challenge-progress-bar">
-                <div class="challenge-progress-fill" style="width: ${percentage}%"></div>
+            <div class="my-challenge-meta">
+                <span class="my-challenge-type">${userChallenge.type}</span>
+                <span class="my-challenge-time">${daysRemaining > 0 ? `${daysRemaining} days left` : 'Ending soon'}</span>
+            </div>
+            <div class="my-challenge-progress-section">
+                <div class="my-challenge-progress-label">
+                    <span>Progress</span>
+                    <span class="my-challenge-progress-text">${progress} / ${target}</span>
+                </div>
+                <div class="challenge-progress-bar">
+                    <div class="challenge-progress-fill" style="width: ${percentage}%"></div>
+                </div>
             </div>
             <div class="my-challenge-footer">
-                <span>Keep going! ${target - progress} more to complete</span>
+                <span>${remaining > 0 ? `${remaining} more to complete` : 'Almost there!'}</span>
+                <span class="my-challenge-reward">${userChallenge.reward} pts reward</span>
             </div>
         `;
+
+        container.appendChild(item);
+    });
+}
+
+/**
+ * Render past challenges (completed and expired incomplete)
+ * @param {Array} completed - Completed challenges
+ * @param {Array} expiredIncomplete - Expired but not completed challenges
+ */
+function renderPastChallenges(completed, expiredIncomplete) {
+    const container = document.getElementById('completed-challenges-list');
+    const section = document.getElementById('completed-challenges');
+
+    const allPast = [
+        ...completed.map(c => ({ ...c, outcome: 'completed' })),
+        ...expiredIncomplete.map(c => ({ ...c, outcome: 'incomplete' }))
+    ];
+
+    // Sort by date (most recent first)
+    allPast.sort((a, b) => {
+        const dateA = a.completedAt ? new Date(a.completedAt) : new Date(a.endDate);
+        const dateB = b.completedAt ? new Date(b.completedAt) : new Date(b.endDate);
+        return dateB - dateA;
+    });
+
+    if (allPast.length === 0) {
+        container.innerHTML = '<p class="empty-message">No past challenges yet. Join active challenges above!</p>';
+        return;
+    }
+
+    section.style.display = 'block';
+    container.innerHTML = '';
+
+    allPast.forEach(challenge => {
+        const item = document.createElement('div');
+        item.className = `past-challenge-item past-challenge-${challenge.outcome}`;
+
+        if (challenge.outcome === 'completed') {
+            const completedDate = new Date(challenge.completedAt).toLocaleDateString();
+            item.innerHTML = `
+                <div class="past-challenge-header">
+                    <h4>${escapeHtml(challenge.title)}</h4>
+                    <span class="past-challenge-badge past-challenge-badge-completed">Completed</span>
+                </div>
+                <div class="past-challenge-details">
+                    <span>Completed on ${completedDate}</span>
+                    <span class="past-challenge-reward">+${challenge.reward} pts earned</span>
+                </div>
+            `;
+        } else {
+            const endedDate = new Date(challenge.endDate).toLocaleDateString();
+            const progress = challenge.progress || 0;
+            const target = challenge.target || 0;
+            const percentage = target > 0 ? Math.min(progress / target * 100, 100) : 0;
+
+            item.innerHTML = `
+                <div class="past-challenge-header">
+                    <h4>${escapeHtml(challenge.title)}</h4>
+                    <span class="past-challenge-badge past-challenge-badge-incomplete">Not Completed</span>
+                </div>
+                <div class="past-challenge-progress-section">
+                    <div class="my-challenge-progress-label">
+                        <span>Final Progress</span>
+                        <span>${progress} / ${target}</span>
+                    </div>
+                    <div class="challenge-progress-bar">
+                        <div class="challenge-progress-fill challenge-progress-fill-expired" style="width: ${percentage}%"></div>
+                    </div>
+                </div>
+                <div class="past-challenge-details">
+                    <span>Ended ${endedDate}</span>
+                    <span class="past-challenge-difficulty">${challenge.difficulty}</span>
+                </div>
+            `;
+        }
 
         container.appendChild(item);
     });

@@ -1031,6 +1031,147 @@ h1 {
     margin-top: 12px;
     color: #666;
     font-size: 0.9em;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.my-challenge-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    font-size: 0.85em;
+}
+
+.my-challenge-type {
+    color: #888;
+    text-transform: capitalize;
+}
+
+.my-challenge-time {
+    color: #4a90e2;
+    font-weight: 500;
+}
+
+.my-challenge-progress-section {
+    margin-bottom: 8px;
+}
+
+.my-challenge-progress-label {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+    font-size: 0.85em;
+    color: #666;
+}
+
+.my-challenge-reward {
+    color: #4a90e2;
+    font-weight: 600;
+}
+
+/* Past challenges (completed and expired) */
+.past-challenge-item {
+    background: white;
+    padding: 16px 20px;
+    margin-bottom: 12px;
+    border-radius: 8px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+}
+
+.past-challenge-completed {
+    border-left: 5px solid #27ae60;
+}
+
+.past-challenge-incomplete {
+    border-left: 5px solid #95a5a6;
+}
+
+.past-challenge-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.past-challenge-header h4 {
+    margin: 0;
+    color: #333;
+    font-size: 1em;
+}
+
+.past-challenge-badge {
+    font-size: 0.75em;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.past-challenge-badge-completed {
+    background: #d5f5e3;
+    color: #27ae60;
+}
+
+.past-challenge-badge-incomplete {
+    background: #eaecee;
+    color: #7f8c8d;
+}
+
+.past-challenge-details {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.85em;
+    color: #888;
+    margin-top: 6px;
+}
+
+.past-challenge-reward {
+    color: #27ae60;
+    font-weight: 600;
+}
+
+.past-challenge-difficulty {
+    text-transform: capitalize;
+}
+
+.past-challenge-progress-section {
+    margin: 8px 0;
+}
+
+.challenge-progress-fill-expired {
+    background: linear-gradient(90deg, #bdc3c7, #95a5a6) !important;
+}
+
+/* Dark mode support for past challenges */
+[data-theme="dark"] .past-challenge-item {
+    background: #2d2d2d;
+}
+
+[data-theme="dark"] .past-challenge-header h4 {
+    color: #e0e0e0;
+}
+
+[data-theme="dark"] .past-challenge-badge-completed {
+    background: #1a3a2a;
+    color: #5dbe8a;
+}
+
+[data-theme="dark"] .past-challenge-badge-incomplete {
+    background: #3a3a3a;
+    color: #aaa;
+}
+
+[data-theme="dark"] .my-challenge-item {
+    background: #2d2d2d;
+}
+
+[data-theme="dark"] .my-challenge-header h4 {
+    color: #e0e0e0;
 }
 
 .loading-message,
