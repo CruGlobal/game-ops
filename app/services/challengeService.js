@@ -454,7 +454,11 @@ export const getUserChallenges = async (username) => {
                         challenge: true
                     }
                 },
-                completedChallenges: true
+                completedChallenges: {
+                    include: {
+                        challenge: true
+                    }
+                }
             }
         });
 
@@ -462,26 +466,48 @@ export const getUserChallenges = async (username) => {
             throw new Error('Contributor not found');
         }
 
-        // Transform to match expected format
-        const activeChallenges = contributor.activeChallenges.map(ac => ({
-            challengeId: ac.challengeId,
-            progress: ac.progress,
-            target: ac.challenge.target,
-            joined: ac.joinedAt,
-            title: ac.challenge.title,
-            type: ac.challenge.type
-        }));
+        // Separate participations into active vs expired based on challenge status
+        const activeChallenges = [];
+        const expiredIncomplete = [];
+
+        for (const ac of contributor.activeChallenges) {
+            const entry = {
+                challengeId: ac.challengeId,
+                progress: ac.progress,
+                target: ac.challenge.target,
+                joined: ac.joinedAt,
+                title: ac.challenge.title,
+                description: ac.challenge.description,
+                type: ac.challenge.type,
+                difficulty: ac.challenge.difficulty,
+                reward: ac.challenge.reward,
+                endDate: ac.challenge.endDate,
+                status: ac.challenge.status
+            };
+
+            if (ac.challenge.status === 'active') {
+                activeChallenges.push(entry);
+            } else {
+                // Challenge expired but participant didn't complete it
+                expiredIncomplete.push(entry);
+            }
+        }
 
         const completedChallenges = contributor.completedChallenges.map(cc => ({
             challengeId: cc.challengeId,
             completedAt: cc.completedAt,
-            reward: cc.reward
+            reward: cc.reward,
+            title: cc.challenge?.title || 'Unknown Challenge',
+            description: cc.challenge?.description || '',
+            type: cc.challenge?.type || '',
+            difficulty: cc.challenge?.difficulty || ''
         }));
 
         return {
             username,
             activeChallenges,
             completedChallenges,
+            expiredIncomplete,
             totalCompleted: completedChallenges.length
         };
     } catch (error) {

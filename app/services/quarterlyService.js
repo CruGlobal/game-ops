@@ -1209,6 +1209,24 @@ export async function checkAndResetIfNewQuarter() {
 
         if (contributorQuarter !== currentQuarter) {
             console.log(`New quarter detected: ${contributorQuarter} → ${currentQuarter}`);
+
+            // Check if this quarter was already archived (e.g., by updateQuarterConfig)
+            // to prevent duplicate notifications
+            const existingArchive = await prisma.quarterlyWinner.findFirst({
+                where: { quarter: contributorQuarter }
+            });
+
+            if (existingArchive) {
+                console.log(`Quarter ${contributorQuarter} already archived, skipping notifications — resetting stats only`);
+                await resetQuarterlyStats(currentQuarter);
+                return {
+                    quarterChanged: true,
+                    oldQuarter: contributorQuarter,
+                    newQuarter: currentQuarter,
+                    alreadyArchived: true
+                };
+            }
+
             const quarterlyWinner = await archiveQuarterWinners(contributorQuarter);
             // Award bills/vonettes based on final standings before resetting
             const billResults = await awardQuarterlyBills(contributorQuarter);
