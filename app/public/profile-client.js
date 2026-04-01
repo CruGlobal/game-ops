@@ -411,24 +411,22 @@ function createChallengeCard(challenge, isCompleted) {
     const card = document.createElement('div');
     card.className = isCompleted ? 'challenge-card completed-challenge-card' : 'challenge-card';
 
-    // Handle nested structure: activeChallenges have challengeId object, completedChallenges have it too
-    const challengeData = challenge.challengeId || challenge;
     const progress = challenge.progress || 0;
-    const target = challenge.target || challengeData.target || 100;
-    const reward = challenge.reward || challengeData.reward || 0;
+    const target = challenge.target || 100;
+    const reward = challenge.reward || 0;
 
-    const difficultyClass = `difficulty-${challengeData.difficulty || 'medium'}`;
+    const difficultyClass = `difficulty-${challenge.difficulty || 'medium'}`;
     const percentComplete = Math.min((progress / target) * 100, 100).toFixed(1);
 
     card.innerHTML = `
         <div class="challenge-header">
             <div>
-                <h3 class="challenge-title">${challengeData.title}</h3>
-                <span class="challenge-badge ${difficultyClass}">${challengeData.difficulty || 'medium'}</span>
+                <h3 class="challenge-title">${challenge.title || 'Unknown Challenge'}</h3>
+                <span class="challenge-badge ${difficultyClass}">${challenge.difficulty || 'medium'}</span>
                 ${isCompleted ? '<span class="challenge-badge status-completed">Completed</span>' : ''}
             </div>
         </div>
-        <p class="challenge-description">${challengeData.description}</p>
+        <p class="challenge-description">${challenge.description || ''}</p>
         ${!isCompleted ? `
             <div class="challenge-progress">
                 <div class="progress-label">
