@@ -6,7 +6,7 @@ import { updateStreak, checkStreakBadges } from './streakService.js';
 import { calculatePoints, awardPoints, awardReviewPoints } from './pointsService.js';
 import { POINT_REASONS } from '../config/points-config.js';
 import { checkAndAwardAchievements } from './achievementService.js';
-import { updateChallengeProgress } from './challengeService.js';
+import { updateChallengeProgress, autoJoinContributorToActiveChallenges } from './challengeService.js';
 import { checkAndResetIfNewQuarter, updateQuarterlyStats } from './quarterlyService.js';
 
 // Initialize Octokit with GitHub token and custom fetch
@@ -125,6 +125,9 @@ export const updateContributor = async (username, type, date, merged = false) =>
                 reviewCount: 0
             }
         });
+        // First-time contributor: enroll in every currently-active challenge
+        // so they aren't excluded from anything running.
+        await autoJoinContributorToActiveChallenges(contributor.id);
     }
 
     // Extract date for aggregation (date only, no time)

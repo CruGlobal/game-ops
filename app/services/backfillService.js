@@ -8,6 +8,7 @@ import { updateQuarterlyStats, recomputeHallOfFameAll, recomputeCurrentQuarterSt
 import { checkAndAwardAchievements } from './achievementService.js';
 import { updateStreak, checkStreakBadges } from './streakService.js';
 import { awardBadges } from './contributorService.js';
+import { autoJoinContributorToActiveChallenges } from './challengeService.js';
 
 const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
 const repoOwner = process.env.REPO_OWNER || 'CruGlobal';
@@ -154,6 +155,7 @@ async function processPR(pr) {
                     reviewCount: 0
                 }
             });
+            await autoJoinContributorToActiveChallenges(contributor.id);
         }
 
         // Check if PR already processed (duplicate prevention for PR)
@@ -261,7 +263,7 @@ async function processPR(pr) {
 
                     if (!reviewer) {
                         // Create new reviewer if doesn't exist
-                        await prisma.contributor.create({
+                        const newReviewer = await prisma.contributor.create({
                             data: {
                                 username: reviewerUsername,
                                 avatarUrl: review.user.avatar_url,
@@ -269,6 +271,7 @@ async function processPR(pr) {
                                 reviewCount: 0
                             }
                         });
+                        await autoJoinContributorToActiveChallenges(newReviewer.id);
                     }
 
                     // Now get the reviewer with ID (include achievements to prevent duplicates)

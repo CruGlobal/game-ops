@@ -141,6 +141,153 @@ function buildDiscussionBody(quarterString, billResults, quarterlyWinner) {
 }
 
 /**
+ * Post a new-challenge announcement as a GitHub Discussion.
+ * Accepts one or more challenges; a multi-challenge array renders as a single
+ * batched announcement (used by the weekly cron so Monday doesn't generate 3
+ * separate discussions).
+ *
+ * Checks enableGitHubDiscussions in QuarterSettings; returns early if disabled.
+ * Never throws; logs a warning on failure.
+ *
+ * @param {Array<Object>} challenges - Challenge records from Prisma
+ */
+export async function postNewChallengesDiscussion(challenges) {
+    const list = Array.isArray(challenges) ? challenges.filter(Boolean) : [];
+    if (list.length === 0) return;
+
+    try {
+        const settings = await prisma.quarterSettings.findUnique({
+            where: { id: 'quarter-config' }
+        });
+
+        if (!settings?.enableGitHubDiscussions) {
+            logger.debug('GitHub Discussion announcements disabled, skipping new-challenge post');
+            return;
+        }
+
+        const token = process.env.GITHUB_TOKEN;
+        const owner = process.env.REPO_OWNER || process.env.GITHUB_OWNER;
+        const repo = process.env.REPO_NAME || process.env.GITHUB_REPO;
+
+        if (!token || !owner || !repo) {
+            logger.warn('Cannot post new-challenge discussion: GITHUB_TOKEN, REPO_OWNER, or REPO_NAME not set');
+            return;
+        }
+
+        const repoData = await graphql(token, `
+            query($owner: String!, $repo: String!) {
+                repository(owner: $owner, name: $repo) {
+                    id
+                    discussionCategories(first: 10) {
+                        nodes { id name }
+                    }
+                }
+            }
+        `, { owner, repo });
+
+        const repositoryId = repoData.data?.repository?.id;
+        if (!repositoryId) {
+            logger.warn('Could not find repository ID for new-challenge discussion');
+            return;
+        }
+
+        const categories = repoData.data.repository.discussionCategories?.nodes || [];
+        const announcementCat = categories.find(c => c.name === 'Announcements')
+            || categories.find(c => c.name === 'General')
+            || categories[0];
+
+        if (!announcementCat) {
+            logger.warn('No discussion categories found for new-challenge post');
+            return;
+        }
+
+        const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
+        const challengesUrl = `${baseUrl.replace(/\/$/, '')}/challenges`;
+        const title = list.length === 1
+            ? `New Challenge: ${list[0].title}`
+            : `${list.length} New Challenges`;
+        const body = list.length === 1
+            ? buildSingleChallengeBody(list[0], challengesUrl)
+            : buildBatchedChallengeBody(list, challengesUrl);
+
+        await graphql(token, `
+            mutation($repositoryId: ID!, $categoryId: ID!, $title: String!, $body: String!) {
+                createDiscussion(input: {
+                    repositoryId: $repositoryId
+                    categoryId: $categoryId
+                    title: $title
+                    body: $body
+                }) {
+                    discussion { url }
+                }
+            }
+        `, {
+            repositoryId,
+            categoryId: announcementCat.id,
+            title,
+            body
+        });
+
+        logger.info('Posted new-challenge discussion', {
+            count: list.length,
+            ids: list.map(c => c.id)
+        });
+    } catch (error) {
+        logger.warn('Failed to post new-challenge discussion', {
+            count: list.length,
+            error: error.message
+        });
+    }
+}
+
+function formatLongDate(d) {
+    return d
+        ? new Date(d).toLocaleDateString('en-US', {
+            weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+        })
+        : 'N/A';
+}
+
+function buildSingleChallengeBody(challenge, challengesUrl) {
+    return [
+        `## 🎯 ${challenge.title}`,
+        '',
+        challenge.description || '_No description._',
+        '',
+        `- **Target:** ${challenge.target}`,
+        `- **Reward:** ${challenge.reward} points`,
+        `- **Difficulty:** ${challenge.difficulty || 'medium'}`,
+        `- **Ends:** ${formatLongDate(challenge.endDate)}`,
+        '',
+        `👉 [View challenges](${challengesUrl})`,
+        '',
+        '_Everyone is auto-enrolled. Just contribute to earn points!_'
+    ].join('\n');
+}
+
+function buildBatchedChallengeBody(challenges, challengesUrl) {
+    const lines = [`## 🎯 ${challenges.length} New Challenges`, ''];
+
+    challenges.forEach((c, i) => {
+        if (i > 0) lines.push('---', '');
+        lines.push(
+            `### ${c.title}`,
+            '',
+            c.description || '_No description._',
+            '',
+            `- **Target:** ${c.target}`,
+            `- **Reward:** ${c.reward} points`,
+            `- **Difficulty:** ${c.difficulty || 'medium'}`,
+            `- **Ends:** ${formatLongDate(c.endDate)}`,
+            ''
+        );
+    });
+
+    lines.push(`👉 [View challenges](${challengesUrl})`, '', '_Everyone is auto-enrolled. Just contribute to earn points!_');
+    return lines.join('\n');
+}
+
+/**
  * Minimal GraphQL helper using fetch (same pattern as verify-quarter-user.js).
  */
 async function graphql(token, query, variables = {}) {
