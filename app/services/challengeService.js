@@ -1,14 +1,123 @@
 import { prisma } from '../lib/prisma.js';
 import { emitChallengeProgress, emitChallengeCompleted } from '../utils/socketEmitter.js';
 import { updateQuarterlyStats } from './quarterlyService.js';
+import { postNewChallengesSlack } from './slackService.js';
+import { postNewChallengesDiscussion } from './discussionService.js';
 import logger from '../utils/logger.js';
+
+/**
+ * Enroll every existing contributor as a participant of the given challenge.
+ * Idempotent: uses createMany with skipDuplicates so re-runs are safe.
+ * Never throws — logs a warning on failure so challenge creation isn't blocked.
+ *
+ * @param {String} challengeId
+ * @returns {Number} count enrolled
+ */
+export const autoJoinAllContributors = async (challengeId) => {
+    try {
+        const contributors = await prisma.contributor.findMany({ select: { id: true } });
+        if (contributors.length === 0) return 0;
+
+        const result = await prisma.challengeParticipant.createMany({
+            data: contributors.map(c => ({
+                challengeId,
+                contributorId: c.id,
+                progress: 0,
+                completed: false
+            })),
+            skipDuplicates: true
+        });
+
+        logger.info('Auto-enrolled contributors in challenge', {
+            challengeId,
+            enrolled: result.count,
+            totalContributors: contributors.length
+        });
+        return result.count;
+    } catch (error) {
+        logger.warn('Failed to auto-enroll contributors in challenge', {
+            challengeId,
+            error: error.message
+        });
+        return 0;
+    }
+};
+
+/**
+ * Enroll a single contributor in every currently-active challenge.
+ * Used when a brand-new contributor is created (first PR/review) so they
+ * don't miss out on ongoing challenges.
+ *
+ * @param {String} contributorId
+ */
+export const autoJoinContributorToActiveChallenges = async (contributorId) => {
+    try {
+        const now = new Date();
+        const active = await prisma.challenge.findMany({
+            where: { status: 'active', endDate: { gte: now } },
+            select: { id: true }
+        });
+        if (active.length === 0) return 0;
+
+        const result = await prisma.challengeParticipant.createMany({
+            data: active.map(c => ({
+                challengeId: c.id,
+                contributorId,
+                progress: 0,
+                completed: false
+            })),
+            skipDuplicates: true
+        });
+
+        logger.info('Auto-enrolled new contributor in active challenges', {
+            contributorId,
+            enrolled: result.count
+        });
+        return result.count;
+    } catch (error) {
+        logger.warn('Failed to auto-enroll new contributor in active challenges', {
+            contributorId,
+            error: error.message
+        });
+        return 0;
+    }
+};
+
+/**
+ * Run after any challenge is created: enroll every contributor and (optionally)
+ * fire Slack + GitHub Discussion notifications (both gated by QuarterSettings
+ * toggles). Never throws — post-create hooks must not break challenge creation.
+ *
+ * @param {Object} challenge
+ * @param {Object} [options]
+ * @param {Boolean} [options.skipNotifications=false] - Suppress the Slack/Discussion
+ *   announcement. Used by generateWeeklyChallenges so the 3 challenges created each
+ *   Monday batch into a single post instead of 3 separate ones.
+ */
+const handleChallengeCreated = async (challenge, { skipNotifications = false } = {}) => {
+    if (!challenge?.id) return;
+    if (challenge.status && challenge.status !== 'active') return;
+
+    await autoJoinAllContributors(challenge.id);
+
+    if (skipNotifications) return;
+
+    // Fire notifications in parallel; each already swallows its own errors.
+    await Promise.allSettled([
+        postNewChallengesSlack([challenge]),
+        postNewChallengesDiscussion([challenge])
+    ]);
+};
 
 /**
  * Create a new challenge
  * @param {Object} challengeData - Challenge data
+ * @param {Object} [options]
+ * @param {Boolean} [options.skipNotifications] - Suppress the Slack/Discussion
+ *   announcement (auto-enroll still runs). Used by batch-creation paths.
  * @returns {Object} Created challenge
  */
-export const createChallenge = async (challengeData) => {
+export const createChallenge = async (challengeData, options = {}) => {
     try {
         const challenge = await prisma.challenge.create({
             data: {
@@ -23,6 +132,8 @@ export const createChallenge = async (challengeData) => {
             type: challenge.type,
             challengeCategory: challenge.challengeCategory
         });
+
+        await handleChallengeCreated(challenge, options);
 
         return challenge;
     } catch (error) {
@@ -729,6 +840,8 @@ export const duplicateChallenge = async (challengeId) => {
             title: duplicate.title
         });
 
+        await handleChallengeCreated(duplicate);
+
         return duplicate;
     } catch (error) {
         logger.error('Error duplicating challenge', {
@@ -902,6 +1015,8 @@ export const generateWeeklyChallenges = async () => {
         const selected = shuffled.slice(0, 3);
 
         for (const template of selected) {
+            // Suppress per-challenge notifications here so the 3 weekly challenges
+            // collapse into one batched announcement below. Auto-enroll still runs.
             const challenge = await createChallenge({
                 ...template,
                 startDate: startOfWeek,
@@ -909,7 +1024,7 @@ export const generateWeeklyChallenges = async () => {
                 status: 'active',
                 category: 'individual',
                 challengeCategory: 'weekly' // Mark as weekly challenge
-            });
+            }, { skipNotifications: true });
 
             generatedChallenges.push(challenge);
         }
@@ -919,6 +1034,14 @@ export const generateWeeklyChallenges = async () => {
             startDate: startOfWeek,
             endDate: endOfWeek
         });
+
+        // Single batched announcement for all weekly challenges.
+        if (generatedChallenges.length > 0) {
+            await Promise.allSettled([
+                postNewChallengesSlack(generatedChallenges),
+                postNewChallengesDiscussion(generatedChallenges)
+            ]);
+        }
 
         return generatedChallenges;
     } catch (error) {
@@ -1106,6 +1229,8 @@ export const createOKRChallenge = async (okrData) => {
             labelFilters: challenge.labelFilters,
             department: okrMetadata?.department
         });
+
+        await handleChallengeCreated(challenge);
 
         return challenge;
     } catch (error) {

@@ -141,6 +141,120 @@ function buildDiscussionBody(quarterString, billResults, quarterlyWinner) {
 }
 
 /**
+ * Post a new-challenge announcement as a GitHub Discussion.
+ * Accepts one or more challenges; a multi-challenge array renders as a single
+ * batched announcement (used by the weekly cron so Monday doesn't generate 3
+ * separate discussions).
+ *
+ * Checks enableGitHubDiscussions in QuarterSettings; returns early if disabled.
+ * Never throws; logs a warning on failure.
+ *
+ * @param {Array<Object>} challenges - Challenge records from Prisma
+ */
+export async function postNewChallengesDiscussion(challenges) {
+    const list = Array.isArray(challenges) ? challenges.filter(Boolean) : [];
+    if (list.length === 0) return;
+
+    try {
+        const settings = await prisma.quarterSettings.findUnique({
+            where: { id: 'quarter-config' }
+        });
+
+        if (!settings?.enableGitHubDiscussions) {
+            logger.debug('GitHub Discussion announcements disabled, skipping new-challenge post');
+            return;
+        }
+
+        const token = process.env.GITHUB_TOKEN;
+        const owner = process.env.REPO_OWNER || process.env.GITHUB_OWNER;
+        const repo = process.env.REPO_NAME || process.env.GITHUB_REPO;
+
+        if (!token || !owner || !repo) {
+            logger.warn('Cannot post new-challenge discussion: GITHUB_TOKEN, REPO_OWNER, or REPO_NAME not set');
+            return;
+        }
+
+        const repoData = await graphql(token, `
+            query($owner: String!, $repo: String!) {
+                repository(owner: $owner, name: $repo) {
+                    id
+                    discussionCategories(first: 10) {
+                        nodes { id name }
+                    }
+                }
+            }
+        `, { owner, repo });
+
+        const repositoryId = repoData.data?.repository?.id;
+        if (!repositoryId) {
+            logger.warn('Could not find repository ID for new-challenge discussion');
+            return;
+        }
+
+        const categories = repoData.data.repository.discussionCategories?.nodes || [];
+        const announcementCat = categories.find(c => c.name === 'Announcements')
+            || categories.find(c => c.name === 'General')
+            || categories[0];
+
+        if (!announcementCat) {
+            logger.warn('No discussion categories found for new-challenge post');
+            return;
+        }
+
+        const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
+        const challengesUrl = `${baseUrl.replace(/\/$/, '')}/challenges`;
+        const title = list.length === 1
+            ? 'A new challenge is live'
+            : `${list.length} new challenges are live`;
+        const body = buildGenericChallengeBody(list.length, challengesUrl);
+
+        await graphql(token, `
+            mutation($repositoryId: ID!, $categoryId: ID!, $title: String!, $body: String!) {
+                createDiscussion(input: {
+                    repositoryId: $repositoryId
+                    categoryId: $categoryId
+                    title: $title
+                    body: $body
+                }) {
+                    discussion { url }
+                }
+            }
+        `, {
+            repositoryId,
+            categoryId: announcementCat.id,
+            title,
+            body
+        });
+
+        logger.info('Posted new-challenge discussion', {
+            count: list.length,
+            ids: list.map(c => c.id)
+        });
+    } catch (error) {
+        logger.warn('Failed to post new-challenge discussion', {
+            count: list.length,
+            error: error.message
+        });
+    }
+}
+
+// Intentionally generic: we link to the challenges page rather than inlining
+// titles/descriptions/rewards so readers click through to see what's new.
+function buildGenericChallengeBody(count, challengesUrl) {
+    const headline = count === 1
+        ? 'A new challenge was just added.'
+        : `${count} new challenges were just added.`;
+
+    return [
+        `## 🎯 ${headline}`,
+        '',
+        `Everyone is auto-enrolled — just contribute as usual and you'll earn points.`,
+        '',
+        `👉 [See what's new on the challenges page](${challengesUrl})`
+    ].join('\n');
+}
+
+/**
  * Minimal GraphQL helper using fetch (same pattern as verify-quarter-user.js).
  */
 async function graphql(token, query, variables = {}) {
