@@ -204,11 +204,9 @@ export async function postNewChallengesDiscussion(challenges) {
         const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
         const challengesUrl = `${baseUrl.replace(/\/$/, '')}/challenges`;
         const title = list.length === 1
-            ? `New Challenge: ${list[0].title}`
-            : `${list.length} New Challenges`;
-        const body = list.length === 1
-            ? buildSingleChallengeBody(list[0], challengesUrl)
-            : buildBatchedChallengeBody(list, challengesUrl);
+            ? 'A new challenge is live'
+            : `${list.length} new challenges are live`;
+        const body = buildGenericChallengeBody(list.length, challengesUrl);
 
         await graphql(token, `
             mutation($repositoryId: ID!, $categoryId: ID!, $title: String!, $body: String!) {
@@ -240,51 +238,20 @@ export async function postNewChallengesDiscussion(challenges) {
     }
 }
 
-function formatLongDate(d) {
-    return d
-        ? new Date(d).toLocaleDateString('en-US', {
-            weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
-        })
-        : 'N/A';
-}
+// Intentionally generic: we link to the challenges page rather than inlining
+// titles/descriptions/rewards so readers click through to see what's new.
+function buildGenericChallengeBody(count, challengesUrl) {
+    const headline = count === 1
+        ? 'A new challenge was just added.'
+        : `${count} new challenges were just added.`;
 
-function buildSingleChallengeBody(challenge, challengesUrl) {
     return [
-        `## 🎯 ${challenge.title}`,
+        `## 🎯 ${headline}`,
         '',
-        challenge.description || '_No description._',
+        `Everyone is auto-enrolled — just contribute as usual and you'll earn points.`,
         '',
-        `- **Target:** ${challenge.target}`,
-        `- **Reward:** ${challenge.reward} points`,
-        `- **Difficulty:** ${challenge.difficulty || 'medium'}`,
-        `- **Ends:** ${formatLongDate(challenge.endDate)}`,
-        '',
-        `👉 [View challenges](${challengesUrl})`,
-        '',
-        '_Everyone is auto-enrolled. Just contribute to earn points!_'
+        `👉 [See what's new on the challenges page](${challengesUrl})`
     ].join('\n');
-}
-
-function buildBatchedChallengeBody(challenges, challengesUrl) {
-    const lines = [`## 🎯 ${challenges.length} New Challenges`, ''];
-
-    challenges.forEach((c, i) => {
-        if (i > 0) lines.push('---', '');
-        lines.push(
-            `### ${c.title}`,
-            '',
-            c.description || '_No description._',
-            '',
-            `- **Target:** ${c.target}`,
-            `- **Reward:** ${c.reward} points`,
-            `- **Difficulty:** ${c.difficulty || 'medium'}`,
-            `- **Ends:** ${formatLongDate(c.endDate)}`,
-            ''
-        );
-    });
-
-    lines.push(`👉 [View challenges](${challengesUrl})`, '', '_Everyone is auto-enrolled. Just contribute to earn points!_');
-    return lines.join('\n');
 }
 
 /**

@@ -178,9 +178,7 @@ export async function postNewChallengesSlack(challenges) {
 
         const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
         const challengesUrl = `${baseUrl.replace(/\/$/, '')}/challenges`;
-        const blocks = list.length === 1
-            ? buildSingleChallengeBlocks(list[0], challengesUrl)
-            : buildBatchedChallengeBlocks(list, challengesUrl);
+        const blocks = buildGenericChallengeBlocks(list.length, challengesUrl);
 
         const response = await fetch(webhookUrl, {
             method: 'POST',
@@ -210,99 +208,36 @@ export async function postNewChallengesSlack(challenges) {
     }
 }
 
-function difficultyEmojiFor(difficulty) {
-    return {
-        easy: ':green_circle:',
-        medium: ':large_yellow_circle:',
-        hard: ':red_circle:'
-    }[difficulty] || ':white_circle:';
-}
-
-function formatEndDate(endDate) {
-    return endDate
-        ? new Date(endDate).toLocaleDateString('en-US', {
-            weekday: 'short', month: 'short', day: 'numeric'
-        })
-        : 'N/A';
-}
-
-function viewChallengesAction(challengesUrl) {
-    return {
-        type: 'actions',
-        elements: [
-            {
-                type: 'button',
-                text: { type: 'plain_text', text: 'View challenges', emoji: true },
-                url: challengesUrl,
-                style: 'primary'
-            }
-        ]
-    };
-}
-
-function autoEnrolledContext() {
-    return {
-        type: 'context',
-        elements: [
-            { type: 'mrkdwn', text: 'Everyone is auto-enrolled. Just contribute to earn points!' }
-        ]
-    };
-}
-
-function buildSingleChallengeBlocks(challenge, challengesUrl) {
-    const fields = [
-        { type: 'mrkdwn', text: `*Target:*\n${challenge.target}` },
-        { type: 'mrkdwn', text: `*Reward:*\n${challenge.reward} points` },
-        { type: 'mrkdwn', text: `*Difficulty:*\n${difficultyEmojiFor(challenge.difficulty)} ${challenge.difficulty || 'medium'}` },
-        { type: 'mrkdwn', text: `*Ends:*\n${formatEndDate(challenge.endDate)}` },
-    ];
+// Intentionally generic: we link to the challenges page rather than inlining
+// titles/descriptions/rewards so recipients click through. This keeps traffic
+// on the leaderboard (the details would otherwise make the post self-sufficient).
+function buildGenericChallengeBlocks(count, challengesUrl) {
+    const headerText = count === 1
+        ? ':dart: A new challenge is live'
+        : `:dart: ${count} new challenges are live`;
+    const bodyText = count === 1
+        ? 'A new challenge was just added. Everyone is auto-enrolled.'
+        : `${count} new challenges were just added. Everyone is auto-enrolled.`;
 
     return [
         {
             type: 'header',
-            text: {
-                type: 'plain_text',
-                text: `:dart: New Challenge: ${challenge.title}`,
-                emoji: true
-            }
+            text: { type: 'plain_text', text: headerText, emoji: true }
         },
         {
             type: 'section',
-            text: { type: 'mrkdwn', text: challenge.description || '_No description_' }
+            text: { type: 'mrkdwn', text: `${bodyText} <${challengesUrl}|See what's new>.` }
         },
-        { type: 'section', fields },
-        viewChallengesAction(challengesUrl),
-        autoEnrolledContext()
-    ];
-}
-
-function buildBatchedChallengeBlocks(challenges, challengesUrl) {
-    const blocks = [
         {
-            type: 'header',
-            text: {
-                type: 'plain_text',
-                text: `:dart: ${challenges.length} New Challenges`,
-                emoji: true
-            }
+            type: 'actions',
+            elements: [
+                {
+                    type: 'button',
+                    text: { type: 'plain_text', text: 'View challenges', emoji: true },
+                    url: challengesUrl,
+                    style: 'primary'
+                }
+            ]
         }
     ];
-
-    challenges.forEach((c, i) => {
-        if (i > 0) blocks.push({ type: 'divider' });
-        blocks.push({
-            type: 'section',
-            text: {
-                type: 'mrkdwn',
-                text:
-                    `*${c.title}* ${difficultyEmojiFor(c.difficulty)}\n` +
-                    `${c.description || '_No description_'}\n` +
-                    `Target: *${c.target}* · Reward: *${c.reward} pts* · Ends: *${formatEndDate(c.endDate)}*`
-            }
-        });
-    });
-
-    blocks.push(viewChallengesAction(challengesUrl));
-    blocks.push(autoEnrolledContext());
-    return blocks;
 }
