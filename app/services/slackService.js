@@ -226,18 +226,7 @@ function buildGenericChallengeBlocks(count, challengesUrl) {
         },
         {
             type: 'section',
-            text: { type: 'mrkdwn', text: `${bodyText} <${challengesUrl}|See what's new>.` }
-        },
-        {
-            type: 'actions',
-            elements: [
-                {
-                    type: 'button',
-                    text: { type: 'plain_text', text: 'View challenges', emoji: true },
-                    url: challengesUrl,
-                    style: 'primary'
-                }
-            ]
+            text: { type: 'mrkdwn', text: `${bodyText} <${challengesUrl}|View challenges>.` }
         }
     ];
 }
