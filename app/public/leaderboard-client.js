@@ -537,7 +537,7 @@ function createQuarterlyCard(user, rank) {
         </div>
 
         <div class="badges-section">
-            <div class="quarter-badge">📅 This Quarter</div>
+            ${generateBadgesHTML(user)}
         </div>
     `;
 
