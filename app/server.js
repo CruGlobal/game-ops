@@ -4,6 +4,7 @@ import rateLimit from 'express-rate-limit';
 import helmet from 'helmet';
 import cors from 'cors';
 import cron from 'node-cron';
+import crypto from 'crypto';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { createServer } from 'http';
@@ -45,13 +46,21 @@ app.use(express.json({
     }
 }));
 
+// Generate a fresh, unguessable CSP nonce per request. Exposed to templates as
+// `nonce` (via res.locals) and consumed by the helmet scriptSrc directive below.
+app.use((req, res, next) => {
+    res.locals.nonce = crypto.randomBytes(16).toString('base64');
+    next();
+});
+
 app.use(helmet({
     contentSecurityPolicy: {
         directives: {
             defaultSrc: ["'self'"],
-            scriptSrc: ["'self'", "https://cdn.jsdelivr.net", "https://cdn.socket.io", "'nonce-lexicostatistics'"],
+            scriptSrc: ["'self'", "https://cdn.jsdelivr.net", "https://cdn.socket.io", (req, res) => `'nonce-${res.locals.nonce}'`],
             imgSrc: ["'self'", "data:", "https://github.com", "https://avatars.githubusercontent.com"],
-            connectSrc: ["'self'", "https://cdn.jsdelivr.net", "ws://localhost:3000", "wss://localhost:3000"]
+            // 'self' covers same-origin ws/wss for Socket.IO in any deployment
+            connectSrc: ["'self'", "https://cdn.jsdelivr.net"]
         }
     }
 }));
@@ -82,10 +91,21 @@ const limiter = rateLimit({
 });
 app.use(limiter);
 
+// Behind the ALB in production, trust the proxy so secure cookies are set
+// correctly (TLS is terminated at the load balancer).
+if (process.env.NODE_ENV === 'production') {
+    app.set('trust proxy', 1);
+}
+
 app.use(session({
-    secret: process.env.GITHUB_CLIENT_SECRET,
+    secret: process.env.SESSION_SECRET || process.env.GITHUB_CLIENT_SECRET,
     resave: false,
-    saveUninitialized: false
+    saveUninitialized: false,
+    cookie: {
+        httpOnly: true,
+        sameSite: 'lax',
+        secure: process.env.NODE_ENV === 'production'
+    }
 }));
 
 app.use(passport.initialize());

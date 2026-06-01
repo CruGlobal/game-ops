@@ -150,12 +150,15 @@
             <a href="/leaderboard" class="error-button error-button-primary">
                 🏠 Go Home
             </a>
-            <button onclick="window.history.back()" class="error-button error-button-secondary">
+            <button id="go-back-button" class="error-button error-button-secondary">
                 ← Go Back
             </button>
         </div>
     </div>
 
+    <script nonce="<%= nonce %>">
+        document.getElementById('go-back-button')?.addEventListener('click', () => window.history.back());
+    </script>
     <script src="/theme-toggle.js"></script>
 </body>
 </html>
