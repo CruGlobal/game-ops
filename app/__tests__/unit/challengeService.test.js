@@ -916,7 +916,12 @@ describe('ChallengeService', () => {
             expect(duration).toBe(7 * 24 * 60 * 60 * 1000);
         });
 
-        it('should not copy participants', async () => {
+        it('should not carry over participant progress from the original', async () => {
+            // A duplicated challenge is a fresh active challenge: handleChallengeCreated
+            // auto-enrolls all contributors (so nobody is excluded), exactly like any
+            // other new challenge. The invariant under test is that the original's
+            // participant STATE (progress / completion) is not copied — each participant
+            // on the duplicate starts clean.
             const contributor = await prisma.contributor.create({
                 data: createTestContributor({ username: 'dupParticipant' })
             });
@@ -929,8 +934,8 @@ describe('ChallengeService', () => {
                     target: 5,
                     reward: 100,
                     status: 'active',
-                    startDate: new Date(),
-                    endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+                    startDate: new Date('2026-01-01'),
+                    endDate: new Date('2026-01-08'),
                     difficulty: 'easy',
                     category: 'individual',
                     participants: {
@@ -938,7 +943,7 @@ describe('ChallengeService', () => {
                             contributorId: contributor.id,
                             progress: 3,
                             completed: false,
-                            joinedAt: new Date()
+                            joinedAt: new Date('2026-01-02')
                         }
                     }
                 }
@@ -946,10 +951,21 @@ describe('ChallengeService', () => {
 
             const dup = await duplicateChallenge(challenge.id);
 
-            const participants = await prisma.challengeParticipant.findMany({
+            // Original is untouched
+            const originalParticipants = await prisma.challengeParticipant.findMany({
+                where: { challengeId: challenge.id }
+            });
+            expect(originalParticipants).toHaveLength(1);
+            expect(originalParticipants[0].progress).toBe(3);
+
+            // Duplicate's participants are all fresh — no progress/completion carried over
+            const dupParticipants = await prisma.challengeParticipant.findMany({
                 where: { challengeId: dup.id }
             });
-            expect(participants).toHaveLength(0);
+            for (const p of dupParticipants) {
+                expect(p.progress).toBe(0);
+                expect(p.completed).toBe(false);
+            }
         });
 
         it('should increment copy number in title', async () => {
