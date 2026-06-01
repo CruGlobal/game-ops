@@ -115,6 +115,7 @@ function initializeEventListeners() {
     if (sortSelect) {
         sortSelect.addEventListener('change', (e) => {
             currentSort = e.target.value;
+            updateViewDescription();
             renderCurrentTab();
         });
     }
@@ -444,10 +445,27 @@ function renderTopStreaks() {
     renderLeaderboard('streaks-grid', sortedUsers, 'streaks');
 }
 
+// Human-readable ranking labels for the View selector
+const VIEW_LABELS = {
+    totalPoints: 'total points earned',
+    prCount: 'pull requests merged',
+    reviewCount: 'code reviews completed',
+    currentStreak: 'current contribution streak',
+    longestStreak: 'longest contribution streak'
+};
+
+function updateViewDescription() {
+    const el = document.querySelector('#all-time-info .quarter-description');
+    if (el) {
+        el.textContent = `All-time contributors ranked by ${VIEW_LABELS[currentSort] || 'total points earned'}`;
+    }
+}
+
 function renderAllTimeLeaderboard() {
     const filteredUsers = filterUsers(allTimeLeaderboard);
     const sortedUsers = sortUsers(filteredUsers, currentSort);
 
+    updateViewDescription();
     renderLeaderboard('all-time-grid', sortedUsers, 'all-time');
 }
 
