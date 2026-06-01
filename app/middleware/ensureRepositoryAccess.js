@@ -20,7 +20,7 @@ export const ensureRepositoryAccess = async (req, res, next) => {
         
         try {
             // Check if user has access to the repository
-            const response = await fetch(`https://api.github.com/repos/${repoOwner}/${repoName}/collaborators/${req.user.username}`, {
+            const response = await fetch(`https://api.github.com/repos/${repoOwner}/${repoName}/collaborators/${encodeURIComponent(req.user.username)}`, {
                 headers: {
                     'Authorization': `token ${token}`,
                     'Accept': 'application/vnd.github.v3+json'
@@ -32,7 +32,7 @@ export const ensureRepositoryAccess = async (req, res, next) => {
                 return next();
             } else if (response.status === 404) {
                 // User is not a collaborator, check if repo is public and user is org member
-                const orgResponse = await fetch(`https://api.github.com/orgs/${repoOwner}/members/${req.user.username}`, {
+                const orgResponse = await fetch(`https://api.github.com/orgs/${repoOwner}/members/${encodeURIComponent(req.user.username)}`, {
                     headers: {
                         'Authorization': `token ${token}`,
                         'Accept': 'application/vnd.github.v3+json'
@@ -53,7 +53,9 @@ export const ensureRepositoryAccess = async (req, res, next) => {
         }
     } else {
         // Not authenticated - redirect to GitHub OAuth
-        const isApiRequest = req.path.startsWith('/api/');
+        // Use originalUrl (full path) — req.path is mount-relative inside sub-routers,
+        // so a sub-router API route would otherwise be misclassified as a page request.
+        const isApiRequest = req.originalUrl.startsWith('/api/');
         
         if (isApiRequest) {
             res.status(401).json({ success: false, message: 'Authentication required' });

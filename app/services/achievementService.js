@@ -1,8 +1,7 @@
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../lib/prisma.js';
 import { ACHIEVEMENTS, checkAchievements } from '../config/achievements-config.js';
 import { emitAchievementUnlocked } from '../utils/socketEmitter.js';
 import logger from '../utils/logger.js';
-const prisma = new PrismaClient();
 
 /**
  * Check and award new achievements to a contributor

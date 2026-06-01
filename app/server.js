@@ -64,7 +64,14 @@ app.use(helmet({
         }
     }
 }));
-app.use(cors());
+// Restrict CORS to known origins. The UI is served same-origin, so cross-origin
+// access is only the configured deployment origin(s); CORS_ORIGINS is a
+// comma-separated allowlist, defaulting to BASE_URL (or localhost in dev).
+const allowedOrigins = (process.env.CORS_ORIGINS || process.env.BASE_URL || 'http://localhost:3000')
+    .split(',')
+    .map(o => o.trim())
+    .filter(Boolean);
+app.use(cors({ origin: allowedOrigins, credentials: true }));
 
 // Only enable COEP/COOP when needed (e.g., production or explicitly enabled)
 if (process.env.NODE_ENV === 'production' || process.env.ENABLE_COEP === 'true') {

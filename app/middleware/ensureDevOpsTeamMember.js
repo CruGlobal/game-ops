@@ -19,7 +19,7 @@ export const ensureDevOpsTeamMember = async (req, res, next) => {
         const teamSlug = process.env.DEVOPS_TEAM_SLUG || 'devops-engineering-team'; // Use DEVOPS_TEAM_SLUG for consistency
 
         try {
-            const response = await fetch(`https://api.github.com/orgs/${org}/teams/${teamSlug}/memberships/${req.user.username}`, {
+            const response = await fetch(`https://api.github.com/orgs/${org}/teams/${teamSlug}/memberships/${encodeURIComponent(req.user.username)}`, {
                 headers: {
                     'Authorization': `token ${token}`,
                     'Accept': 'application/vnd.github.v3+json'
@@ -41,7 +41,9 @@ export const ensureDevOpsTeamMember = async (req, res, next) => {
         }
     } else {
         // Check if this is an API request or page request
-        const isApiRequest = req.path.startsWith('/api/');
+        // Use originalUrl (full path) — req.path is mount-relative inside sub-routers,
+        // so a sub-router API route would otherwise be misclassified as a page request.
+        const isApiRequest = req.originalUrl.startsWith('/api/');
         
         if (isApiRequest) {
             // For API routes, respond with 401 JSON

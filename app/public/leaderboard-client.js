@@ -1089,7 +1089,7 @@ function showError(message) {
         for (let i = 0; i < newData.length; i++) {
             const user = newData[i];
             const newRank = i + 1;
-            const card = grid.querySelector(`[data-username="${user.username}"]`);
+            const card = grid.querySelector(`[data-username="${CSS.escape(user.username)}"]`);
             if (!card) continue;
 
             let hasChanges = false;
@@ -1141,7 +1141,7 @@ function showError(message) {
     function findFirstChangedCard(gridUpdates, changedUsernames) {
         for (const { grid } of gridUpdates) {
             for (const username of changedUsernames) {
-                const card = grid.querySelector(`[data-username="${username}"]`);
+                const card = grid.querySelector(`[data-username="${CSS.escape(username)}"]`);
                 if (card) return card;
             }
         }

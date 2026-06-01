@@ -489,7 +489,8 @@ export const completeChallenge = async (username, challengeId) => {
             throw new Error('Challenge or contributor not found');
         }
 
-        // Award reward points
+        // Approximate post-award total for the emit/return below (display only).
+        // The persisted value is written with an atomic increment, not this number.
         const newTotalPoints = Number(contributor.totalPoints) + challenge.reward;
 
         // Create completed challenge record and update points
@@ -503,11 +504,15 @@ export const completeChallenge = async (username, challengeId) => {
                     reward: challenge.reward
                 }
             }),
-            // Update contributor points (both quarterly and all-time)
+            // Update contributor points (both quarterly and all-time). Use increment
+            // rather than an absolute read-then-write so a concurrent points award
+            // between the read above and this write is not lost.
             prisma.contributor.update({
                 where: { username },
                 data: {
-                    totalPoints: newTotalPoints,
+                    totalPoints: {
+                        increment: BigInt(challenge.reward)
+                    },
                     allTimePoints: {
                         increment: BigInt(challenge.reward)
                     },
@@ -1010,8 +1015,13 @@ export const generateWeeklyChallenges = async () => {
 
         const generatedChallenges = [];
 
-        // Generate 3 random challenges
-        const shuffled = challengeTemplates.sort(() => 0.5 - Math.random());
+        // Generate 3 random challenges. Copy first (don't mutate the shared template
+        // array) and use Fisher-Yates for an unbiased shuffle.
+        const shuffled = [...challengeTemplates];
+        for (let i = shuffled.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+        }
         const selected = shuffled.slice(0, 3);
 
         for (const template of selected) {

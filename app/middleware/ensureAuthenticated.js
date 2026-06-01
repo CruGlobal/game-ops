@@ -13,7 +13,7 @@ export const ensureAuthenticated = async (req, res, next) => {
         const teamSlug = process.env.DEVOPS_TEAM_SLUG || 'devops-engineering-team'; // Use DEVOPS_TEAM_SLUG for consistency
 
         try {
-            const response = await fetch(`https://api.github.com/orgs/${org}/teams/${teamSlug}/memberships/${req.user.username}`, {
+            const response = await fetch(`https://api.github.com/orgs/${org}/teams/${teamSlug}/memberships/${encodeURIComponent(req.user.username)}`, {
                 headers: {
                     'Authorization': `token ${token}`,
                     'Accept': 'application/vnd.github.v3+json'
