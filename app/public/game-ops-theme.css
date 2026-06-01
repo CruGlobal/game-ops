@@ -508,6 +508,24 @@ body {
     border-radius: 0 !important;
 }
 
+/* Card markup is [rank][contributor-info][badges-section] as flex siblings.
+   Legacy floated badges-section into a right-hand column, which overlapped the
+   wide 2-col stats grid. Make the card wrap and drop badges to a full-width row
+   below the stats. */
+.container .leaderboard-card { flex-wrap: wrap; }
+.container .leaderboard-card .contributor-info { flex: 1 1 auto; min-width: 0; }
+.container .leaderboard-card .badges-section {
+    flex: 1 0 100%;
+    width: 100%;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 6px;
+    margin-top: 6px;
+    order: 5;
+}
+
 /* ---- Responsive --------------------------------------------------- */
 @media (max-width: 640px) {
     .header-section { flex-direction: column; gap: 12px; align-items: flex-start; }
