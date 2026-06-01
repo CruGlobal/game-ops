@@ -577,7 +577,7 @@
 <script src="/admin.js"></script>
 <script src="/init.js"></script>
 
-<script nonce="lexicostatistics">
+<script nonce="<%= nonce %>">
 // Simple toast notification function for admin page
 function showToast(message, type = 'info') {
     const toast = document.createElement('div');
@@ -603,7 +603,7 @@ function showToast(message, type = 'info') {
 }
 </script>
 
-<script nonce="lexicostatistics">
+<script nonce="<%= nonce %>">
 // Data Overview Functionality
 (async function initDataOverview() {
     // Auth gate: check if user is authenticated before hitting admin APIs
@@ -1497,7 +1497,7 @@ document.getElementById('bulk-reset-bills-btn')?.addEventListener('click', async
     })();
 </script>
 
-<script nonce="lexicostatistics">
+<script nonce="<%= nonce %>">
 // Background Sync (Catch-Up) controls
 async function initCronControls() {
     try {
@@ -1839,7 +1839,7 @@ function toggleDevOpsMembersList() {
 
 <!-- Socket.IO Client Library -->
 <script src="/socket.io/socket.io.js"></script>
-<script nonce="lexicostatistics">
+<script nonce="<%= nonce %>">
     // Initialize Socket.IO connection for real-time updates
     const socket = io();
     
