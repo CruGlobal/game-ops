@@ -34,31 +34,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     let selectedChallenges = new Set();
     let templates = [];
 
-    // Token management
-    const setToken = (token) => {
-        try {
-            localStorage.setItem('token', token);
-        } catch (error) {
-            console.error('Error setting token in localStorage:', error);
-        }
-    };
-
-    const getToken = () => {
-        try {
-            return localStorage.getItem('token');
-        } catch (error) {
-            console.error('Error getting token from localStorage:', error);
-            return null;
-        }
-    };
-
-    // Check if token is present in URL and store it in localStorage
-    const urlParams = new URLSearchParams(window.location.search);
-    const token = urlParams.get('token');
-    if (token) {
-        setToken(token);
-        window.history.replaceState({}, document.title, "/admin/challenges");
-    }
+    // Authentication is carried by the httpOnly session cookie (GitHub OAuth +
+    // ensureDevOpsTeamMember). All admin API calls use credentials: 'same-origin';
+    // no token is read from the URL or localStorage.
 
     // Set default dates
     const startDateInput = document.getElementById('start-date');
@@ -278,12 +256,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         try {
-            const storedToken = getToken();
             const response = await fetch(`/api/challenges/admin/${challengeId}`, {
                 method: 'DELETE',
-                headers: {
-                    'Authorization': `Bearer ${storedToken}`
-                }
+                credentials: 'same-origin'
             });
 
             if (response.ok) {
@@ -350,12 +325,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         try {
-            const storedToken = getToken();
             const response = await fetch(`/api/challenges/admin/${challengeId}`, {
                 method: 'PUT',
+                credentials: 'same-origin',
                 headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${storedToken}`
+                    'Content-Type': 'application/json'
                 },
                 body: JSON.stringify(updateData)
             });
@@ -378,12 +352,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     // ===== Duplicate Challenge =====
     const duplicateChallenge = async (challengeId) => {
         try {
-            const storedToken = getToken();
             const response = await fetch(`/api/challenges/admin/${challengeId}/duplicate`, {
                 method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${storedToken}`
-                }
+                credentials: 'same-origin'
             });
 
             const result = await response.json();
@@ -476,12 +447,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!confirm(confirmMsg)) return;
 
         try {
-            const storedToken = getToken();
             const response = await fetch('/api/challenges/admin/bulk-action', {
                 method: 'POST',
+                credentials: 'same-origin',
                 headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${storedToken}`
+                    'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
                     ids: [...selectedChallenges],
@@ -663,19 +633,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         try {
-            const storedToken = getToken();
-            if (!storedToken) {
-                challengeCreateStatus.innerHTML = '<p class="error">Authentication required. Please log in.</p>';
-                return;
-            }
-
             challengeCreateStatus.innerHTML = '<p class="info">Creating challenge...</p>';
 
             const response = await fetch(endpoint, {
                 method: 'POST',
+                credentials: 'same-origin',
                 headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${storedToken}`
+                    'Content-Type': 'application/json'
                 },
                 body: JSON.stringify(requestBody)
             });

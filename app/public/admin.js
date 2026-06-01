@@ -9,34 +9,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     const achievementToggle = document.getElementById('achievement-toggle');
     const resetNotificationsButton = document.getElementById('reset-notifications');
 
-    // Function to set the token in localStorage
-    const setToken = (token) => {
-        try {
-            localStorage.setItem('token', token);
-        } catch (error) {
-            console.error('Error setting token in localStorage:', error);
-        }
-    };
-
-    // Function to get the token from localStorage
-    const getToken = () => {
-        try {
-            return localStorage.getItem('token');
-        } catch (error) {
-            console.error('Error getting token from localStorage:', error);
-            return null;
-        }
-    };
-
-    // Check if token is present in URL and store it in localStorage
-    const urlParams = new URLSearchParams(window.location.search);
-    const token = urlParams.get('token');
-    if (token) {
-        setToken(token);
-        window.history.replaceState({}, document.title, "/admin"); // Remove token from URL
-    }
-
-    //const storedToken = getToken();
+    // Authentication is carried by the httpOnly session cookie (GitHub OAuth +
+    // ensureDevOpsTeamMember). All admin API calls below use
+    // credentials: 'same-origin'; no token is read from the URL or localStorage.
 
     const loadContributors = async () => {
         try {

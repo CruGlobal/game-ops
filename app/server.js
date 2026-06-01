@@ -21,7 +21,6 @@ import { errorHandler } from './middleware/errorHandler.js';
 import logger from './utils/logger.js';
 import session from 'express-session';
 import passport from './config/passport.js';
-import jwt from 'jsonwebtoken';
 import { ensureAuthenticated } from './middleware/ensureAuthenticated.js';
 import { ensureDevOpsTeamMember } from './middleware/ensureDevOpsTeamMember.js';
 import { ensureRepositoryAccess } from './middleware/ensureRepositoryAccess.js';
@@ -140,7 +139,8 @@ app.get('/challenges', ensureRepositoryAccess, (req, res) => {
 });
 
 // Route to render individual profile pages
-app.get('/profile/:username', async (req, res) => {
+// Requires repository access (any org member or collaborator)
+app.get('/profile/:username', ensureRepositoryAccess, async (req, res) => {
     try {
         const { username } = req.params;
 
@@ -167,16 +167,16 @@ app.get('/profile/:username', async (req, res) => {
     }
 });
 
-// Admin routes
-app.get('/activity', (req, res) => {
+// Data views — require repository access (any org member or collaborator)
+app.get('/activity', ensureRepositoryAccess, (req, res) => {
     res.render('activity');
 });
 
-app.get('/charts', (req, res) => {
+app.get('/charts', ensureRepositoryAccess, (req, res) => {
     res.render('charts');
 });
 
-app.get('/analytics', (req, res) => {
+app.get('/analytics', ensureRepositoryAccess, (req, res) => {
     res.render('analytics');
 });
 
@@ -190,19 +190,13 @@ app.get('/auth/github/callback',
             logger.error('Failed to obtain access token during GitHub OAuth callback');
             return res.redirect('/');
         }
-        const token = jwt.sign({ username: req.user.username }, process.env.JWT_SECRET, { expiresIn: '1h' });
 
-        // Redirect back to the original page if stored in session, otherwise go to leaderboard
-        // Default previously pointed to '/admin'; changed to '/leaderboard' for improved initial UX.
+        // Authentication is carried by the httpOnly session cookie established by
+        // passport above. We do NOT mint a JWT into the redirect URL — that leaked
+        // the token via browser history, Referer headers, and proxy logs.
         const returnTo = req.session.returnTo || '/leaderboard';
         delete req.session.returnTo; // Clear the stored URL
-
-        // If going to admin, include the token in URL
-        if (returnTo.startsWith('/admin')) {
-            res.redirect(`${returnTo}${returnTo.includes('?') ? '&' : '?'}token=${token}`);
-        } else {
-            res.redirect(returnTo);
-        }
+        res.redirect(returnTo);
     }
 );
 
