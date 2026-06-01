@@ -533,6 +533,22 @@ function createQuarterlyCard(user, rank) {
                         <div class="stat-value" data-stat="pointsThisQuarter">${pointsThisQuarter}</div>
                     </div>
                 </div>
+                <div class="stat-item">
+                    <span class="stat-icon">🔥</span>
+                    <div>
+                        <div class="stat-label">Streak</div>
+                        <div class="stat-value" data-stat="currentStreak">${user.currentStreak || 0} days</div>
+                    </div>
+                </div>
+                ${user.totalBillsAwarded ? `
+                <div class="stat-item">
+                    <span class="stat-icon">💵</span>
+                    <div>
+                        <div class="stat-label">Bills</div>
+                        <div class="stat-value" data-stat="totalBillsAwarded">${user.totalBillsAwarded}</div>
+                    </div>
+                </div>
+                ` : ''}
             </div>
         </div>
 
