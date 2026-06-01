@@ -58,20 +58,15 @@ export async function getCurrentQuarter() {
     // Get Q1 start month from config
     const q1Start = config.q1StartMonth;
 
-    // Calculate which quarter we're in
-    // If current month is before Q1 start, we're in Q4 of previous year
-    let quarterNum;
-    let year = currentYear;
+    // Months elapsed since the configured Q1 start, wrapping across the year so
+    // non-calendar configs (fiscal/academic) compute the right quarter. e.g. with
+    // q1Start=10 (Oct): Jan→Q2, Apr→Q3, Jul→Q4 — not all-Q4 as before.
+    const monthsSinceQ1 = (currentMonth - q1Start + 12) % 12;
+    const quarterNum = Math.floor(monthsSinceQ1 / 3) + 1;
 
-    if (currentMonth < q1Start) {
-        // We're in Q4 of previous year
-        quarterNum = 4;
-        year = currentYear - 1;
-    } else {
-        // Calculate quarter number based on months since Q1 start
-        const monthsSinceQ1 = currentMonth - q1Start;
-        quarterNum = Math.floor(monthsSinceQ1 / 3) + 1;
-    }
+    // The fiscal year is labeled by the calendar year in which its Q1 starts, so
+    // months before q1Start belong to the cycle that began the previous year.
+    const year = currentMonth >= q1Start ? currentYear : currentYear - 1;
 
     return `${year}-Q${quarterNum}`;
 }
@@ -89,32 +84,25 @@ export async function getQuarterDateRange(quarterString) {
 
     const q1Start = config.q1StartMonth;
 
-    // Calculate start month for this quarter
-    const startMonth = ((q1Start + (quarterNum - 1) * 3 - 1) % 12) + 1;
+    // Absolute month offset (0-indexed from January of the label year) of this
+    // quarter's first month: Q1 begins at q1Start, each quarter adds 3 months.
+    // Dividing by 12 rolls the year forward generally — so fiscal/academic
+    // quarters that cross January (e.g. q1Start=10, Q2 = Jan–Mar of year+1) get the
+    // correct year, which the old `quarterNum === 1`-only adjustment did not.
+    const startMonthIndex = (q1Start - 1) + (quarterNum - 1) * 3;
+    const startYear = year + Math.floor(startMonthIndex / 12);
+    const startMonth0 = startMonthIndex % 12;
 
-    // Calculate year adjustment if quarter spans year boundary
-    let startYear = year;
-    let endYear = year;
-
-    // If startMonth > 10 and quarterNum is 1, we're spanning from previous year
-    if (startMonth > 10 && quarterNum === 1) {
-        startYear = year - 1;
-        endYear = year;
-    }
-
-    // Calculate end month (2 months after start)
-    let endMonth = startMonth + 2;
-    if (endMonth > 12) {
-        endMonth = endMonth - 12;
-        endYear = startYear + 1;
-    }
+    const endMonthIndex = startMonthIndex + 2;
+    const endYear = year + Math.floor(endMonthIndex / 12);
+    const endMonth0 = endMonthIndex % 12;
 
     // Use UTC dates to avoid timezone issues
-    const startDate = new Date(Date.UTC(startYear, startMonth - 1, 1, 0, 0, 0));
+    const startDate = new Date(Date.UTC(startYear, startMonth0, 1, 0, 0, 0));
 
-    // Get last day of endMonth
-    const lastDay = new Date(Date.UTC(endYear, endMonth, 0)).getUTCDate();
-    const endDate = new Date(Date.UTC(endYear, endMonth - 1, lastDay, 23, 59, 59));
+    // Day 0 of the month after endMonth0 = last day of endMonth0
+    const lastDay = new Date(Date.UTC(endYear, endMonth0 + 1, 0)).getUTCDate();
+    const endDate = new Date(Date.UTC(endYear, endMonth0, lastDay, 23, 59, 59));
 
     return { start: startDate, end: endDate };
 }

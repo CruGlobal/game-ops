@@ -24,14 +24,23 @@ const domain = process.env.BASE_URL || process.env.DOMAIN || 'http://localhost:3
 // Function to sleep for a specified number of milliseconds
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-// Function to initialize the database
-export const initializeDatabase = async () => {
+// Function to initialize the database.
+// DESTRUCTIVE: deletes every contributor, then re-imports the full history from
+// GitHub. Requires explicit confirmation so an accidental or prefetched call
+// cannot wipe the database. The import is idempotent (processedPRs/Reviews guard
+// duplicates), so a run that fails partway can simply be re-run.
+export const initializeDatabase = async ({ confirm = false } = {}) => {
     try {
         // In test environment, avoid external GitHub API calls
         if (process.env.NODE_ENV === 'test') {
             console.log('Database initialized successfully (test mode)');
             return 'Database initialized successfully.';
         }
+
+        if (!confirm) {
+            throw new Error('initializeDatabase requires explicit confirmation (confirm: true) — it deletes all contributors before re-importing.');
+        }
+
         await prisma.contributor.deleteMany({});
 
         let page = 1;

@@ -85,35 +85,55 @@ describe('QuarterlyService', () => {
     });
 
     describe('getQuarterDateRange', () => {
-        it('should return date range for quarter', async () => {
+        // Helper: assert a range covers [startY-startM-1 .. endY-endM-lastDay] in UTC
+        const expectRange = (range, startY, startM, endY, endM) => {
+            expect(range.start.getUTCFullYear()).toBe(startY);
+            expect(range.start.getUTCMonth()).toBe(startM - 1);
+            expect(range.start.getUTCDate()).toBe(1);
+            expect(range.end.getUTCFullYear()).toBe(endY);
+            expect(range.end.getUTCMonth()).toBe(endM - 1);
+            // end is the last day of endM
+            const lastDay = new Date(Date.UTC(endY, endM, 0)).getUTCDate();
+            expect(range.end.getUTCDate()).toBe(lastDay);
+            expect(range.end.getTime()).toBeGreaterThan(range.start.getTime());
+        };
+
+        it('should return calendar quarters (Q1 = Jan–Mar, Q4 = Oct–Dec)', async () => {
             await prisma.quarterSettings.create({
-                data: {
-                    id: 'quarter-config',
-                    systemType: 'calendar',
-                    q1StartMonth: 1
-                }
+                data: { id: 'quarter-config', systemType: 'calendar', q1StartMonth: 1 }
             });
 
-            const range = await getQuarterDateRange('2025-Q1');
-
-            expect(range.start).toBeInstanceOf(Date);
-            expect(range.end).toBeInstanceOf(Date);
-            expect(range.end.getTime()).toBeGreaterThan(range.start.getTime());
+            expectRange(await getQuarterDateRange('2025-Q1'), 2025, 1, 2025, 3);
+            expectRange(await getQuarterDateRange('2025-Q4'), 2025, 10, 2025, 12);
         });
 
-        it('should handle quarter spanning year boundary', async () => {
+        it('should return fiscal-us Q1 in the label year (Oct–Dec)', async () => {
             await prisma.quarterSettings.create({
-                data: {
-                    id: 'quarter-config',
-                    systemType: 'fiscal-us',
-                    q1StartMonth: 10
-                }
+                data: { id: 'quarter-config', systemType: 'fiscal-us', q1StartMonth: 10 }
             });
 
-            const range = await getQuarterDateRange('2025-Q1');
+            expectRange(await getQuarterDateRange('2025-Q1'), 2025, 10, 2025, 12);
+        });
 
-            expect(range.start).toBeInstanceOf(Date);
-            expect(range.end).toBeInstanceOf(Date);
+        it('should roll fiscal-us Q2/Q3/Q4 into the next calendar year (crosses January)', async () => {
+            await prisma.quarterSettings.create({
+                data: { id: 'quarter-config', systemType: 'fiscal-us', q1StartMonth: 10 }
+            });
+
+            // FY2025 (starts Oct 2025): Q2 = Jan–Mar 2026, Q3 = Apr–Jun 2026, Q4 = Jul–Sep 2026
+            expectRange(await getQuarterDateRange('2025-Q2'), 2026, 1, 2026, 3);
+            expectRange(await getQuarterDateRange('2025-Q3'), 2026, 4, 2026, 6);
+            expectRange(await getQuarterDateRange('2025-Q4'), 2026, 7, 2026, 9);
+        });
+
+        it('should handle academic-year config (Sep start)', async () => {
+            await prisma.quarterSettings.create({
+                data: { id: 'quarter-config', systemType: 'academic', q1StartMonth: 9 }
+            });
+
+            // Q1 = Sep–Nov 2025, Q2 = Dec 2025–Feb 2026 (crosses January)
+            expectRange(await getQuarterDateRange('2025-Q1'), 2025, 9, 2025, 11);
+            expectRange(await getQuarterDateRange('2025-Q2'), 2025, 12, 2026, 2);
         });
     });
 
