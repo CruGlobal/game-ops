@@ -1,0 +1,629 @@
+/* =====================================================================
+   Game Ops — "Ops Terminal" theme
+   A competition-arcade scoreboard rendered like a sharp ops console.
+   Loaded LAST: redefines the shared design tokens (re-skinning everything
+   that uses var(--color-*) / var(--bg-*) / var(--text-*)) and adds
+   arcade component styling for the leaderboard.
+
+   Type:  Chakra Petch (display / ranks)  +  JetBrains Mono (UI / stats)
+   Signature: oversized rank numerals, hard-offset shadows, grid+scanline
+              backdrop, single lime signal accent, amber recognition gold.
+   ===================================================================== */
+
+/* ---- Light theme (default): "daylight console" -------------------- */
+:root {
+    --font-display: 'Chakra Petch', 'JetBrains Mono', ui-monospace, monospace;
+    --font-mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+
+    --canvas: #eef0ea;
+    --surface: #ffffff;
+    --surface-2: #f4f6f0;
+    --ink: #10140e;
+    --muted: #4a5247;
+    --faint: #79806f;
+    --line: rgba(16, 20, 14, 0.14);
+    --line-strong: rgba(16, 20, 14, 0.85);
+
+    --accent: #2f7d22;          /* readable green for text/borders on light */
+    --signal: #b6f23a;          /* lime fill — dark text sits on it */
+    --signal-ink: #14210a;      /* text on signal fills */
+    --gold: #e0a008;
+    --silver: #8b97a4;
+    --bronze: #c1763c;
+
+    --grid: rgba(16, 20, 14, 0.05);
+    --shadow-hard: 4px 4px 0 var(--line-strong);
+    --shadow-hard-sm: 3px 3px 0 var(--line-strong);
+    --glow: none;
+
+    /* Re-map the shared design-system tokens so the rest of the app follows */
+    --color-primary: var(--accent);
+    --color-primary-dark: #245f1a;
+    --color-primary-light: #46a534;
+    --bg-primary: var(--canvas);
+    --bg-secondary: var(--surface-2);
+    --bg-tertiary: var(--surface-2);
+    --bg-elevated: var(--surface);
+    --text-primary: var(--ink);
+    --text-secondary: var(--muted);
+    --text-tertiary: var(--faint);
+    --text-inverse: #f7faf3;
+}
+
+/* ---- Dark theme: "phosphor terminal" ------------------------------ */
+[data-theme="dark"] {
+    --canvas: #080b10;
+    --surface: #10151d;
+    --surface-2: #161d27;
+    --ink: #e7f0e4;
+    --muted: #9aa79b;
+    --faint: #6c7a6e;
+    --line: rgba(168, 240, 0, 0.16);
+    --line-strong: rgba(168, 240, 0, 0.55);
+
+    --accent: #a8f000;
+    --signal: #caff32;
+    --signal-ink: #0a1400;
+    --gold: #ffc83d;
+    --silver: #c2cdda;
+    --bronze: #e2935a;
+
+    --grid: rgba(168, 240, 0, 0.05);
+    --shadow-hard: 4px 4px 0 rgba(168, 240, 0, 0.22);
+    --shadow-hard-sm: 3px 3px 0 rgba(168, 240, 0, 0.22);
+    --glow: 0 0 24px rgba(168, 240, 0, 0.12);
+
+    --color-primary: var(--accent);
+    --color-primary-dark: #7fbf00;
+    --color-primary-light: #caff32;
+    --bg-primary: var(--canvas);
+    --bg-secondary: var(--surface);
+    --bg-tertiary: var(--surface-2);
+    --bg-elevated: var(--surface);
+    --text-primary: var(--ink);
+    --text-secondary: var(--muted);
+    --text-tertiary: var(--faint);
+    --text-inverse: #06090c;
+}
+
+/* ---- Canvas + backdrop ------------------------------------------- */
+body {
+    font-family: var(--font-mono);
+    background-color: var(--canvas);
+    background-image:
+        linear-gradient(var(--grid) 1px, transparent 1px),
+        linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+    background-size: 44px 44px;
+    color: var(--ink);
+    letter-spacing: 0.01em;
+    min-height: 100vh;
+}
+
+/* faint scanlines + vignette over the whole page */
+body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    background-image: repeating-linear-gradient(
+        to bottom,
+        rgba(0, 0, 0, 0.018) 0px,
+        rgba(0, 0, 0, 0.018) 1px,
+        transparent 1px,
+        transparent 3px
+    );
+}
+[data-theme="dark"] body::before {
+    background-image:
+        repeating-linear-gradient(to bottom, rgba(0,0,0,0.16) 0px, rgba(0,0,0,0.16) 1px, transparent 1px, transparent 3px),
+        radial-gradient(120% 90% at 50% -10%, rgba(168,240,0,0.06), transparent 60%);
+}
+
+.container { position: relative; z-index: 1; max-width: 1180px; }
+
+/* ---- Header ------------------------------------------------------- */
+.header-section {
+    border: 1.5px solid var(--line-strong);
+    background: var(--surface);
+    box-shadow: var(--shadow-hard);
+    padding: 22px 26px;
+    margin: 28px 0 26px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: relative;
+}
+.header-section::before {
+    content: "● GAME-OPS // LIVE SCOREBOARD";
+    position: absolute;
+    top: -10px;
+    left: 18px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.22em;
+    color: var(--signal-ink);
+    background: var(--signal);
+    padding: 2px 10px;
+    border: 1.5px solid var(--line-strong);
+}
+.header-section h1 {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: clamp(1.9rem, 4vw, 3rem);
+    letter-spacing: -0.01em;
+    margin: 0;
+    text-transform: uppercase;
+    /* Defeat legacy gradient text-clip (background-clip:text + transparent fill),
+       which rendered the title invisible once the theme changed the background. */
+    background: none !important;
+    color: var(--ink) !important;
+    -webkit-text-fill-color: var(--ink) !important;
+    -webkit-background-clip: border-box !important;
+    background-clip: border-box !important;
+}
+
+/* ---- Controls (search / sort / filter) --------------------------- */
+.controls-section {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    align-items: center;
+    margin-bottom: 22px;
+}
+.search-bar { flex: 1 1 280px; }
+.search-bar input,
+.filter-dropdown select {
+    font-family: var(--font-mono);
+    font-size: 0.9rem;
+    width: 100%;
+    background: var(--surface);
+    color: var(--ink);
+    border: 1.5px solid var(--line-strong);
+    border-radius: 0;
+    padding: 12px 14px;
+    box-shadow: var(--shadow-hard-sm);
+    transition: transform 0.08s ease, box-shadow 0.08s ease;
+}
+.search-bar input:focus,
+.filter-dropdown select:focus {
+    outline: none;
+    transform: translate(-2px, -2px);
+    box-shadow: 5px 5px 0 var(--accent);
+}
+.filter-dropdown { display: flex; align-items: center; gap: 8px; }
+.filter-dropdown label,
+.devops-filter-toggle label {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--muted);
+}
+.devops-filter-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border: 1.5px solid var(--line);
+    padding: 8px 12px;
+    background: var(--surface-2);
+}
+
+/* ---- Tabs: segmented terminal selector --------------------------- */
+.tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0;
+    border: 1.5px solid var(--line-strong);
+    background: var(--surface-2);
+    box-shadow: var(--shadow-hard);
+    margin-bottom: 28px;
+    padding: 4px;
+}
+.tab-button {
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--muted);
+    background: transparent;
+    border: none;
+    padding: 11px 16px;
+    cursor: pointer;
+    position: relative;
+    transition: color 0.12s ease, background 0.12s ease;
+}
+.tab-button:hover { color: var(--ink); background: var(--line); }
+.tab-button.active {
+    color: var(--signal-ink);
+    background: var(--signal);
+    box-shadow: inset 0 -3px 0 var(--line-strong);
+}
+.tab-button:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+/* ---- Quarter info banner ----------------------------------------- */
+.quarter-info {
+    border-left: 4px solid var(--accent);
+    background: var(--surface);
+    padding: 14px 18px;
+    margin-bottom: 22px;
+}
+.quarter-info h3 {
+    font-family: var(--font-display);
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    margin: 0 0 4px;
+    color: var(--ink);
+}
+.quarter-description {
+    font-family: var(--font-mono);
+    font-size: 0.82rem;
+    color: var(--muted);
+    margin: 0;
+}
+
+/* ---- Leaderboard grid -------------------------------------------- */
+.leaderboard-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
+    gap: 18px;
+}
+
+/* ---- Leaderboard card -------------------------------------------- */
+.leaderboard-card {
+    position: relative;
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    background: var(--surface);
+    border: 1.5px solid var(--line-strong);
+    box-shadow: var(--shadow-hard), var(--glow);
+    padding: 18px 18px 18px 16px;
+    overflow: hidden;
+    transition: transform 0.1s ease, box-shadow 0.1s ease;
+}
+.leaderboard-card:hover {
+    transform: translate(-3px, -3px);
+    box-shadow: 7px 7px 0 var(--line-strong), var(--glow);
+}
+/* accent spine */
+.leaderboard-card::before {
+    content: "";
+    position: absolute;
+    top: 0; left: 0; bottom: 0;
+    width: 4px;
+    background: var(--accent);
+    opacity: 0.0;
+    transition: opacity 0.1s ease;
+}
+.leaderboard-card:hover::before { opacity: 1; }
+
+/* Rank numeral — oversized display figure */
+.rank-badge {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 2.1rem;
+    line-height: 1;
+    min-width: 2.4ch;
+    text-align: center;
+    color: var(--faint);
+    border: 1.5px solid var(--line);
+    padding: 8px 6px;
+    background: var(--surface-2);
+    flex-shrink: 0;
+}
+.rank-badge.rank-1 { color: var(--signal-ink); background: var(--gold); border-color: var(--line-strong); }
+.rank-badge.rank-2 { color: var(--ink); background: var(--silver); border-color: var(--line-strong); }
+.rank-badge.rank-3 { color: #fff; background: var(--bronze); border-color: var(--line-strong); }
+
+.contributor-info { flex: 1; min-width: 0; }
+.contributor-header { display: flex; align-items: center; gap: 11px; margin-bottom: 12px; }
+.contributor-avatar {
+    width: 42px; height: 42px;
+    border-radius: 0;
+    border: 1.5px solid var(--line-strong);
+    object-fit: cover;
+    flex-shrink: 0;
+}
+.contributor-name {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 1.05rem;
+    color: var(--ink);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Stats row */
+.stats-row { display: flex; flex-wrap: wrap; gap: 14px; }
+.stat-item { display: flex; align-items: center; gap: 7px; }
+.stat-icon { font-size: 0.95rem; opacity: 0.8; }
+.stat-label {
+    font-family: var(--font-mono);
+    font-size: 0.6rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--faint);
+    display: block;
+}
+.stat-value {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 1.15rem;
+    color: var(--ink);
+    line-height: 1.1;
+}
+
+/* Badges section */
+.badges-section { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 13px; align-items: center; }
+.alltime-badge, .quarter-badge, .points-badge, .streak-indicator {
+    font-family: var(--font-mono);
+    font-size: 0.62rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding: 4px 9px;
+    border: 1.5px solid var(--line-strong);
+    background: var(--surface-2);
+    color: var(--ink);
+}
+.alltime-badge { background: var(--signal); color: var(--signal-ink); }
+.points-badge { background: var(--surface-2); }
+.streak-indicator.active { background: #ff5b1e; color: #fff; border-color: var(--line-strong); }
+.quarter-badge { background: var(--accent); color: var(--signal-ink); }
+.badges-grid { display: flex; flex-wrap: wrap; gap: 5px; }
+.badge-item {
+    width: 26px; height: 26px;
+    border: 1.5px solid var(--line);
+    background: var(--surface-2);
+    object-fit: contain;
+    padding: 2px;
+}
+
+/* ---- Hall of Fame ------------------------------------------------ */
+.hall-of-fame-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 20px;
+}
+.hall-of-fame-card {
+    position: relative;
+    background: var(--surface);
+    border: 1.5px solid var(--line-strong);
+    box-shadow: var(--shadow-hard), var(--glow);
+    padding: 0 0 16px;
+    overflow: hidden;
+}
+.hall-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 12px 16px;
+    background: var(--ink);
+    color: var(--text-inverse);
+}
+.hall-card-header .quarter-badge {
+    background: var(--gold);
+    color: #1a1303;
+    border: none;
+}
+.quarter-date {
+    font-family: var(--font-mono);
+    font-size: 0.66rem;
+    letter-spacing: 0.08em;
+    color: var(--text-inverse);
+    opacity: 0.75;
+}
+.hall-champion { text-align: center; padding: 22px 16px 14px; }
+.champion-crown { font-size: 1.7rem; line-height: 1; }
+.champion-avatar {
+    width: 76px; height: 76px;
+    border-radius: 0;
+    border: 2px solid var(--gold);
+    object-fit: cover;
+    margin: 8px auto 10px;
+    display: block;
+    box-shadow: var(--shadow-hard-sm);
+}
+.champion-name {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 1.25rem;
+    text-transform: uppercase;
+    color: var(--ink);
+}
+.champion-stats { display: flex; justify-content: center; gap: 10px; margin-top: 12px; }
+.stat-pill {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-family: var(--font-mono);
+    font-weight: 700;
+    font-size: 0.82rem;
+    border: 1.5px solid var(--line);
+    padding: 5px 10px;
+    background: var(--surface-2);
+}
+.hall-podium { padding: 4px 16px 0; }
+.podium-title {
+    font-family: var(--font-mono);
+    font-size: 0.62rem;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    color: var(--faint);
+    border-top: 1.5px dashed var(--line);
+    padding-top: 12px;
+    margin-bottom: 8px;
+}
+.podium-item { display: flex; align-items: center; gap: 10px; padding: 6px 0; }
+.podium-avatar {
+    width: 30px; height: 30px;
+    border: 1.5px solid var(--line);
+    object-fit: cover;
+}
+.podium-name { font-family: var(--font-display); font-weight: 600; flex: 1; }
+.podium-points { font-family: var(--font-mono); font-size: 0.78rem; color: var(--muted); }
+.hall-footer {
+    margin-top: 12px;
+    padding: 10px 16px 0;
+    border-top: 1.5px dashed var(--line);
+}
+.participants-count {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--faint);
+}
+
+/* ---- Winners banner ---------------------------------------------- */
+.winners-banner {
+    position: relative;
+    border: 1.5px solid var(--line-strong);
+    background: var(--ink);
+    color: var(--text-inverse);
+    box-shadow: var(--shadow-hard);
+    padding: 20px 24px;
+    margin-bottom: 24px;
+    overflow: hidden;
+}
+.winners-banner::after {
+    content: "";
+    position: absolute; inset: 0;
+    background-image: repeating-linear-gradient(45deg, var(--gold) 0, var(--gold) 2px, transparent 2px, transparent 14px);
+    opacity: 0.06;
+    pointer-events: none;
+}
+.winners-banner-title {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 1.3rem;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    margin-bottom: 14px;
+    color: var(--gold);
+}
+.winners-banner-champion { display: flex; align-items: center; gap: 14px; }
+.winners-banner-champion img { width: 54px; height: 54px; border: 2px solid var(--gold); object-fit: cover; }
+.winners-banner-champion-name { font-family: var(--font-display); font-weight: 700; font-size: 1.1rem; }
+.winners-banner-champion-stats { font-family: var(--font-mono); font-size: 0.78rem; opacity: 0.8; }
+.winners-banner-podium { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 14px; }
+.winners-banner-podium-item { display: flex; align-items: center; gap: 8px; font-family: var(--font-mono); font-size: 0.8rem; }
+.winners-banner-podium-item img { width: 30px; height: 30px; border: 1.5px solid var(--gold); }
+.winners-banner-dismiss {
+    position: absolute; top: 10px; right: 12px;
+    background: transparent; border: none;
+    color: var(--text-inverse); font-size: 1.4rem;
+    cursor: pointer; opacity: 0.6;
+}
+.winners-banner-dismiss:hover { opacity: 1; }
+
+/* ---- Navigation (hamburger panel) -------------------------------- */
+.hamburger-button {
+    font-size: 1.5rem;
+    background: var(--surface);
+    color: var(--ink);
+    border: 1.5px solid var(--line-strong);
+    box-shadow: var(--shadow-hard-sm);
+    padding: 6px 12px;
+    cursor: pointer;
+}
+.hamburger-content {
+    background: var(--surface);
+    border: 1.5px solid var(--line-strong);
+    box-shadow: var(--shadow-hard);
+}
+.nav-link, .submenu-link, .admin-menu-toggle {
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+    letter-spacing: 0.04em;
+    color: var(--ink);
+}
+.nav-link:hover, .submenu-link:hover { background: var(--signal); color: var(--signal-ink); }
+.submenu-section-title {
+    font-family: var(--font-mono);
+    font-size: 0.6rem;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    color: var(--faint);
+}
+
+/* ---- Theme toggle button (created by theme-toggle.js) ------------ */
+#theme-toggle {
+    font-size: 1.1rem;
+    background: var(--surface);
+    border: 1.5px solid var(--line-strong);
+    box-shadow: var(--shadow-hard-sm);
+    cursor: pointer;
+    width: 40px; height: 40px;
+}
+
+/* ---- Loading / empty states -------------------------------------- */
+.loading, .empty-state, .no-data {
+    font-family: var(--font-mono);
+    color: var(--muted);
+    letter-spacing: 0.04em;
+}
+
+/* ---- Skip link --------------------------------------------------- */
+.skip-link:focus {
+    background: var(--signal);
+    color: var(--signal-ink);
+    border: 1.5px solid var(--line-strong);
+    font-family: var(--font-mono);
+}
+
+/* ---- Motion: staggered card reveal on load ----------------------- */
+@media (prefers-reduced-motion: no-preference) {
+    .leaderboard-card, .hall-of-fame-card {
+        animation: go-rise 0.4s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+    }
+    .leaderboard-card:nth-child(1) { animation-delay: 0.02s; }
+    .leaderboard-card:nth-child(2) { animation-delay: 0.06s; }
+    .leaderboard-card:nth-child(3) { animation-delay: 0.10s; }
+    .leaderboard-card:nth-child(4) { animation-delay: 0.14s; }
+    .leaderboard-card:nth-child(5) { animation-delay: 0.18s; }
+    .leaderboard-card:nth-child(n+6) { animation-delay: 0.22s; }
+    @keyframes go-rise {
+        from { opacity: 0; transform: translateY(10px); }
+        to   { opacity: 1; transform: translateY(0); }
+    }
+}
+
+/* ---- Higher-specificity overrides for legacy rules --------------- */
+/* styles.css / leaderboard.css carry some higher-specificity rules that
+   would otherwise beat the single-class selectors above. Match/raise them. */
+.container .leaderboard-card .stats-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px 16px;
+    flex-direction: row;
+}
+.container .leaderboard-card .stat-item {
+    width: auto;
+    flex-direction: row;
+    align-items: center;
+}
+[data-theme="dark"] .rank-badge { color: var(--faint); background: var(--surface-2); border-color: var(--line); }
+[data-theme="dark"] .rank-badge.rank-1 { color: var(--signal-ink); background: var(--gold); }
+[data-theme="dark"] .rank-badge.rank-2 { color: #0c1014; background: var(--silver); }
+[data-theme="dark"] .rank-badge.rank-3 { color: #160c06; background: var(--bronze); }
+
+/* Page wordmark — make the leaderboard title unmistakable */
+.header-section h1 {
+    line-height: 0.95;
+}
+
+/* ---- Responsive -------------------------------------------------- */
+@media (max-width: 640px) {
+    .header-section { flex-direction: column; gap: 14px; align-items: flex-start; }
+    .leaderboard-grid, .hall-of-fame-container { grid-template-columns: 1fr; }
+    .tab-button { flex: 1 1 auto; text-align: center; }
+}
