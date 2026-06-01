@@ -3,10 +3,9 @@
 // and filtering of leaderboards based on DevOps membership
 
 import { Octokit } from '@octokit/rest';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../lib/prisma.js';
 import logger from '../utils/logger.js';
 
-const prisma = new PrismaClient();
 const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
 
 const GITHUB_ORG = process.env.GITHUB_ORG || process.env.REPO_OWNER;
