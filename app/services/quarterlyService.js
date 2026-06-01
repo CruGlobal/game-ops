@@ -1084,6 +1084,21 @@ export async function awardQuarterlyBills(quarterString) {
 
     try {
         const quarter = quarterString || await getCurrentQuarter();
+
+        // Idempotency guard: claim this quarter so bills are awarded at most once.
+        // Both checkAndResetIfNewQuarter and updateQuarterConfig can detect the same
+        // boundary; the unique `quarter` constraint makes this claim atomic and also
+        // serializes concurrent callers.
+        try {
+            await prisma.quarterlyAward.create({ data: { quarter } });
+        } catch (claimError) {
+            if (claimError.code === 'P2002') {
+                console.log(`Quarterly bills already awarded for ${quarter}, skipping`);
+                return { ...results, alreadyAwarded: true };
+            }
+            throw claimError;
+        }
+
         console.log(`Awarding quarterly bills for ${quarter}`);
 
         // --- Non-DevOps awards (top 3 from filtered leaderboard) ---
@@ -1195,6 +1210,13 @@ export async function awardQuarterlyBills(quarterString) {
         }
 
         console.log(`Quarterly bills awarded: ${results.nonDevOpsAwards.length} non-DevOps, ${results.devOpsAwards.length} DevOps`);
+
+        // Record what was awarded on the idempotency marker for auditing
+        await prisma.quarterlyAward.update({
+            where: { quarter },
+            data: { results }
+        });
+
         return results;
     } catch (error) {
         console.error('Error awarding quarterly bills:', error);
