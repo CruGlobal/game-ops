@@ -1,5 +1,19 @@
 /* Profile Page Client-Side Logic */
 
+/**
+ * Escape a value for safe interpolation into HTML. Escapes & < > " ' so
+ * untrusted strings such as challenge title/description cannot inject markup.
+ */
+function escapeHtml(value) {
+    if (value === null || value === undefined) return '';
+    return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
 // Extract username from URL
 const pathParts = window.location.pathname.split('/');
 const username = pathParts[pathParts.length - 1];
@@ -421,12 +435,12 @@ function createChallengeCard(challenge, isCompleted) {
     card.innerHTML = `
         <div class="challenge-header">
             <div>
-                <h3 class="challenge-title">${challenge.title || 'Unknown Challenge'}</h3>
+                <h3 class="challenge-title">${escapeHtml(challenge.title || 'Unknown Challenge')}</h3>
                 <span class="challenge-badge ${difficultyClass}">${challenge.difficulty || 'medium'}</span>
                 ${isCompleted ? '<span class="challenge-badge status-completed">Completed</span>' : ''}
             </div>
         </div>
-        <p class="challenge-description">${challenge.description || ''}</p>
+        <p class="challenge-description">${escapeHtml(challenge.description || '')}</p>
         ${!isCompleted ? `
             <div class="challenge-progress">
                 <div class="progress-label">

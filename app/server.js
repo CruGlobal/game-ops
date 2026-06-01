@@ -39,8 +39,6 @@ const port = 3000;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-app.use(errorHandler);
-
 // Store raw body for webhook signature verification
 app.use(express.json({
     verify: (req, res, buf) => {
@@ -229,6 +227,10 @@ if (process.env.NODE_ENV !== 'production') {
     app.use('/api', testRoutes);
     logger.info('Test routes enabled for WebSocket testing');
 }
+
+// Error-handling middleware must be registered AFTER all routes so it can
+// catch errors thrown by them.
+app.use(errorHandler);
 
 //Schedule tasks to be run on the server
 async function shouldRunCron(taskName) {

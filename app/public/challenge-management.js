@@ -1,3 +1,18 @@
+/**
+ * Escape a value for safe interpolation into HTML — including inside
+ * double-quoted attributes. Escapes & < > " ' so untrusted strings such as
+ * challenge title/description cannot break out and inject markup.
+ */
+function escapeHtml(value) {
+    if (value === null || value === undefined) return '';
+    return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
     const authStatus = document.getElementById('auth-status');
     const adminContent = document.getElementById('admin-content');
@@ -187,23 +202,23 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const participantCount = challenge.participants ? challenge.participants.length : 0;
         const categoryBadge = getCategoryBadge(challenge.challengeCategory);
-        const statusBadge = `<span class="badge badge-${challenge.status}">${challenge.status}</span>`;
+        const statusBadge = `<span class="badge badge-${escapeHtml(challenge.status)}">${escapeHtml(challenge.status)}</span>`;
 
         let typeInfo = '';
         if (challenge.challengeCategory === 'okr' && challenge.labelFilters && challenge.labelFilters.length > 0) {
-            const labelList = challenge.labelFilters.map(l => `<code>${l}</code>`).join(', ');
+            const labelList = challenge.labelFilters.map(l => `<code>${escapeHtml(l)}</code>`).join(', ');
             typeInfo = `<div><strong>Label Filters:</strong> ${labelList}</div>`;
         } else {
-            typeInfo = `<div><strong>Type:</strong> ${challenge.type}</div>`;
+            typeInfo = `<div><strong>Type:</strong> ${escapeHtml(challenge.type)}</div>`;
         }
 
         const okrInfo = challenge.okrMetadata && Object.values(challenge.okrMetadata).some(v => v)
             ? `
                 <div class="okr-info">
-                    ${challenge.okrMetadata.objective ? `<div><strong>Objective:</strong> ${challenge.okrMetadata.objective}</div>` : ''}
-                    ${challenge.okrMetadata.keyResult ? `<div><strong>Key Result:</strong> ${challenge.okrMetadata.keyResult}</div>` : ''}
-                    ${challenge.okrMetadata.department ? `<div><strong>Department:</strong> ${challenge.okrMetadata.department}</div>` : ''}
-                    ${challenge.okrMetadata.quarter ? `<div><strong>Quarter:</strong> ${challenge.okrMetadata.quarter}</div>` : ''}
+                    ${challenge.okrMetadata.objective ? `<div><strong>Objective:</strong> ${escapeHtml(challenge.okrMetadata.objective)}</div>` : ''}
+                    ${challenge.okrMetadata.keyResult ? `<div><strong>Key Result:</strong> ${escapeHtml(challenge.okrMetadata.keyResult)}</div>` : ''}
+                    ${challenge.okrMetadata.department ? `<div><strong>Department:</strong> ${escapeHtml(challenge.okrMetadata.department)}</div>` : ''}
+                    ${challenge.okrMetadata.quarter ? `<div><strong>Quarter:</strong> ${escapeHtml(challenge.okrMetadata.quarter)}</div>` : ''}
                 </div>
             `
             : '';
@@ -214,18 +229,18 @@ document.addEventListener('DOMContentLoaded', async () => {
             <input type="checkbox" class="challenge-card-checkbox" data-id="${challenge.id}"
                 ${isSelected ? 'checked' : ''}>
             <div class="challenge-header">
-                <h3>${challenge.title}</h3>
+                <h3>${escapeHtml(challenge.title)}</h3>
                 <div class="challenge-badges">
                     ${categoryBadge}
                     ${statusBadge}
                 </div>
             </div>
-            <p class="challenge-description">${challenge.description}</p>
+            <p class="challenge-description">${escapeHtml(challenge.description)}</p>
             <div class="challenge-details">
                 ${typeInfo}
-                <div><strong>Target:</strong> ${challenge.target}</div>
-                <div><strong>Reward:</strong> ${challenge.reward} points</div>
-                <div><strong>Difficulty:</strong> <span class="badge badge-${challenge.difficulty}">${challenge.difficulty}</span></div>
+                <div><strong>Target:</strong> ${escapeHtml(challenge.target)}</div>
+                <div><strong>Reward:</strong> ${escapeHtml(challenge.reward)} points</div>
+                <div><strong>Difficulty:</strong> <span class="badge badge-${escapeHtml(challenge.difficulty)}">${escapeHtml(challenge.difficulty)}</span></div>
                 <div><strong>Participants:</strong> ${participantCount}</div>
                 <div><strong>Start:</strong> ${new Date(challenge.startDate).toLocaleDateString()}</div>
                 <div><strong>End:</strong> ${new Date(challenge.endDate).toLocaleDateString()}</div>
@@ -671,7 +686,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 challengeCreateStatus.innerHTML = `
                     <p class="success">
                         ✅ Challenge created successfully!<br>
-                        <strong>${result.challenge.title}</strong>
+                        <strong>${escapeHtml(result.challenge.title)}</strong>
                     </p>
                 `;
                 challengeCreateForm.reset();

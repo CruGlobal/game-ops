@@ -1,3 +1,18 @@
+/**
+ * Escape a value for safe interpolation into HTML — including inside
+ * double-quoted attributes. Escapes & < > " ' so untrusted strings such as
+ * avatarUrl/username cannot break out and inject markup.
+ */
+function escapeHtml(value) {
+    if (value === null || value === undefined) return '';
+    return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
     // Hamburger menu logic
     const hamburgerButton = document.querySelector('.hamburger-button');
@@ -47,13 +62,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         listItem.innerHTML = `
             <div class="profile-column">
                 <div class="profile">
-                    <img src="${contributor.avatarUrl}" alt="${contributor.username}" width="50" height="50" class="profile-picture">
-                    <span>${contributor.username}</span>
+                    <img src="${escapeHtml(contributor.avatarUrl)}" alt="${escapeHtml(contributor.username)}" width="50" height="50" class="profile-picture">
+                    <span>${escapeHtml(contributor.username)}</span>
                 </div>
             </div>
             <div class="pr-count-column pr-count">${contributor.prCount || 0}</div>
             <div class="total-bills-column">${contributor.totalBillsAwarded || 0}</div>
-            <div class="badges-column">${(contributor.badges || []).map(badge => /pr|prs/i.test(badge.badge) ? `<img src="/images/badges/${badge.badge.replace(/ /g, '_').toLowerCase()}.png" alt="${badge.badge}" class="badge">` : '').join('')}</div>
+            <div class="badges-column">${(contributor.badges || []).map(badge => /pr|prs/i.test(badge.badge) ? `<img src="/images/badges/${escapeHtml(String(badge.badge).replace(/ /g, '_').toLowerCase())}.png" alt="${escapeHtml(badge.badge)}" class="badge">` : '').join('')}</div>
         `;
         return listItem;
     };
@@ -65,13 +80,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         listItem.innerHTML = `
             <div class="profile-column">
                 <div class="profile">
-                    <img src="${reviewer.avatarUrl}" alt="${reviewer.username}" width="50" height="50" class="profile-picture">
-                    <span>${reviewer.username}</span>
+                    <img src="${escapeHtml(reviewer.avatarUrl)}" alt="${escapeHtml(reviewer.username)}" width="50" height="50" class="profile-picture">
+                    <span>${escapeHtml(reviewer.username)}</span>
                 </div>
             </div>
             <div class="review-count-column review-count">${reviewer.reviewCount || 0}</div>
             <div class="total-bills-column">${reviewer.totalBillsAwarded || 0}</div>
-            <div class="badges-column">${(reviewer.badges || []).map(badge => /review|reviews/i.test(badge.badge) ? `<img src="/images/badges/${badge.badge.replace(/ /g, '_').toLowerCase()}.png" alt="${badge.badge}" class="badge">` : '').join('')}</div>
+            <div class="badges-column">${(reviewer.badges || []).map(badge => /review|reviews/i.test(badge.badge) ? `<img src="/images/badges/${escapeHtml(String(badge.badge).replace(/ /g, '_').toLowerCase())}.png" alt="${escapeHtml(badge.badge)}" class="badge">` : '').join('')}</div>
         `;
         return listItem;
     };
