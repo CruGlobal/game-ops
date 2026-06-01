@@ -336,7 +336,9 @@ body {
 .streak-indicator.active { background: var(--c-coral-soft); color: var(--c-coral); }
 .quarter-badge { background: var(--c-violet-soft); color: var(--c-violet); }
 .badges-grid { display: flex; flex-wrap: wrap; gap: 5px; }
-.badge-item {
+/* Scoped to the leaderboard's badge grid — `.badge-item` is also used by the
+   profile page's badge showcase (larger cards), which must not be shrunk. */
+.badges-grid .badge-item {
     width: 26px; height: 26px;
     border-radius: var(--radius-sm);
     border: 1px solid var(--line);

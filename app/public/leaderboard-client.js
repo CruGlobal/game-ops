@@ -728,7 +728,6 @@ function createLeaderboardCard(user, rank, type) {
         </div>
 
         <div class="badges-section">
-            ${type === 'all-time' ? '<div class="alltime-badge">🌟 All-Time</div>' : ''}
             ${badgesHTML}
         </div>
     `;
@@ -807,24 +806,8 @@ function generateStatsHTML(user, type) {
 function generateBadgesHTML(user) {
     const elements = [];
 
-    // Points badge
-    if (user.totalPoints && user.totalPoints > 0) {
-        elements.push(`
-            <div class="points-badge">
-                ⭐ ${user.totalPoints} points
-            </div>
-        `);
-    }
-
-    // Current streak
-    if (user.currentStreak && user.currentStreak > 0) {
-        const isActive = user.currentStreak > 0;
-        elements.push(`
-            <div class="streak-indicator ${isActive ? 'active' : ''}">
-                🔥 ${user.currentStreak} day streak
-            </div>
-        `);
-    }
+    // Points and current streak are already shown in the card's stats grid, so
+    // they are not repeated here as chips — only earned badges are rendered below.
 
     // Streak badges
     if (user.streakBadges) {
