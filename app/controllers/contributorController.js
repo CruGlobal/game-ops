@@ -12,7 +12,13 @@ export const initializeDatabaseController = async (req, res) => {
         if (process.env.NODE_ENV === 'test') {
             return res.status(200).send('Database initialized successfully.');
         }
-        await initializeDatabase(); // Call the initializeDatabase function
+        // Destructive: deletes all contributors and re-imports from GitHub.
+        // Require explicit ?confirm=true so it cannot be triggered accidentally.
+        const confirmed = req.query.confirm === 'true' || req.body?.confirm === true;
+        if (!confirmed) {
+            return res.status(400).send('Refusing to initialize: this deletes all contributors and re-imports from GitHub. Re-run with ?confirm=true to proceed.');
+        }
+        await initializeDatabase({ confirm: true }); // Call the initializeDatabase function
         res.status(200).send('Database initialized successfully.');
     } catch (err) {
         res.status(500).send('Error initializing database.'); // Handle errors
