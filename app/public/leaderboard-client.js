@@ -1,5 +1,20 @@
 // Enhanced Leaderboard Client-Side JavaScript
 
+/**
+ * Escape a value for safe interpolation into HTML — including inside
+ * double-quoted attributes (e.g. src="..."). Escapes & < > " ' so that
+ * untrusted strings such as avatarUrl/username cannot break out and inject markup.
+ */
+function escapeHtml(value) {
+    if (value === null || value === undefined) return '';
+    return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
 let allContributors = [];
 let allReviewers = [];
 let allTimeLeaderboard = [];
@@ -294,8 +309,8 @@ function checkAndShowWinnersBanner() {
             ${top3.slice(0, 3).map((c, i) => `
                 <div class="winners-banner-podium-item">
                     ${medals[i] || ''}
-                    <img src="${c.avatarUrl || '/images/default-avatar.png'}" alt="${c.username}">
-                    ${c.username} — ${c.pointsThisQuarter || 0} pts
+                    <img src="${escapeHtml(c.avatarUrl || '/images/default-avatar.png')}" alt="${escapeHtml(c.username)}">
+                    ${escapeHtml(c.username)} — ${c.pointsThisQuarter || 0} pts
                 </div>
             `).join('')}
         </div>`;
@@ -304,11 +319,11 @@ function checkAndShowWinnersBanner() {
     const categoryLabel = recent.category === 'devops' ? 'DevOps ' : '';
 
     content.innerHTML = `
-        <div class="winners-banner-title">👑 ${recent.quarter} ${categoryLabel}Quarter Champions</div>
+        <div class="winners-banner-title">👑 ${escapeHtml(recent.quarter)} ${categoryLabel}Quarter Champions</div>
         <div class="winners-banner-champion">
-            <img src="${winner.avatarUrl || '/images/default-avatar.png'}" alt="${winner.username}">
+            <img src="${escapeHtml(winner.avatarUrl || '/images/default-avatar.png')}" alt="${escapeHtml(winner.username)}">
             <div class="winners-banner-champion-info">
-                <div class="winners-banner-champion-name">${winner.username || 'N/A'}</div>
+                <div class="winners-banner-champion-name">${escapeHtml(winner.username || 'N/A')}</div>
                 <div class="winners-banner-champion-stats">${winner.pointsThisQuarter || 0} pts | ${winner.prsThisQuarter || 0} PRs | ${winner.reviewsThisQuarter || 0} Reviews</div>
             </div>
         </div>
@@ -509,8 +524,8 @@ function createQuarterlyCard(user, rank) {
 
         <div class="contributor-info">
             <div class="contributor-header">
-                <img src="${user.avatarUrl}" alt="${user.username}" class="contributor-avatar">
-                <div class="contributor-name">${user.username}</div>
+                <img src="${escapeHtml(user.avatarUrl)}" alt="${escapeHtml(user.username)}" class="contributor-avatar">
+                <div class="contributor-name">${escapeHtml(user.username)}</div>
             </div>
             <div class="stats-row">
                 <div class="stat-item">
@@ -586,16 +601,16 @@ function createHallOfFameCard(winner, index) {
 
     card.innerHTML = `
         <div class="hall-card-header">
-            <div class="quarter-badge">${winner.quarter}${categoryLabel}</div>
+            <div class="quarter-badge">${escapeHtml(winner.quarter)}${categoryLabel}</div>
             <div class="quarter-date">${new Date(winner.quarterStart).toLocaleDateString()} - ${new Date(winner.quarterEnd).toLocaleDateString()}</div>
         </div>
 
         <div class="hall-champion">
             <div class="champion-crown">👑</div>
-            <img src="${winnerData.avatarUrl || '/images/default-avatar.png'}"
-                 alt="${winnerData.username}'s avatar"
+            <img src="${escapeHtml(winnerData.avatarUrl || '/images/default-avatar.png')}"
+                 alt="${escapeHtml(winnerData.username)}'s avatar"
                  class="champion-avatar">
-            <div class="champion-name">${winnerData.username}</div>
+            <div class="champion-name">${escapeHtml(winnerData.username)}</div>
             <div class="champion-stats">
                 <div class="stat-pill">
                     <span class="stat-icon">⭐</span>
@@ -618,11 +633,11 @@ function createHallOfFameCard(winner, index) {
                 ${top3.slice(0, 3).map(contributor => `
                     <div class="podium-item">
                         ${getRankDisplay(contributor.rank || 0)}
-                        <img src="${contributor.avatarUrl || '/images/default-avatar.png'}"
-                             alt="${contributor.username || 'Unknown'}"
+                        <img src="${escapeHtml(contributor.avatarUrl || '/images/default-avatar.png')}"
+                             alt="${escapeHtml(contributor.username || 'Unknown')}"
                              class="podium-avatar">
                         <div class="podium-info">
-                            <div class="podium-name">${contributor.username || 'Unknown'}</div>
+                            <div class="podium-name">${escapeHtml(contributor.username || 'Unknown')}</div>
                             <div class="podium-points">${contributor.pointsThisQuarter || 0} pts</div>
                         </div>
                     </div>
@@ -704,8 +719,8 @@ function createLeaderboardCard(user, rank, type) {
 
         <div class="contributor-info">
             <div class="contributor-header">
-                <img src="${user.avatarUrl}" alt="${user.username}" class="contributor-avatar">
-                <div class="contributor-name">${user.username}</div>
+                <img src="${escapeHtml(user.avatarUrl)}" alt="${escapeHtml(user.username)}" class="contributor-avatar">
+                <div class="contributor-name">${escapeHtml(user.username)}</div>
             </div>
             <div class="stats-row">
                 ${statsHTML}
@@ -840,8 +855,8 @@ function generateBadgesHTML(user) {
             .slice(0, 5) // Limit to 5 badges for display
             .map(badge => {
                 const badgeName = typeof badge === 'string' ? badge : badge.badge;
-                const src = streakBadgeImages[badgeName] || `/images/badges/${badgeName.replace(/ /g, '_').toLowerCase()}.png`;
-                return `<img src="${src}" alt="${badgeName}" class="badge-item" title="${badgeName}">`;
+                const src = streakBadgeImages[badgeName] || `/images/badges/${String(badgeName).replace(/ /g, '_').toLowerCase()}.png`;
+                return `<img src="${escapeHtml(src)}" alt="${escapeHtml(badgeName)}" class="badge-item" title="${escapeHtml(badgeName)}">`;
             })
             .join('');
 
