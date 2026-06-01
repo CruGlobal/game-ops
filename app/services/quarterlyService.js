@@ -330,33 +330,19 @@ export async function resetQuarterlyStats(newQuarter = null) {
 
         console.log(`Resetting quarterly stats for ${quarter}`);
 
-        // Only reset contributors NOT already on the new quarter.
-        // This prevents a concurrent/duplicate reset from wiping points
-        // that started accumulating in the new quarter.
-        const staleContributors = await prisma.contributor.findMany({
+        // Reset only contributors NOT already on the new quarter, in a single
+        // atomic updateMany. The stale predicate lives in the WHERE (not a prior
+        // read), so a contributor whose PR/review moves them onto the new quarter
+        // between here and the write is excluded by Postgres at execution time —
+        // no lost update of points that just started accumulating this quarter.
+        // (Previously this read stale ids then updated by id, leaving a TOCTOU gap.)
+        // allTimePoints is never reset.
+        const result = await prisma.contributor.updateMany({
             where: {
                 OR: [
                     { quarterlyStats: { equals: null } },
                     { quarterlyStats: { path: ['currentQuarter'], not: quarter } }
                 ]
-            },
-            select: { id: true }
-        });
-
-        if (staleContributors.length === 0) {
-            console.log(`All contributors already on ${quarter}, skipping reset`);
-            return {
-                quarter,
-                contributorsReset: 0,
-                quarterStart: quarterDates.start,
-                quarterEnd: quarterDates.end
-            };
-        }
-
-        // Reset quarterly totalPoints only — allTimePoints is never reset
-        const result = await prisma.contributor.updateMany({
-            where: {
-                id: { in: staleContributors.map(c => c.id) }
             },
             data: {
                 totalPoints: 0,

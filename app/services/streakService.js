@@ -60,8 +60,11 @@ export const updateStreak = async (contributor, contributionDate) => {
                     streakBroken: false
                 };
             } else if (businessDaysGap === 0) {
-                // Only weekends passed (e.g., Friday → Monday with no weekdays between)
-                // Update lastContributionDate but don't increment streak
+                // Only weekend days elapsed (e.g. Fri → Sat/Sun). Record the latest
+                // contribution date but don't change the streak. Storing a weekend
+                // date here is safe: weekend days contribute 0 business days, so the
+                // gap to any later weekday is identical whether the baseline sits on
+                // the weekend day or the prior Friday.
                 await prisma.contributor.update({
                     where: { username: contributor.username },
                     data: {

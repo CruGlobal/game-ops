@@ -46,21 +46,27 @@ describe('StreakService', () => {
             expect(updated.lastContributionDate).toBeDefined();
         });
 
-        it('should increment streak for consecutive day contribution', async () => {
-            const yesterday = new Date();
-            yesterday.setDate(yesterday.getDate() - 1);
+        // Fixed anchor dates (local midnight) so business-day logic is deterministic
+        // and not dependent on the weekday the suite happens to run. June 2026:
+        //   1=Mon 2=Tue 3=Wed 4=Thu 5=Fri 6=Sat 8=Mon
+        const MON = new Date(2026, 5, 1);
+        const TUE = new Date(2026, 5, 2);
+        const THU = new Date(2026, 5, 4);
+        const FRI = new Date(2026, 5, 5);
+        const SAT = new Date(2026, 5, 6);
+        const NEXT_MON = new Date(2026, 5, 8);
 
+        it('should increment streak for consecutive business-day contribution', async () => {
             const contributor = await prisma.contributor.create({
                 data: createTestContributor({
                     username: 'consistent',
                     currentStreak: 5,
                     longestStreak: 5,
-                    lastContributionDate: yesterday
+                    lastContributionDate: MON
                 })
             });
 
-            const today = new Date();
-            const result = await updateStreak(contributor, today);
+            const result = await updateStreak(contributor, TUE);
 
             expect(result.currentStreak).toBe(6);
             expect(result.streakContinued).toBe(true);
@@ -72,43 +78,37 @@ describe('StreakService', () => {
         });
 
         it('should not change streak for same-day contribution', async () => {
-            const today = new Date();
-            today.setHours(10, 0, 0, 0);
+            const morning = new Date(2026, 5, 2, 10);
 
             const contributor = await prisma.contributor.create({
                 data: createTestContributor({
                     username: 'sameDayUser',
                     currentStreak: 3,
                     longestStreak: 5,
-                    lastContributionDate: today
+                    lastContributionDate: morning
                 })
             });
 
-            const laterToday = new Date(today);
-            laterToday.setHours(15, 0, 0, 0);
-
-            const result = await updateStreak(contributor, laterToday);
+            const afternoon = new Date(2026, 5, 2, 15);
+            const result = await updateStreak(contributor, afternoon);
 
             expect(result.currentStreak).toBe(3);
             expect(result.streakContinued).toBe(false);
             expect(result.streakBroken).toBe(false);
         });
 
-        it('should reset streak when contribution gap is more than 1 day', async () => {
-            const threeDaysAgo = new Date();
-            threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
-
+        it('should reset streak when business-day gap is more than 1', async () => {
+            // Mon → Thu skips Tue and Wed (two missed business days)
             const contributor = await prisma.contributor.create({
                 data: createTestContributor({
                     username: 'broken',
                     currentStreak: 10,
                     longestStreak: 10,
-                    lastContributionDate: threeDaysAgo
+                    lastContributionDate: MON
                 })
             });
 
-            const today = new Date();
-            const result = await updateStreak(contributor, today);
+            const result = await updateStreak(contributor, THU);
 
             expect(result.currentStreak).toBe(1);
             expect(result.streakBroken).toBe(true);
@@ -120,21 +120,54 @@ describe('StreakService', () => {
             expect(Number(updated.longestStreak)).toBe(10); // Longest should remain unchanged
         });
 
-        it('should update longest streak when current exceeds it', async () => {
-            const yesterday = new Date();
-            yesterday.setDate(yesterday.getDate() - 1);
+        it('should continue streak across a weekend (Fri → Mon)', async () => {
+            const contributor = await prisma.contributor.create({
+                data: createTestContributor({
+                    username: 'weekendSpanner',
+                    currentStreak: 5,
+                    longestStreak: 5,
+                    lastContributionDate: FRI
+                })
+            });
 
+            const result = await updateStreak(contributor, NEXT_MON);
+
+            expect(result.currentStreak).toBe(6);
+            expect(result.streakContinued).toBe(true);
+            expect(result.streakBroken).toBe(false);
+        });
+
+        it('should not change streak for a weekend-only contribution (Fri → Sat)', async () => {
+            // Saturday has no business day after Friday, so the streak is held steady
+            // (neither incremented nor broken) and the contribution date is recorded.
+            const contributor = await prisma.contributor.create({
+                data: createTestContributor({
+                    username: 'weekendContributor',
+                    currentStreak: 5,
+                    longestStreak: 5,
+                    lastContributionDate: FRI
+                })
+            });
+
+            const result = await updateStreak(contributor, SAT);
+
+            expect(result.weekendGap).toBe(true);
+            expect(result.currentStreak).toBe(5);
+            expect(result.streakContinued).toBe(false);
+            expect(result.streakBroken).toBe(false);
+        });
+
+        it('should update longest streak when current exceeds it', async () => {
             const contributor = await prisma.contributor.create({
                 data: createTestContributor({
                     username: 'recordBreaker',
                     currentStreak: 20,
                     longestStreak: 15, // Current is already higher
-                    lastContributionDate: yesterday
+                    lastContributionDate: MON
                 })
             });
 
-            const today = new Date();
-            await updateStreak(contributor, today);
+            await updateStreak(contributor, TUE);
 
             const updated = await prisma.contributor.findUnique({ where: { username: 'recordBreaker' } });
             expect(Number(updated.currentStreak)).toBe(21);
