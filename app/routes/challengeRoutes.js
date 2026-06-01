@@ -14,7 +14,6 @@ import {
     bulkActionController
 } from '../controllers/challengeController.js';
 import { getTemplates } from '../config/challenge-templates.js';
-import { authenticate } from '../middleware/authMiddleware.js';
 import { ensureAuthenticated } from '../middleware/ensureAuthenticated.js';
 import { ensureDevOpsTeamMember } from '../middleware/ensureDevOpsTeamMember.js';
 
@@ -35,8 +34,8 @@ router.get('/:id/leaderboard', getChallengeLeaderboardController);
 // Get user's challenges (active and completed)
 router.get('/user/:username', getUserChallengesController);
 
-// Create OKR challenge (admin only)
-router.post('/okr/create', authenticate, createOKRChallengeController);
+// Create OKR challenge (admin only) — session-authenticated, same as /admin/create
+router.post('/okr/create', ensureDevOpsTeamMember, createOKRChallengeController);
 
 // Admin routes for challenge management
 router.post('/admin/bulk-action', ensureDevOpsTeamMember, bulkActionController);
