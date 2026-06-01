@@ -265,6 +265,19 @@ model FetchDate {
   @@map("fetch_dates")
 }
 
+// Per-quarter idempotency marker. A row is claimed (created) the first time
+// quarterly bills are awarded for a quarter; the unique `quarter` constraint
+// guarantees bills are awarded at most once, even if the boundary is detected
+// by both checkAndResetIfNewQuarter and updateQuarterConfig (or concurrently).
+model QuarterlyAward {
+  id        String   @id @default(cuid())
+  quarter   String   @unique
+  awardedAt DateTime @default(now()) @map("awarded_at")
+  results   Json?
+
+  @@map("quarterly_awards")
+}
+
 model WebhookEvent {
   id          String   @id @default(cuid())
   deliveryId  String   @unique @map("delivery_id")

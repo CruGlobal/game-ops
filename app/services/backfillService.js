@@ -174,67 +174,80 @@ async function processPR(pr) {
             const mergedDate = new Date(pr.merged_at);
             const dateOnly = new Date(mergedDate.getFullYear(), mergedDate.getMonth(), mergedDate.getDate());
 
-            // Update contributor with new PR
-            await prisma.contributor.update({
-                where: { username },
-                data: {
-                    prCount: { increment: 1 },
-                    processedPRs: {
-                        create: {
-                            prNumber: BigInt(pr.number),
-                            prTitle: pr.title,
-                            processedDate: mergedDate,
-                            action: 'authored'
+            // Update contributor with new PR. The processedPR create carries a unique
+            // constraint; if a concurrent path (e.g. the 6-hour fetch cron) processed
+            // this same PR between our findUnique check and here, the create throws
+            // P2002. Treat that as an already-processed duplicate rather than crashing,
+            // and skip the point/streak side effects so nothing is double-counted.
+            let prCreated = false;
+            try {
+                await prisma.contributor.update({
+                    where: { username },
+                    data: {
+                        prCount: { increment: 1 },
+                        processedPRs: {
+                            create: {
+                                prNumber: BigInt(pr.number),
+                                prTitle: pr.title,
+                                processedDate: mergedDate,
+                                action: 'authored'
+                            }
                         }
                     }
-                }
-            });
-
-            // Find or create contribution record for this date
-            const existingContribution = await prisma.contribution.findFirst({
-                where: {
-                    contributorId: contributor.id,
-                    date: dateOnly
-                }
-            });
-
-            if (existingContribution) {
-                await prisma.contribution.update({
-                    where: { id: existingContribution.id },
-                    data: {
-                        count: { increment: 1 },
-                        merged: true
-                    }
                 });
-            } else {
-                await prisma.contribution.create({
-                    data: {
-                        contributorId: contributor.id,
-                        date: dateOnly,
-                        count: 1,
-                        merged: true
-                    }
-                });
+                prCreated = true;
+            } catch (createError) {
+                if (createError.code !== 'P2002') throw createError;
+                logger.debug(`PR #${pr.number} for ${username} processed concurrently, skipping`);
             }
 
-            // Calculate and award points for the merged PR using labels/streak logic
-            const pointsData = calculatePoints(pr, contributor);
-            await awardPoints(contributor, pointsData.points, POINT_REASONS.PR_MERGED, pr.number, mergedDate);
+            if (prCreated) {
+                // Find or create contribution record for this date
+                const existingContribution = await prisma.contribution.findFirst({
+                    where: {
+                        contributorId: contributor.id,
+                        date: dateOnly
+                    }
+                });
 
-            // Update quarterly stats (count PR and points) if within current quarter
-            await updateQuarterlyStats(username, { prs: 1, points: pointsData.points }, mergedDate);
+                if (existingContribution) {
+                    await prisma.contribution.update({
+                        where: { id: existingContribution.id },
+                        data: {
+                            count: { increment: 1 },
+                            merged: true
+                        }
+                    });
+                } else {
+                    await prisma.contribution.create({
+                        data: {
+                            contributorId: contributor.id,
+                            date: dateOnly,
+                            count: 1,
+                            merged: true
+                        }
+                    });
+                }
 
-            // Update streak for PRs (with workweek-aware logic)
-            await updateStreak(contributor, mergedDate);
-            await checkStreakBadges(contributor);
+                // Calculate and award points for the merged PR using labels/streak logic
+                const pointsData = calculatePoints(pr, contributor);
+                await awardPoints(contributor, pointsData.points, POINT_REASONS.PR_MERGED, pr.number, mergedDate);
 
-            // Check and award achievements
-            await checkAndAwardAchievements(contributor);
+                // Update quarterly stats (count PR and points) if within current quarter
+                await updateQuarterlyStats(username, { prs: 1, points: pointsData.points }, mergedDate);
 
-            prAdded = 1;
-            logger.debug(`Added PR #${pr.number} for ${username}`);
-            if (backfillState.verboseLogging) {
-                logger.info(`✅ [BACKFILL] Added NEW PR #${pr.number} by ${username} - "${pr.title}" - Points awarded!`);
+                // Update streak for PRs (with workweek-aware logic)
+                await updateStreak(contributor, mergedDate);
+                await checkStreakBadges(contributor);
+
+                // Check and award achievements
+                await checkAndAwardAchievements(contributor);
+
+                prAdded = 1;
+                logger.debug(`Added PR #${pr.number} for ${username}`);
+                if (backfillState.verboseLogging) {
+                    logger.info(`✅ [BACKFILL] Added NEW PR #${pr.number} by ${username} - "${pr.title}" - Points awarded!`);
+                }
             }
         } else {
             logger.debug(`PR #${pr.number} already processed for ${username}, but checking reviews...`);
@@ -298,70 +311,81 @@ async function processPR(pr) {
                         const submittedDate = new Date(review.submitted_at);
                         const dateOnly = new Date(submittedDate.getFullYear(), submittedDate.getMonth(), submittedDate.getDate());
 
-                        // Add review
-                        await prisma.contributor.update({
-                            where: { username: reviewerUsername },
-                            data: {
-                                reviewCount: { increment: 1 },
-                                processedReviews: {
-                                    create: {
-                                        reviewId: BigInt(review.id),
-                                        prNumber: BigInt(pr.number),
-                                        processedDate: submittedDate
+                        // Add review. processedReview has a unique constraint; a
+                        // concurrent path processing the same review throws P2002 —
+                        // treat as a duplicate and skip the side effects.
+                        let reviewCreated = false;
+                        try {
+                            await prisma.contributor.update({
+                                where: { username: reviewerUsername },
+                                data: {
+                                    reviewCount: { increment: 1 },
+                                    processedReviews: {
+                                        create: {
+                                            reviewId: BigInt(review.id),
+                                            prNumber: BigInt(pr.number),
+                                            processedDate: submittedDate
+                                        }
                                     }
                                 }
-                            }
-                        });
-
-                        // Find or create review record for this date
-                        const existingReviewDay = await prisma.review.findFirst({
-                            where: {
-                                contributorId: reviewerRecord.id,
-                                date: dateOnly
-                            }
-                        });
-
-                        if (existingReviewDay) {
-                            await prisma.review.update({
-                                where: { id: existingReviewDay.id },
-                                data: {
-                                    count: { increment: 1 }
-                                }
                             });
-                        } else {
-                            await prisma.review.create({
-                                data: {
-                                    contributorId: reviewerRecord.id,
-                                    date: dateOnly,
-                                    count: 1
-                                }
-                            });
+                            reviewCreated = true;
+                        } catch (createError) {
+                            if (createError.code !== 'P2002') throw createError;
+                            logger.debug(`Review ${review.id} on PR #${pr.number} processed concurrently, skipping`);
                         }
 
-                        // Award points for the review using PR number for traceability
-                        const reviewDate = new Date(review.submitted_at);
-                        await awardPoints(
-                            reviewerRecord,
-                            POINT_VALUES.review,
-                            POINT_REASONS.REVIEW_COMPLETED,
-                            pr.number,
-                            submittedDate
-                        );
+                        if (reviewCreated) {
+                            // Find or create review record for this date
+                            const existingReviewDay = await prisma.review.findFirst({
+                                where: {
+                                    contributorId: reviewerRecord.id,
+                                    date: dateOnly
+                                }
+                            });
 
-                        // Update quarterly stats for review (count + points)
-                        await updateQuarterlyStats(reviewerUsername, { reviews: 1, points: POINT_VALUES.review }, reviewDate);
+                            if (existingReviewDay) {
+                                await prisma.review.update({
+                                    where: { id: existingReviewDay.id },
+                                    data: {
+                                        count: { increment: 1 }
+                                    }
+                                });
+                            } else {
+                                await prisma.review.create({
+                                    data: {
+                                        contributorId: reviewerRecord.id,
+                                        date: dateOnly,
+                                        count: 1
+                                    }
+                                });
+                            }
 
-                        // Update streak for reviews (with workweek-aware logic)
-                        await updateStreak(reviewerRecord, submittedDate);
-                        await checkStreakBadges(reviewerRecord);
+                            // Award points for the review using PR number for traceability
+                            const reviewDate = new Date(review.submitted_at);
+                            await awardPoints(
+                                reviewerRecord,
+                                POINT_VALUES.review,
+                                POINT_REASONS.REVIEW_COMPLETED,
+                                pr.number,
+                                submittedDate
+                            );
 
-                        // Check and award achievements
-                        await checkAndAwardAchievements(reviewerRecord);
+                            // Update quarterly stats for review (count + points)
+                            await updateQuarterlyStats(reviewerUsername, { reviews: 1, points: POINT_VALUES.review }, reviewDate);
 
-                        reviewsAdded++;
-                        logger.debug(`Added review by ${reviewerUsername} on PR #${pr.number}`);
-                        if (backfillState.verboseLogging) {
-                            logger.info(`✅ [BACKFILL] Added NEW review by ${reviewerUsername} on PR #${pr.number} - Points awarded!`);
+                            // Update streak for reviews (with workweek-aware logic)
+                            await updateStreak(reviewerRecord, submittedDate);
+                            await checkStreakBadges(reviewerRecord);
+
+                            // Check and award achievements
+                            await checkAndAwardAchievements(reviewerRecord);
+
+                            reviewsAdded++;
+                            logger.debug(`Added review by ${reviewerUsername} on PR #${pr.number}`);
+                            if (backfillState.verboseLogging) {
+                                logger.info(`✅ [BACKFILL] Added NEW review by ${reviewerUsername} on PR #${pr.number} - Points awarded!`);
+                            }
                         }
                     } else {
                         if (backfillState.verboseLogging) {
@@ -390,6 +414,10 @@ async function processPR(pr) {
  * @param {Boolean} verboseLogging - Whether to enable verbose debug logging
  */
 export async function startBackfill(startDate, endDate, checkRateLimits = true, verboseLogging = false) {
+    // Guard against concurrent backfills. There is no `await` between this check
+    // and the assignment below, so under Node's single-threaded event loop the
+    // check-and-set is atomic — a second call cannot slip through. (Overlap with
+    // other writers, e.g. the fetch cron, is handled by P2002 catches in processPR.)
     if (backfillState.isRunning) {
         return { success: false, message: 'Backfill is already running' };
     }
