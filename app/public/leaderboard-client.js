@@ -22,7 +22,7 @@ let quarterlyLeaderboard = [];
 let hallOfFame = [];
 let currentQuarterInfo = null;
 let currentTab = 'all-time';
-let currentSort = 'prCount';
+let currentSort = 'totalPoints';
 let searchTerm = '';
 let userDevOpsStatus = { isDevOps: false, showDevOpsMembers: true, isAuthenticated: false };
 
@@ -646,11 +646,12 @@ function filterUsers(users) {
 }
 
 function sortUsers(users, sortBy) {
-    return [...users].sort((a, b) => {
-        const aVal = a[sortBy] || 0;
-        const bVal = b[sortBy] || 0;
-        return bVal - aVal;
-    });
+    // "Total Points" means lifetime points (allTimePoints) on the all-time board,
+    // not the quarter-resettable totalPoints. Fall back to totalPoints if absent.
+    const pick = (u) => sortBy === 'totalPoints'
+        ? (u.allTimePoints ?? u.totalPoints ?? 0)
+        : (u[sortBy] ?? 0);
+    return [...users].sort((a, b) => Number(pick(b)) - Number(pick(a)));
 }
 
 function renderLeaderboard(gridId, users, type) {
@@ -748,12 +749,15 @@ function generateStatsHTML(user, type) {
     }
 
     if (type === 'all-time' || type === 'points') {
+        // All-time board ranks by lifetime points, so show allTimePoints here
+        // (totalPoints resets each quarter and would mismatch the ranking).
+        const lifetimePoints = user.allTimePoints ?? user.totalPoints ?? 0;
         stats.push(`
             <div class="stat-item">
                 <span class="stat-icon">⭐</span>
                 <div>
                     <div class="stat-label">Points</div>
-                    <div class="stat-value" data-stat="totalPoints">${user.totalPoints || 0}</div>
+                    <div class="stat-value" data-stat="allTimePoints">${lifetimePoints}</div>
                 </div>
             </div>
         `);
