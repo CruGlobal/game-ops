@@ -261,8 +261,8 @@ function updateQuarterInfoDisplay() {
     }
 
     if (datesEl) {
-        const startDate = new Date(currentQuarterInfo.quarterDates.start).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-        const endDate = new Date(currentQuarterInfo.quarterDates.end).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+        const startDate = new Date(currentQuarterInfo.quarterDates.start).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+        const endDate = new Date(currentQuarterInfo.quarterDates.end).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
         datesEl.textContent = `${startDate} - ${endDate}`;
     }
 }
@@ -602,7 +602,7 @@ function createHallOfFameCard(winner, index) {
     card.innerHTML = `
         <div class="hall-card-header">
             <div class="quarter-badge">${escapeHtml(winner.quarter)}${categoryLabel}</div>
-            <div class="quarter-date">${new Date(winner.quarterStart).toLocaleDateString()} - ${new Date(winner.quarterEnd).toLocaleDateString()}</div>
+            <div class="quarter-date">${new Date(winner.quarterStart).toLocaleDateString('en-US', { timeZone: 'UTC' })} - ${new Date(winner.quarterEnd).toLocaleDateString('en-US', { timeZone: 'UTC' })}</div>
         </div>
 
         <div class="hall-champion">
