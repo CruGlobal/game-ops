@@ -379,15 +379,30 @@ export const processSingleReview = async (reviewData) => {
     const { reviewId, username, submittedAt, prNumber } = reviewData;
     const reviewDate = new Date(submittedAt);
 
-    // Update contributor review count
-    await updateContributor(username, 'reviewCount', reviewDate);
-
-    const reviewer = await prisma.contributor.findUnique({
+    // Check if already processed BEFORE mutating counts. updateContributor
+    // unconditionally increments reviewCount and the daily Review aggregate, so a
+    // duplicate re-processed review here would inflate those even though the points
+    // dedupe short-circuits — exactly the drift checkForDuplicates exists to clean.
+    const existing = await prisma.contributor.findUnique({
         where: { username },
         include: {
             processedReviews: {
                 where: { reviewId: BigInt(reviewId) }
-            },
+            }
+        }
+    });
+
+    if (existing?.processedReviews && existing.processedReviews.length > 0) {
+        return { processed: false, reason: 'duplicate' };
+    }
+
+    // Update contributor review count (creates the contributor if first-seen)
+    await updateContributor(username, 'reviewCount', reviewDate);
+
+    // Re-fetch with the relations needed for points/challenges/achievements
+    const reviewer = await prisma.contributor.findUnique({
+        where: { username },
+        include: {
             pointsHistory: {
                 orderBy: { timestamp: 'desc' },
                 take: 1
@@ -399,12 +414,6 @@ export const processSingleReview = async (reviewData) => {
 
     if (!reviewer) {
         return { processed: false, reason: 'reviewer_not_found' };
-    }
-
-    // Check if already processed
-    const alreadyProcessed = reviewer.processedReviews && reviewer.processedReviews.length > 0;
-    if (alreadyProcessed) {
-        return { processed: false, reason: 'duplicate' };
     }
 
     // Record as processed

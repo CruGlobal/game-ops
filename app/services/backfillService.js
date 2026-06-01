@@ -489,12 +489,11 @@ export async function startBackfill(startDate, endDate, checkRateLimits = true, 
 
             totalPRsFound += filteredPRs.length;
 
-            // If we've gone past the start date, we can stop counting
-            const oldestPR = prs[prs.length - 1];
-            if (oldestPR.merged_at && new Date(oldestPR.merged_at) < new Date(startDate)) {
-                hasMore = false;
-            }
-
+            // No early-exit: pulls.list can only sort by created/updated, never by
+            // merged_at, so a PR merged in-range may appear on any page (e.g. an old
+            // PR merged recently, or a long-lived PR). Stopping on the oldest PR's
+            // merged_at would skip in-range PRs. Page through all closed PRs and rely
+            // on the merged_at filter above; the loop ends when a page comes back empty.
             page++;
 
             if (checkRateLimits && page % 10 === 0) {
@@ -566,12 +565,8 @@ export async function startBackfill(startDate, endDate, checkRateLimits = true, 
                 }
             }
 
-            // Check if we've gone past the start date
-            const oldestPR = prs[prs.length - 1];
-            if (oldestPR.merged_at && new Date(oldestPR.merged_at) < new Date(startDate)) {
-                hasMore = false;
-            }
-
+            // No early-exit (see count pass): page through all closed PRs and let the
+            // merged_at filter decide. The loop ends on an empty page.
             page++;
         }
 
