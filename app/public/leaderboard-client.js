@@ -210,17 +210,13 @@ async function loadLeaderboardData() {
     try {
         showLoading();
 
-        const [contributorsData, reviewersData, allTimeData, quarterlyData, hallOfFameData, quarterInfoData] = await Promise.all([
-            fetchData('/api/top-contributors'),
-            fetchData('/api/top-reviewers'),
+        const [allTimeData, quarterlyData, hallOfFameData, quarterInfoData] = await Promise.all([
             fetchData('/api/leaderboard/all-time'),
             fetchData('/api/leaderboard/quarterly'),
             fetchData('/api/leaderboard/hall-of-fame'),
             fetchData('/api/quarter-info')
         ]);
 
-        allContributors = contributorsData;
-        allReviewers = reviewersData;
         // Server returns { success, data: [...] } for all-time
         allTimeLeaderboard = allTimeData?.data || allTimeData || [];
         // Server returns { success, data: [...] } for quarterly (array of contributors)
@@ -385,18 +381,6 @@ function renderCurrentTab() {
             break;
         case 'hall-of-fame':
             renderHallOfFame();
-            break;
-        case 'contributors':
-            renderTopContributors();
-            break;
-        case 'reviewers':
-            renderTopReviewers();
-            break;
-        case 'points':
-            renderTopPoints();
-            break;
-        case 'streaks':
-            renderTopStreaks();
             break;
     }
 }
@@ -856,7 +840,7 @@ function generateBadgesHTML(user) {
 }
 
 function showLoading() {
-    const grids = ['all-time-grid', 'quarterly-grid', 'contributors-grid', 'reviewers-grid', 'points-grid', 'streaks-grid'];
+    const grids = ['all-time-grid', 'quarterly-grid'];
     grids.forEach(gridId => {
         const grid = document.getElementById(gridId);
         if (grid) {
@@ -870,7 +854,7 @@ function showLoading() {
 }
 
 function showError(message) {
-    const grids = ['all-time-grid', 'quarterly-grid', 'contributors-grid', 'reviewers-grid', 'points-grid', 'streaks-grid'];
+    const grids = ['all-time-grid', 'quarterly-grid'];
     grids.forEach(gridId => {
         const grid = document.getElementById(gridId);
         if (grid) {
