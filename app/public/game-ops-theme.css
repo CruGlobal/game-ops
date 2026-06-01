@@ -11,45 +11,48 @@
    Type: Plus Jakarta Sans (everything; tabular figures for stats)
    ===================================================================== */
 
-/* ---- Light theme (default) --------------------------------------- */
+/* ---- Light theme (default) — Cru / Cornerstone "cru-light" -------- */
 :root {
-    --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --font-sans: 'Noto Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
     --font-display: var(--font-sans);
-    --font-mono: var(--font-sans);
+    --font-mono: 'Roboto Mono', ui-monospace, 'SF Mono', Menlo, monospace;
 
-    --canvas: #f9f8f7;          /* warm off-white app background */
+    --canvas: #FBFBFB;          /* cs-surface */
     --surface: #ffffff;
-    --surface-2: #f4f3f2;
-    --ink: #1e1f21;             /* near-black */
-    --muted: #6d6e6f;
-    --faint: #9a9b9c;
-    --line: #ececeb;            /* hairline border */
-    --line-2: #e2e1e0;
+    --surface-2: #F9F8F8;       /* cs-surface-subtle */
+    --ink: #1a1a1a;             /* cs-text-primary (softened from pure black) */
+    --muted: #60605F;           /* cs-text-secondary */
+    --faint: #8a8987;
+    --line: #F3F2F1;            /* cs-border */
+    --line-2: #C0BFBE;          /* cs-border-strong */
 
-    --accent: #f06a6a;          /* coral — primary interactive */
+    --accent: #007890;          /* cs-action — Cru turquoise (primary) */
     --accent-ink: #ffffff;
-    --accent-soft: #fdeced;     /* coral tint */
+    --accent-soft: #e2f0f3;     /* turquoise tint */
 
-    /* calm category hues + their soft tints — softened/desaturated (pastel) */
-    --c-teal: #4a9389;   --c-teal-soft: #eaf4f2;
-    --c-violet: #8073c4; --c-violet-soft: #efecf9;
-    --c-amber: #bd8a3c;  --c-amber-soft: #f8f1e2;
-    --c-coral: #db8585;  --c-coral-soft: #fbeded;
+    --highlight: #FFD000;       /* cru-yellow — signature highlight / overline */
+    --highlight-soft: #FFF3BF;  /* cs-yellow-light */
 
-    --gold: #e0a008;     --gold-soft: #fbf1d6;
-    --silver: #8b97a4;   --silver-soft: #eef0f2;
-    --bronze: #c1763c;   --bronze-soft: #f6e9df;
+    /* category hues drawn from the Cru palette */
+    --c-teal: #0a7a8c;   --c-teal-soft: #e2f0f3;   /* turquoise/cyan */
+    --c-violet: #007890; --c-violet-soft: #e2f0f3; /* turquoise */
+    --c-amber: #904D13;  --c-amber-soft: #FEF9F4;  /* cs-warning */
+    --c-coral: #74242C;  --c-coral-soft: #FCF5F6;  /* cs-error (cerise) */
 
-    --radius: 12px;
-    --radius-sm: 8px;
+    --gold: #FFD000;     --gold-soft: #FFF3BF;     /* cru-yellow medal */
+    --silver: #9a9b99;   --silver-soft: #eef0f1;
+    --bronze: #C0740F;   --bronze-soft: #FBEFE0;
+
+    --radius: 8px;
+    --radius-sm: 6px;
     --radius-pill: 999px;
-    --shadow-1: 0 1px 2px rgba(28, 31, 33, 0.06), 0 1px 3px rgba(28, 31, 33, 0.04);
-    --shadow-2: 0 6px 16px rgba(28, 31, 33, 0.08), 0 2px 6px rgba(28, 31, 33, 0.05);
+    --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.05), 0 1px 3px rgba(0, 0, 0, 0.04);
+    --shadow-2: 0 6px 16px rgba(0, 0, 0, 0.08), 0 2px 6px rgba(0, 0, 0, 0.04);
 
     /* Re-map shared design-system tokens so the rest of the app follows */
     --color-primary: var(--accent);
-    --color-primary-dark: #db5151;
-    --color-primary-light: #f48b8b;
+    --color-primary-dark: #004856;   /* cs-action-dark */
+    --color-primary-light: #2bb6cf;
     --bg-primary: var(--canvas);
     --bg-secondary: var(--surface-2);
     --bg-tertiary: var(--surface-2);
@@ -60,34 +63,38 @@
     --text-inverse: #ffffff;
 }
 
-/* ---- Dark theme: calm slate workspace ---------------------------- */
+/* ---- Dark theme: Cru-aligned slate ------------------------------- */
 [data-theme="dark"] {
-    --canvas: #1e1f21;
-    --surface: #292a2c;
-    --surface-2: #323335;
-    --ink: #f3f3f2;
-    --muted: #a9aaab;
-    --faint: #76787a;
-    --line: #3a3b3d;
-    --line-2: #45464a;
+    --canvas: #14171a;
+    --surface: #1d2125;
+    --surface-2: #262b30;
+    --ink: #f2f2f1;
+    --muted: #a8aaa7;
+    --faint: #74777a;
+    --line: #2e3439;
+    --line-2: #3c434a;
 
-    --accent: #f47f7f;
-    --accent-ink: #2a1212;
-    --accent-soft: #3a2627;
+    --accent: #2bb6cf;          /* lifted turquoise for dark */
+    --accent-ink: #04222b;
+    --accent-soft: #103038;
 
-    --c-teal: #4cc3b4;   --c-teal-soft: #1d3733;
-    --c-violet: #9a86f0; --c-violet-soft: #2b2748;
-    --c-amber: #f0b24a;  --c-amber-soft: #3a2f1a;
-    --c-coral: #f47f7f;  --c-coral-soft: #3a2627;
+    --highlight: #FFD000;
+    --highlight-soft: #3a3119;
 
-    --gold: #ffc83d;     --gold-soft: #3a3119;
-    --silver: #c2cdda;   --silver-soft: #2e3338;
-    --bronze: #e2935a;   --bronze-soft: #3a2a1d;
+    --c-teal: #36c0d6;   --c-teal-soft: #0f2f37;
+    --c-violet: #36c0d6; --c-violet-soft: #0f2f37;
+    --c-amber: #e0a24a;  --c-amber-soft: #362c18;
+    --c-coral: #e07a7a;  --c-coral-soft: #381f22;
 
-    --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.3);
-    --shadow-2: 0 8px 20px rgba(0, 0, 0, 0.4);
+    --gold: #FFD000;     --gold-soft: #3a3119;
+    --silver: #c2c4c2;   --silver-soft: #2c3236;
+    --bronze: #e0934a;   --bronze-soft: #382a1b;
+
+    --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.35);
+    --shadow-2: 0 8px 20px rgba(0, 0, 0, 0.45);
 
     --color-primary: var(--accent);
+    --color-primary-dark: #1f93a8;
     --bg-primary: var(--canvas);
     --bg-secondary: var(--surface);
     --bg-tertiary: var(--surface-2);
@@ -95,7 +102,7 @@
     --text-primary: var(--ink);
     --text-secondary: var(--muted);
     --text-tertiary: var(--faint);
-    --text-inverse: #1e1f21;
+    --text-inverse: #14171a;
 }
 
 /* ---- Canvas ------------------------------------------------------- */
@@ -166,6 +173,25 @@ body {
     -webkit-text-fill-color: var(--ink) !important;
     -webkit-background-clip: border-box !important;
     background-clip: border-box !important;
+}
+
+/* Cru signature: a 32x3 yellow overline rule above left-aligned section titles. */
+.challenges-section h2,
+.section .section-title,
+main > section > h2 {
+    position: relative;
+    padding-top: 14px;
+}
+.challenges-section h2::before,
+.section .section-title::before,
+main > section > h2::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 32px;
+    height: 3px;
+    background: var(--highlight);
 }
 
 /* ---- Controls ----------------------------------------------------- */
