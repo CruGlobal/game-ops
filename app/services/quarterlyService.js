@@ -19,6 +19,12 @@ function periodMonths(systemType) {
 function periodPrefix(systemType) {
     return systemType === 'tertile' ? 'T' : 'Q';
 }
+// Tertiles are labeled by the calendar year the cycle ENDS in. An Oct-start
+// cycle (q1Start>1) crosses the new year, so its label = cycle-start-year + 1.
+// Other systems are labeled by their cycle-start year (unchanged).
+function tertileYearOffset(systemType, q1Start) {
+    return (systemType === 'tertile' && q1Start > 1) ? 1 : 0;
+}
 
 /**
  * Get quarter configuration from database
@@ -75,9 +81,9 @@ export async function getCurrentQuarter() {
     const monthsSinceQ1 = (currentMonth - q1Start + 12) % 12;
     const quarterNum = Math.floor(monthsSinceQ1 / pm) + 1;
 
-    // The fiscal year is labeled by the calendar year in which its Q1 starts, so
-    // months before q1Start belong to the cycle that began the previous year.
-    const year = currentMonth >= q1Start ? currentYear : currentYear - 1;
+    // Cycle-start year, then apply the tertile end-year offset for the label.
+    const cycleStartYear = currentMonth >= q1Start ? currentYear : currentYear - 1;
+    const year = cycleStartYear + tertileYearOffset(config.systemType, q1Start);
 
     return `${year}-${periodPrefix(config.systemType)}${quarterNum}`;
 }
@@ -90,15 +96,18 @@ export async function getCurrentQuarter() {
 export async function getQuarterDateRange(quarterString) {
     const config = await getQuarterConfig();
     const [yearStr, quarterStr] = quarterString.split('-');
-    const year = parseInt(yearStr);
+    const labelYear = parseInt(yearStr);
     const quarterNum = parseInt(quarterStr.replace(/\D/g, '')); // tolerate Q or T prefix
 
     const q1Start = config.q1StartMonth;
     const pm = periodMonths(config.systemType);
+    // Undo the tertile end-year offset to get the cycle-start year the month
+    // math is built on.
+    const year = labelYear - tertileYearOffset(config.systemType, q1Start);
 
-    // Absolute month offset (0-indexed from January of the label year) of this
-    // period's first month: period 1 begins at q1Start, each period adds `pm`
-    // months. Dividing by 12 rolls the year forward — so periods that cross
+    // Absolute month offset (0-indexed from January of the cycle-start year) of
+    // this period's first month: period 1 begins at q1Start, each period adds
+    // `pm` months. Dividing by 12 rolls the year forward — so periods that cross
     // January (e.g. q1Start=10) get the correct year.
     const startMonthIndex = (q1Start - 1) + (quarterNum - 1) * pm;
     const startYear = year + Math.floor(startMonthIndex / 12);
@@ -1045,11 +1054,12 @@ export async function recomputeHallOfFameAll() {
         const month = date.getUTCMonth() + 1; // 1-12
         const monthsSinceQ1 = (month - q1Start + 12) % 12;
         const quarterNum = Math.floor(monthsSinceQ1 / pm) + 1;
-        const qYear = month >= q1Start ? year : year - 1;
+        const cycleStartYear = month >= q1Start ? year : year - 1;
+        const qYear = cycleStartYear + tertileYearOffset(config.systemType, q1Start);
         return `${qYear}-${prefix}${quarterNum}`;
     };
 
-    // Generate all quarter strings in range
+    // Generate all period strings in range
     const quarters = new Set();
     let cursor = new Date(Date.UTC(minTs.getUTCFullYear(), minTs.getUTCMonth(), 1));
     const end = new Date(Date.UTC(maxTs.getUTCFullYear(), maxTs.getUTCMonth(), 1));
@@ -1059,6 +1069,11 @@ export async function recomputeHallOfFameAll() {
         const m = cursor.getUTCMonth();
         cursor = new Date(Date.UTC(cursor.getUTCFullYear(), m + 1, 1));
     }
+
+    // The Hall of Fame is for COMPLETED periods only — never archive the
+    // in-progress one (it has a future end date and incomplete standings).
+    const currentPeriod = await getCurrentQuarter();
+    quarters.delete(currentPeriod);
 
     const updatedQuarters = [];
     for (const q of quarters) {

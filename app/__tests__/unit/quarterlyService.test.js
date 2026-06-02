@@ -136,15 +136,15 @@ describe('QuarterlyService', () => {
             expectRange(await getQuarterDateRange('2025-Q2'), 2025, 12, 2026, 2);
         });
 
-        it('should return tertiles as 4-month thirds (T1 Oct–Jan, T2 Feb–May, T3 Jun–Sep)', async () => {
+        it('should return tertiles as 4-month thirds, labeled by ending year (T1 Oct–Jan, T2 Feb–May, T3 Jun–Sep)', async () => {
             await prisma.quarterSettings.create({
                 data: { id: 'quarter-config', systemType: 'tertile', q1StartMonth: 10 }
             });
 
-            // T1 starts Oct 2025 and crosses January into 2026
-            expectRange(await getQuarterDateRange('2025-T1'), 2025, 10, 2026, 1); // Oct 2025 – Jan 2026
-            expectRange(await getQuarterDateRange('2025-T2'), 2026, 2, 2026, 5);  // Feb – May 2026
-            expectRange(await getQuarterDateRange('2025-T3'), 2026, 6, 2026, 9);  // Jun – Sep 2026
+            // The Oct 2025 – Sep 2026 cycle is labeled 2026 (its ending year).
+            expectRange(await getQuarterDateRange('2026-T1'), 2025, 10, 2026, 1); // Oct 2025 – Jan 2026
+            expectRange(await getQuarterDateRange('2026-T2'), 2026, 2, 2026, 5);  // Feb – May 2026
+            expectRange(await getQuarterDateRange('2026-T3'), 2026, 6, 2026, 9);  // Jun – Sep 2026
         });
     });
 
@@ -433,7 +433,7 @@ describe('QuarterlyService', () => {
                     username: 'tert-champ',
                     avatarUrl: 'https://github.com/tert-champ.png',
                     quarterlyStats: {
-                        currentQuarter: '2025-T3',
+                        currentQuarter: '2026-T3',
                         prsThisQuarter: 12,
                         reviewsThisQuarter: 9,
                         pointsThisQuarter: 210
@@ -441,15 +441,15 @@ describe('QuarterlyService', () => {
                 })
             });
 
-            await archiveQuarterWinners('2025-T3');
+            await archiveQuarterWinners('2026-T3');
 
             const winner = await prisma.quarterlyWinner.findUnique({
-                where: { quarter_category: { quarter: '2025-T3', category: 'general' } }
+                where: { quarter_category: { quarter: '2026-T3', category: 'general' } }
             });
 
             expect(winner).toBeDefined();
             expect(winner.winner.username).toBe('tert-champ');
-            expect(winner.year).toBe(2025);
+            expect(winner.year).toBe(2026);
             expect(winner.quarterNumber).toBe(3); // parsed from the "T3" label, not NaN
         });
     });
