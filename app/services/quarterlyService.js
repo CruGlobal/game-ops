@@ -10,6 +10,16 @@ const DEVOPS_PARTICIPATION_THRESHOLD = 50;
 // Minimum contributions (PRs + reviews) for non-DevOps to qualify as quarterly winner
 const NON_DEVOPS_WINNER_THRESHOLD = 10;
 
+// Months per period: tertiles are 3 four-month thirds; everything else is
+// standard 3-month quarters.
+function periodMonths(systemType) {
+    return systemType === 'tertile' ? 4 : 3;
+}
+// Period label prefix: T1/T2/T3 for tertiles, Q1..Q4 otherwise.
+function periodPrefix(systemType) {
+    return systemType === 'tertile' ? 'T' : 'Q';
+}
+
 /**
  * Get quarter configuration from database
  * @returns {Object} Quarter settings
@@ -21,15 +31,15 @@ export async function getQuarterConfig() {
 
     if (!config) {
         try {
-            // Create default config (calendar quarters)
+            // Create default config (tertiles: T1 Oct, T2 Feb, T3 Jun)
             config = await prisma.quarterSettings.create({
                 data: {
                     id: 'quarter-config',
-                    systemType: 'calendar',
-                    q1StartMonth: 1
+                    systemType: 'tertile',
+                    q1StartMonth: 10
                 }
             });
-            console.log('Created default quarter configuration (calendar)');
+            console.log('Created default quarter configuration (tertile)');
         } catch (error) {
             // Handle race condition where config was created by another process
             if (error.code === 'P2002') {
@@ -57,18 +67,19 @@ export async function getCurrentQuarter() {
 
     // Get Q1 start month from config
     const q1Start = config.q1StartMonth;
+    const pm = periodMonths(config.systemType);
 
     // Months elapsed since the configured Q1 start, wrapping across the year so
-    // non-calendar configs (fiscal/academic) compute the right quarter. e.g. with
-    // q1Start=10 (Oct): Jan→Q2, Apr→Q3, Jul→Q4 — not all-Q4 as before.
+    // non-calendar configs (fiscal/academic/tertile) compute the right period.
+    // e.g. tertile q1Start=10 (Oct): Feb→T2, Jun→T3.
     const monthsSinceQ1 = (currentMonth - q1Start + 12) % 12;
-    const quarterNum = Math.floor(monthsSinceQ1 / 3) + 1;
+    const quarterNum = Math.floor(monthsSinceQ1 / pm) + 1;
 
     // The fiscal year is labeled by the calendar year in which its Q1 starts, so
     // months before q1Start belong to the cycle that began the previous year.
     const year = currentMonth >= q1Start ? currentYear : currentYear - 1;
 
-    return `${year}-Q${quarterNum}`;
+    return `${year}-${periodPrefix(config.systemType)}${quarterNum}`;
 }
 
 /**
@@ -80,20 +91,20 @@ export async function getQuarterDateRange(quarterString) {
     const config = await getQuarterConfig();
     const [yearStr, quarterStr] = quarterString.split('-');
     const year = parseInt(yearStr);
-    const quarterNum = parseInt(quarterStr.replace('Q', ''));
+    const quarterNum = parseInt(quarterStr.replace(/\D/g, '')); // tolerate Q or T prefix
 
     const q1Start = config.q1StartMonth;
+    const pm = periodMonths(config.systemType);
 
     // Absolute month offset (0-indexed from January of the label year) of this
-    // quarter's first month: Q1 begins at q1Start, each quarter adds 3 months.
-    // Dividing by 12 rolls the year forward generally — so fiscal/academic
-    // quarters that cross January (e.g. q1Start=10, Q2 = Jan–Mar of year+1) get the
-    // correct year, which the old `quarterNum === 1`-only adjustment did not.
-    const startMonthIndex = (q1Start - 1) + (quarterNum - 1) * 3;
+    // period's first month: period 1 begins at q1Start, each period adds `pm`
+    // months. Dividing by 12 rolls the year forward — so periods that cross
+    // January (e.g. q1Start=10) get the correct year.
+    const startMonthIndex = (q1Start - 1) + (quarterNum - 1) * pm;
     const startYear = year + Math.floor(startMonthIndex / 12);
     const startMonth0 = startMonthIndex % 12;
 
-    const endMonthIndex = startMonthIndex + 2;
+    const endMonthIndex = startMonthIndex + (pm - 1);
     const endYear = year + Math.floor(endMonthIndex / 12);
     const endMonth0 = endMonthIndex % 12;
 
@@ -125,6 +136,7 @@ export async function updateQuarterConfig(systemType, q1StartMonth, modifiedBy, 
         'calendar': 1,    // January
         'fiscal-us': 10,  // October
         'academic': 9,    // September
+        'tertile': 10,    // October (T1 Oct–Jan, T2 Feb–May, T3 Jun–Sep)
         'custom': q1StartMonth
     };
 
@@ -168,11 +180,25 @@ export async function updateQuarterConfig(systemType, q1StartMonth, modifiedBy, 
         await resetQuarterlyStats(newQuarter);
     }
 
+    // If the period DEFINITION changed (system or start month), the historical
+    // Hall of Fame is now sliced wrong — rebuild it under the new periods.
+    const periodSystemChanged = oldConfig.systemType !== systemType || oldConfig.q1StartMonth !== actualStartMonth;
+    let hallOfFameRecomputed = false;
+    if (periodSystemChanged) {
+        try {
+            await recomputeHallOfFameAll();
+            hallOfFameRecomputed = true;
+        } catch (e) {
+            console.error('Hall of Fame recompute after config change failed:', e.message);
+        }
+    }
+
     return {
         config,
         quarterChanged,
         oldQuarter,
-        newQuarter
+        newQuarter,
+        hallOfFameRecomputed
     };
 }
 
@@ -184,7 +210,9 @@ export async function archiveQuarterWinners(quarterString = null) {
     try {
         const quarter = quarterString || await getCurrentQuarter();
         const quarterDates = await getQuarterDateRange(quarter);
-        const [year, quarterNum] = quarter.split('-Q');
+        // Parse label tolerant of Q or T prefix (e.g. 2025-Q1 / 2025-T3)
+        const year = quarter.split('-')[0];
+        const quarterNum = quarter.split('-')[1].replace(/\D/g, '');
 
         console.log(`Archiving winners for ${quarter}`);
 
@@ -904,9 +932,9 @@ export async function recomputeHallOfFame(quarterString) {
         };
     };
 
-    const [yearStr, qPart] = quarter.split('-Q');
-    const year = parseInt(yearStr);
-    const quarterNumber = parseInt(qPart);
+    // Parse label tolerant of Q or T prefix (e.g. 2025-Q1 / 2025-T3)
+    const year = parseInt(quarter.split('-')[0]);
+    const quarterNumber = parseInt(quarter.split('-')[1].replace(/\D/g, ''));
 
     // Split ranked into DevOps and non-DevOps categories
     const rankedByCategory = {
@@ -985,6 +1013,8 @@ export async function recomputeHallOfFame(quarterString) {
 export async function recomputeHallOfFameAll() {
     const config = await getQuarterConfig();
     const q1Start = config.q1StartMonth;
+    const pm = periodMonths(config.systemType);
+    const prefix = periodPrefix(config.systemType);
 
     // Aggregate ranges across all relevant tables to ensure full historical coverage
     const phRange = await prisma.pointHistory.aggregate({ _min: { timestamp: true }, _max: { timestamp: true } });
@@ -999,24 +1029,24 @@ export async function recomputeHallOfFameAll() {
     const minTs = minCandidates.length ? new Date(Math.min(...minCandidates.map(d => d.getTime()))) : null;
     const maxTs = maxCandidates.length ? new Date(Math.max(...maxCandidates.map(d => d.getTime()))) : null;
 
+    // Drop Hall of Fame rows from a different period system (e.g. leftover
+    // "-Q" rows after switching to tertiles), so history reflects the new system.
+    await prisma.quarterlyWinner.deleteMany({
+        where: { quarter: { not: { contains: '-' + prefix } } }
+    });
+
     if (!minTs || !maxTs) {
         return { updatedQuarters: [], message: 'No historical activity found' };
     }
 
-    // Helper: get quarter string for a date based on q1Start
+    // Helper: get the period string for a date (works for quarters or tertiles).
     const quarterFromDate = (date) => {
         const year = date.getUTCFullYear();
         const month = date.getUTCMonth() + 1; // 1-12
-        let qYear = year;
-        let quarterNum;
-        if (month < q1Start) {
-            quarterNum = 4;
-            qYear = year - 1;
-        } else {
-            const monthsSinceQ1 = month - q1Start;
-            quarterNum = Math.floor(monthsSinceQ1 / 3) + 1;
-        }
-        return `${qYear}-Q${quarterNum}`;
+        const monthsSinceQ1 = (month - q1Start + 12) % 12;
+        const quarterNum = Math.floor(monthsSinceQ1 / pm) + 1;
+        const qYear = month >= q1Start ? year : year - 1;
+        return `${qYear}-${prefix}${quarterNum}`;
     };
 
     // Generate all quarter strings in range

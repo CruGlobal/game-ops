@@ -424,8 +424,8 @@ describe('Quarterly API Endpoints', () => {
                 .expect(200);
 
             expect(response.body.success).toBe(true);
-            expect(response.body.config.systemType).toBe('calendar');
-            expect(response.body.config.q1StartMonth).toBe(1);
+            expect(response.body.config.systemType).toBe('tertile');
+            expect(response.body.config.q1StartMonth).toBe(10);
         });
     });
 

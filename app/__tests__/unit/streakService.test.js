@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, afterAll, jest } from '@jest/globals';
+import { isUSFederalHoliday, isNonWorkingDay } from '../../utils/holidays.js';
 import {
     updateStreak,
     checkStreakBadges,
@@ -486,5 +487,38 @@ describe('StreakService', () => {
     afterAll(async () => {
         // Disconnect Prisma to allow Jest to exit
         await prisma.$disconnect();
+    });
+});
+
+describe('US federal holidays (streak exclusions)', () => {
+    // Local-time date; the holiday util compares local Y-M-D.
+    const d = (y, m, day) => new Date(y, m - 1, day);
+
+    it('flags fixed-date holidays (weekend dates shift to the observed weekday)', () => {
+        // Jul 4 2026 is a Saturday -> observed Friday Jul 3 (the actual Saturday
+        // is already a weekend, so only the observed weekday is added).
+        expect(isUSFederalHoliday(d(2026, 7, 3))).toBe(true);
+        expect(isUSFederalHoliday(d(2026, 7, 4))).toBe(false);
+        expect(isUSFederalHoliday(d(2026, 12, 25))).toBe(true); // Christmas (Fri)
+        expect(isUSFederalHoliday(d(2026, 6, 19))).toBe(true);  // Juneteenth (Fri)
+    });
+
+    it('flags floating holidays', () => {
+        expect(isUSFederalHoliday(d(2026, 1, 19))).toBe(true);  // MLK — 3rd Mon Jan
+        expect(isUSFederalHoliday(d(2026, 5, 25))).toBe(true);  // Memorial — last Mon May
+        expect(isUSFederalHoliday(d(2026, 9, 7))).toBe(true);   // Labor — 1st Mon Sep
+        expect(isUSFederalHoliday(d(2026, 11, 26))).toBe(true); // Thanksgiving — 4th Thu Nov
+    });
+
+    it('does not flag ordinary days', () => {
+        expect(isUSFederalHoliday(d(2026, 3, 17))).toBe(false);
+        expect(isUSFederalHoliday(d(2026, 8, 12))).toBe(false);
+    });
+
+    it('treats weekends and holidays as non-working', () => {
+        expect(isNonWorkingDay(d(2026, 1, 3))).toBe(true);   // Saturday
+        expect(isNonWorkingDay(d(2026, 1, 4))).toBe(true);   // Sunday
+        expect(isNonWorkingDay(d(2026, 12, 25))).toBe(true); // Christmas
+        expect(isNonWorkingDay(d(2026, 1, 6))).toBe(false);  // ordinary Tuesday
     });
 });

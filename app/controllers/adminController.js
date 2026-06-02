@@ -187,12 +187,16 @@ export async function getQuarterInfoController(req, res) {
     try {
         const currentQuarter = await getCurrentQuarter();
         const { start, end } = await getQuarterDateRange(currentQuarter);
+        const config = await getQuarterConfig();
+        const periodLabel = config.systemType === 'tertile' ? 'Tertile' : 'Quarter';
 
         res.json({
             success: true,
             currentQuarter,
             quarterStart: start,
-            quarterEnd: end
+            quarterEnd: end,
+            systemType: config.systemType,
+            periodLabel
         });
     } catch (error) {
         console.error('Error in getQuarterInfoController:', error);
@@ -243,7 +247,7 @@ export async function updateQuarterConfigController(req, res) {
         const modifiedBy = req.user?.username || 'admin';
 
         // Validation expected by tests
-        const allowedSystems = ['calendar', 'fiscal-us', 'academic', 'custom'];
+        const allowedSystems = ['calendar', 'fiscal-us', 'academic', 'tertile', 'custom'];
         if (!allowedSystems.includes(systemType)) {
             return res.status(400).json({ success: false, message: 'Invalid system type' });
         }
