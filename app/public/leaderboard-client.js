@@ -232,6 +232,7 @@ async function loadLeaderboardData() {
             // API returns top-level fields: currentQuarter, quarterStart, quarterEnd
             currentQuarterInfo = {
                 currentQuarter: quarterInfoData.currentQuarter,
+                periodLabel: quarterInfoData.periodLabel || 'Quarter',
                 quarterDates: {
                     start: quarterInfoData.quarterStart,
                     end: quarterInfoData.quarterEnd
@@ -250,11 +251,16 @@ async function loadLeaderboardData() {
 function updateQuarterInfoDisplay() {
     if (!currentQuarterInfo) return;
 
+    const label = currentQuarterInfo.periodLabel || 'Quarter'; // 'Tertile' when the system is tertile
     const titleEl = document.getElementById('current-quarter-title');
     const datesEl = document.getElementById('current-quarter-dates');
 
+    // Relabel the "This Quarter" tab to match the configured period.
+    const tabEl = document.getElementById('tab-quarterly');
+    if (tabEl) tabEl.textContent = `📅 This ${label}`;
+
     if (titleEl) {
-        titleEl.textContent = `Current Quarter: ${currentQuarterInfo.currentQuarter}`;
+        titleEl.textContent = `Current ${label}: ${currentQuarterInfo.currentQuarter}`;
     }
 
     if (datesEl) {
@@ -497,7 +503,7 @@ function renderQuarterlyGrid(gridId, users) {
     grid.innerHTML = '';
 
     if (users.length === 0) {
-        grid.innerHTML = tableMessageRow('📅', 'No contributors this quarter yet');
+        grid.innerHTML = tableMessageRow('📅', `No contributors this ${(currentQuarterInfo?.periodLabel || 'quarter').toLowerCase()} yet`);
         return;
     }
 

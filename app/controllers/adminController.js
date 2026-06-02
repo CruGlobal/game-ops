@@ -187,12 +187,16 @@ export async function getQuarterInfoController(req, res) {
     try {
         const currentQuarter = await getCurrentQuarter();
         const { start, end } = await getQuarterDateRange(currentQuarter);
+        const config = await getQuarterConfig();
+        const periodLabel = config.systemType === 'tertile' ? 'Tertile' : 'Quarter';
 
         res.json({
             success: true,
             currentQuarter,
             quarterStart: start,
-            quarterEnd: end
+            quarterEnd: end,
+            systemType: config.systemType,
+            periodLabel
         });
     } catch (error) {
         console.error('Error in getQuarterInfoController:', error);
