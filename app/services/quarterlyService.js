@@ -1038,10 +1038,21 @@ export async function recomputeHallOfFameAll() {
     const minTs = minCandidates.length ? new Date(Math.min(...minCandidates.map(d => d.getTime()))) : null;
     const maxTs = maxCandidates.length ? new Date(Math.max(...maxCandidates.map(d => d.getTime()))) : null;
 
-    // Drop Hall of Fame rows from a different period system (e.g. leftover
-    // "-Q" rows after switching to tertiles), so history reflects the new system.
+    const currentPeriod = await getCurrentQuarter();
+
+    // Drop Hall of Fame rows that no longer belong, before rebuilding:
+    //  - a different period system (leftover "-Q" rows after switching to tertiles)
+    //  - the in-progress period, or anything with a future end date
+    // (the Hall of Fame is completed periods only). Runs even when there's no
+    // new history to scan.
     await prisma.quarterlyWinner.deleteMany({
-        where: { quarter: { not: { contains: '-' + prefix } } }
+        where: {
+            OR: [
+                { quarter: { not: { contains: '-' + prefix } } },
+                { quarter: currentPeriod },
+                { quarterEnd: { gt: new Date() } }
+            ]
+        }
     });
 
     if (!minTs || !maxTs) {
@@ -1070,9 +1081,7 @@ export async function recomputeHallOfFameAll() {
         cursor = new Date(Date.UTC(cursor.getUTCFullYear(), m + 1, 1));
     }
 
-    // The Hall of Fame is for COMPLETED periods only — never archive the
-    // in-progress one (it has a future end date and incomplete standings).
-    const currentPeriod = await getCurrentQuarter();
+    // Never rebuild the in-progress period (deleted above; completed periods only).
     quarters.delete(currentPeriod);
 
     const updatedQuarters = [];

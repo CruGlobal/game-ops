@@ -8,7 +8,8 @@ import {
     getHallOfFame,
     resetQuarterlyStats,
     archiveQuarterWinners,
-    checkAndResetIfNewQuarter
+    checkAndResetIfNewQuarter,
+    recomputeHallOfFameAll
 } from '../../services/quarterlyService.js';
 import { prisma, createTestContributor } from '../setup.js';
 
@@ -484,6 +485,37 @@ describe('QuarterlyService', () => {
         await prisma.quarterlyWinner.deleteMany({});
         await prisma.quarterSettings.deleteMany({});
         await prisma.contributor.deleteMany({});
+    });
+
+    describe('recomputeHallOfFameAll', () => {
+        it('drops in-progress / future-dated rows (Hall of Fame is completed periods only)', async () => {
+            await prisma.quarterSettings.create({
+                data: { id: 'quarter-config', systemType: 'tertile', q1StartMonth: 10 }
+            });
+            const current = await getCurrentQuarter();
+            const { start, end } = await getQuarterDateRange(current);
+
+            // Seed a stray archived row for the in-progress period (future end date)
+            await prisma.quarterlyWinner.create({
+                data: {
+                    quarter: current,
+                    category: 'devops',
+                    year: parseInt(current.split('-')[0]),
+                    quarterNumber: parseInt(current.split('-')[1].replace(/\D/g, '')),
+                    quarterStart: start,
+                    quarterEnd: end,
+                    winner: { username: 'stray' },
+                    top3: [],
+                    totalParticipants: 1,
+                    archivedDate: new Date()
+                }
+            });
+
+            await recomputeHallOfFameAll();
+
+            const remaining = await prisma.quarterlyWinner.findMany({ where: { quarter: current } });
+            expect(remaining).toHaveLength(0);
+        });
     });
 
     afterAll(async () => {
