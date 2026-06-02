@@ -22,7 +22,8 @@ import {
     getPointsSummaryController,
     getStreakLeaderboardController,
     getStreakStatsController,
-    getContributorController
+    getContributorController,
+    getContributionGridController
 } from '../controllers/contributorController.js';
 import {
     getContributors,
@@ -109,6 +110,7 @@ router.post('/admin/fix-duplicates', ensureDevOpsTeamMember, fixDuplicatesContro
 
 // Public Quarter Info (no auth required)
 router.get('/quarter-info', getQuarterInfoController);
+router.get('/contributions/grid', getContributionGridController);
 
 // Quarter Configuration (admin only)
 router.get('/admin/quarter-config', ensureDevOpsTeamMember, getQuarterConfigController);

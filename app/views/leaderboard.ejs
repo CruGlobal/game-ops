@@ -25,6 +25,17 @@
         </div>
     </div>
 
+    <!-- Arcade contribution-graph header (self-hosted Canvas; real activity) -->
+    <section class="arcade-header" aria-label="Arcade contribution animation">
+        <div id="arcade-graph" class="arcade-graph" role="img" aria-label="Arcade contribution animation"></div>
+        <div class="arcade-controls">
+            <span class="arcade-score" id="arcade-score" aria-live="polite"></span>
+            <button type="button" class="arcade-play" id="arcade-play" aria-pressed="false">▶ Play</button>
+            <label for="arcade-select">🕹️</label>
+            <select id="arcade-select" aria-label="Choose which arcade game to play"></select>
+        </div>
+    </section>
+
     <!-- Search and Filter Bar -->
     <div class="controls-section" role="search" aria-label="Leaderboard controls">
         <div class="search-bar">
@@ -73,7 +84,19 @@
             <div class="quarter-info" id="all-time-info">
                 <p class="quarter-description">All-time top contributors based on total points earned</p>
             </div>
-            <div class="leaderboard-grid" id="all-time-grid" aria-live="polite" aria-atomic="false"></div>
+            <table class="leaderboard-table" id="all-time-table">
+                <thead>
+                    <tr>
+                        <th class="rank-col" scope="col">Rank</th>
+                        <th class="dev-col" scope="col">Developer</th>
+                        <th class="num-col" data-sortkey="prCount" scope="col">PRs</th>
+                        <th class="num-col" data-sortkey="reviewCount" scope="col">Reviews</th>
+                        <th class="num-col" data-sortkey="allTimePoints" scope="col">Points</th>
+                        <th class="num-col" data-sortkey="currentStreak" scope="col">Streak</th>
+                    </tr>
+                </thead>
+                <tbody class="leaderboard-grid" id="all-time-grid" aria-live="polite" aria-atomic="false"></tbody>
+            </table>
         </div>
 
         <!-- Quarterly Leaderboard Tab -->
@@ -82,7 +105,19 @@
                 <h3 id="current-quarter-title">Loading...</h3>
                 <p id="current-quarter-dates" class="quarter-description">Loading quarter information...</p>
             </div>
-            <div class="leaderboard-grid" id="quarterly-grid" aria-live="polite" aria-atomic="false"></div>
+            <table class="leaderboard-table" id="quarterly-table">
+                <thead>
+                    <tr>
+                        <th class="rank-col" scope="col">Rank</th>
+                        <th class="dev-col" scope="col">Developer</th>
+                        <th class="num-col" scope="col">PRs</th>
+                        <th class="num-col" scope="col">Reviews</th>
+                        <th class="num-col" scope="col">Points</th>
+                        <th class="num-col" scope="col">Streak</th>
+                    </tr>
+                </thead>
+                <tbody class="leaderboard-grid" id="quarterly-grid" aria-live="polite" aria-atomic="false"></tbody>
+            </table>
         </div>
 
         <!-- Hall of Fame Tab -->
@@ -105,5 +140,7 @@
 <script nonce="<%= nonce %>" src="/leaderboard-client.js"></script>
 <script nonce="<%= nonce %>" src="/theme-toggle.js"></script>
 <script src="/init.js"></script>
+<!-- Self-hosted arcade header (Canvas; no external deps) -->
+<script src="/arcade.js"></script>
 </body>
 </html>

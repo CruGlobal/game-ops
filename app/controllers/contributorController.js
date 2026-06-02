@@ -400,3 +400,27 @@ export const updateQuarterConfigController = async (req, res) => {
         res.status(500).json({ success: false, message: 'Error updating quarter config', error: err.message });
     }
 };
+
+/**
+ * Team-wide daily contribution counts for the arcade header's grid.
+ * One cell per day over the last `weeks` (default 53, max 53) weeks, aggregated
+ * across all contributors, plus the max for intensity scaling. Read-only,
+ * public (same as the leaderboard endpoints).
+ */
+export const getContributionGridController = async (req, res) => {
+    try {
+        const weeks = Math.min(Math.max(parseInt(req.query.weeks, 10) || 53, 1), 53);
+        const days = weeks * 7;
+        const rows = await prisma.$queryRaw`
+            SELECT (date::date)::text AS day, SUM(count)::int AS count
+            FROM contributions
+            WHERE date >= (CURRENT_DATE - ${days}::int)
+            GROUP BY 1
+            ORDER BY 1`;
+        const cells = rows.map(r => ({ date: r.day, count: Number(r.count) }));
+        const maxCount = cells.reduce((m, c) => Math.max(m, c.count), 0);
+        res.json({ success: true, weeks, days, maxCount, cells });
+    } catch (err) {
+        res.status(500).json({ success: false, message: 'Error loading contribution grid', error: err.message });
+    }
+};

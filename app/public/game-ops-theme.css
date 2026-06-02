@@ -293,11 +293,162 @@ main > section > h2::before {
 }
 .quarter-description { font-size: 0.85rem; color: var(--muted); margin: 0; }
 
-/* ---- Grid --------------------------------------------------------- */
-.leaderboard-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-    gap: 16px;
+/* ---- Leaderboard table -------------------------------------------- */
+/* A ranked table is the core of a leaderboard: one vertical axis, rank
+   descending top-to-bottom, a comparable primary metric per row. (Replaces an
+   earlier card grid that laid #1/#2/#3 out side-by-side as equal peers.) */
+.leaderboard-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    overflow: hidden;
+    box-shadow: var(--shadow-1);
+}
+/* Keep the tbody as a normal row group, overriding any legacy grid rule. */
+.leaderboard-grid { display: table-row-group; }
+
+.leaderboard-table thead th {
+    font-size: 0.66rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--faint);
+    text-align: right;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--line-2);
+    background: var(--surface-2);
+    white-space: nowrap;
+}
+.leaderboard-table thead th.rank-col { text-align: center; width: 80px; }
+.leaderboard-table thead th.dev-col { text-align: left; }
+.leaderboard-table thead th.num-col { width: 96px; }
+.leaderboard-table thead th.sorted { color: var(--accent); }
+.leaderboard-table thead th.sorted::after { content: " ▾"; }
+
+.leaderboard-row { border-bottom: 1px solid var(--line); transition: background 0.15s ease; }
+.leaderboard-row:hover { background: var(--accent-soft); }
+.leaderboard-row td { padding: 12px 16px; vertical-align: middle; }
+
+/* Rank — oversized numerals carry the ranking; top 3 keep medal tints */
+.rank-cell { text-align: center; }
+.leaderboard-row .rank-badge { min-width: 48px; height: 32px; font-size: 0.95rem; }
+.leaderboard-row[data-rank="1"] .rank-badge,
+.leaderboard-row[data-rank="2"] .rank-badge,
+.leaderboard-row[data-rank="3"] .rank-badge { height: 36px; min-width: 56px; font-size: 1rem; }
+
+/* Developer cell */
+.dev-cell-inner { display: flex; align-items: center; gap: 12px; }
+.dev-cell .contributor-avatar { width: 38px; height: 38px; }
+.dev-meta { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.dev-cell .contributor-name { font-size: 0.98rem; }
+.row-badges { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; }
+.row-badges .badges-grid { gap: 4px; }
+.row-badges .badge-item { width: 20px; height: 20px; }
+.bill-chip {
+    display: inline-flex; align-items: center; gap: 3px;
+    font-size: 0.7rem; font-weight: 600;
+    color: var(--c-amber); background: var(--c-amber-soft);
+    border-radius: var(--radius-pill); padding: 1px 8px;
+}
+.bill-chip .stat-value { font-size: 0.7rem; }
+
+/* Numeric cells — mono tabular figures align down the column */
+.num-cell { text-align: right; }
+.num-cell .stat-value {
+    font-family: var(--font-mono);
+    font-weight: 500;
+    font-size: 0.95rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--ink);
+}
+
+/* Points cell with a magnitude bar relative to the column leader */
+.points-cell { position: relative; }
+.points-cell .stat-value { font-weight: 700; }
+.points-bar {
+    position: absolute;
+    left: 0; bottom: 4px;
+    height: 3px;
+    max-width: 100%;
+    background: var(--accent);
+    border-radius: 2px;
+    opacity: 0.5;
+}
+
+/* Message rows (empty / loading / error) span the full table */
+.lb-message-row td { padding: 0; }
+.lb-message-row .empty-state, .lb-message-row .loading-spinner { padding: 40px 16px; }
+
+@media (max-width: 600px) {
+    /* Drop PRs + Reviews columns on narrow screens; keep Rank / Dev / Points / Streak */
+    .leaderboard-table thead th:nth-child(3),
+    .leaderboard-table thead th:nth-child(4),
+    .leaderboard-row td:nth-child(3),
+    .leaderboard-row td:nth-child(4) { display: none; }
+    .leaderboard-table thead th, .leaderboard-row td { padding: 10px; }
+}
+
+/* ---- Arcade header ------------------------------------------------ */
+.arcade-header {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 4px 0 18px;
+    padding: 14px 16px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-1);
+}
+.arcade-graph {
+    width: 100%;
+    min-height: 90px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.arcade-canvas { display: block; width: 100%; }
+.arcade-graph--failed { display: none; }
+.arcade-controls {
+    display: flex; align-items: center; gap: 8px;
+    width: 100%;
+    font-size: 0.8rem; color: var(--muted);
+}
+.arcade-score {
+    flex: 1;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    color: var(--ink);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.arcade-controls select {
+    font-family: var(--font-sans);
+    font-size: 0.82rem;
+    padding: 5px 10px;
+    border: 1px solid var(--line-2);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    color: var(--ink);
+}
+.arcade-play {
+    font-family: var(--font-sans);
+    font-size: 0.82rem;
+    font-weight: 600;
+    padding: 5px 12px;
+    border: 1px solid var(--accent);
+    border-radius: var(--radius-sm);
+    background: var(--accent);
+    color: var(--accent-ink);
+    cursor: pointer;
+}
+.arcade-play:hover { filter: brightness(1.05); }
+.arcade-play[aria-pressed="true"] {
+    background: var(--surface);
+    color: var(--accent);
 }
 
 /* ---- Leaderboard card -------------------------------------------- */
