@@ -17,6 +17,7 @@ import webhookRoutes from './routes/webhookRoutes.js';
 import { fetchPRsCron, awardContributorBadgesCron } from './controllers/contributorController.js';
 import { generateWeeklyChallenges, checkExpiredChallenges } from './services/challengeService.js';
 import { checkAndResetIfNewQuarter } from './services/quarterlyService.js';
+import { verifyStreaks } from './services/streakService.js';
 import { syncDevOpsTeamFromGitHub } from './services/devOpsTeamService.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import logger from './utils/logger.js';
@@ -355,6 +356,18 @@ cron.schedule('0 0 * * *', async () => {
         }
     } catch (error) {
         logger.error('Error checking quarterly reset', { error: error.message });
+    }
+});
+
+// Break stale streaks daily at midnight (idle contributors don't break otherwise)
+cron.schedule('0 0 * * *', async () => {
+    logger.info('Running daily task to verify streaks');
+    try {
+        if (!(await shouldRunCron('streakCheck'))) return;
+        const result = await verifyStreaks();
+        logger.info('Streak verification done', { checked: result.checked, broken: result.broken });
+    } catch (error) {
+        logger.error('Error verifying streaks', { error: error.message });
     }
 });
 

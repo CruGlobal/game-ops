@@ -243,7 +243,7 @@ export async function updateQuarterConfigController(req, res) {
         const modifiedBy = req.user?.username || 'admin';
 
         // Validation expected by tests
-        const allowedSystems = ['calendar', 'fiscal-us', 'academic', 'custom'];
+        const allowedSystems = ['calendar', 'fiscal-us', 'academic', 'tertile', 'custom'];
         if (!allowedSystems.includes(systemType)) {
             return res.status(400).json({ success: false, message: 'Invalid system type' });
         }

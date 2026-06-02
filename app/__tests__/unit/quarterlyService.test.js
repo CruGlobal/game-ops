@@ -48,8 +48,8 @@ describe('QuarterlyService', () => {
             const config = await getQuarterConfig();
 
             expect(config).toBeDefined();
-            expect(config.systemType).toBe('calendar');
-            expect(config.q1StartMonth).toBe(1);
+            expect(config.systemType).toBe('tertile');
+            expect(config.q1StartMonth).toBe(10);
         });
     });
 
@@ -134,6 +134,17 @@ describe('QuarterlyService', () => {
             // Q1 = Sep–Nov 2025, Q2 = Dec 2025–Feb 2026 (crosses January)
             expectRange(await getQuarterDateRange('2025-Q1'), 2025, 9, 2025, 11);
             expectRange(await getQuarterDateRange('2025-Q2'), 2025, 12, 2026, 2);
+        });
+
+        it('should return tertiles as 4-month thirds (T1 Oct–Jan, T2 Feb–May, T3 Jun–Sep)', async () => {
+            await prisma.quarterSettings.create({
+                data: { id: 'quarter-config', systemType: 'tertile', q1StartMonth: 10 }
+            });
+
+            // T1 starts Oct 2025 and crosses January into 2026
+            expectRange(await getQuarterDateRange('2025-T1'), 2025, 10, 2026, 1); // Oct 2025 – Jan 2026
+            expectRange(await getQuarterDateRange('2025-T2'), 2026, 2, 2026, 5);  // Feb – May 2026
+            expectRange(await getQuarterDateRange('2025-T3'), 2026, 6, 2026, 9);  // Jun – Sep 2026
         });
     });
 
