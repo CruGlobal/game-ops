@@ -179,26 +179,29 @@ export async function updateQuarterConfig(systemType, q1StartMonth, modifiedBy, 
     const newQuarter = await getCurrentQuarter();
     const quarterChanged = oldQuarter !== newQuarter;
 
-    if (quarterChanged) {
-        console.log(`Quarter changed from ${oldQuarter} to ${newQuarter} due to config update`);
-        // Archive old quarter and reset
-        const quarterlyWinner = await archiveQuarterWinners(oldQuarter);
-        const billResults = await awardQuarterlyBills(oldQuarter);
-        await postQuarterlyWinnersDiscussion(oldQuarter, billResults, quarterlyWinner);
-        await postQuarterlyWinnersSlack(oldQuarter, billResults, quarterlyWinner);
-        await resetQuarterlyStats(newQuarter);
-    }
-
-    // If the period DEFINITION changed (system or start month), the historical
-    // Hall of Fame is now sliced wrong — rebuild it under the new periods.
-    const periodSystemChanged = oldConfig.systemType !== systemType || oldConfig.q1StartMonth !== actualStartMonth;
+    // GUARD: changing the configuration re-slices time — it is NOT a real period
+    // rollover. So a config change must never award bills/vonettes, announce
+    // winners (Slack/GitHub), or reset stats. (Genuine time-based rollovers are
+    // handled by the daily checkAndResetIfNewQuarter cron, which does announce +
+    // award.) Here we only rebuild DERIVED data so the leaderboards/Hall of Fame
+    // reflect the new periods: recompute the Hall of Fame (past periods) and the
+    // current period's stats from point history.
+    const definitionChanged = quarterChanged
+        || oldConfig.systemType !== systemType
+        || oldConfig.q1StartMonth !== actualStartMonth;
     let hallOfFameRecomputed = false;
-    if (periodSystemChanged) {
+    if (definitionChanged) {
+        console.log(`Quarter config changed (${oldQuarter} -> ${newQuarter}); rebuilding Hall of Fame + current stats (no bills/announce/reset).`);
         try {
             await recomputeHallOfFameAll();
             hallOfFameRecomputed = true;
         } catch (e) {
             console.error('Hall of Fame recompute after config change failed:', e.message);
+        }
+        try {
+            await recomputeCurrentQuarterStats();
+        } catch (e) {
+            console.error('Current-period stats recompute after config change failed:', e.message);
         }
     }
 
@@ -1038,10 +1041,21 @@ export async function recomputeHallOfFameAll() {
     const minTs = minCandidates.length ? new Date(Math.min(...minCandidates.map(d => d.getTime()))) : null;
     const maxTs = maxCandidates.length ? new Date(Math.max(...maxCandidates.map(d => d.getTime()))) : null;
 
-    // Drop Hall of Fame rows from a different period system (e.g. leftover
-    // "-Q" rows after switching to tertiles), so history reflects the new system.
+    const currentPeriod = await getCurrentQuarter();
+
+    // Drop Hall of Fame rows that no longer belong, before rebuilding:
+    //  - a different period system (leftover "-Q" rows after switching to tertiles)
+    //  - the in-progress period, or anything with a future end date
+    // (the Hall of Fame is completed periods only). Runs even when there's no
+    // new history to scan.
     await prisma.quarterlyWinner.deleteMany({
-        where: { quarter: { not: { contains: '-' + prefix } } }
+        where: {
+            OR: [
+                { quarter: { not: { contains: '-' + prefix } } },
+                { quarter: currentPeriod },
+                { quarterEnd: { gt: new Date() } }
+            ]
+        }
     });
 
     if (!minTs || !maxTs) {
@@ -1070,9 +1084,7 @@ export async function recomputeHallOfFameAll() {
         cursor = new Date(Date.UTC(cursor.getUTCFullYear(), m + 1, 1));
     }
 
-    // The Hall of Fame is for COMPLETED periods only — never archive the
-    // in-progress one (it has a future end date and incomplete standings).
-    const currentPeriod = await getCurrentQuarter();
+    // Never rebuild the in-progress period (deleted above; completed periods only).
     quarters.delete(currentPeriod);
 
     const updatedQuarters = [];
