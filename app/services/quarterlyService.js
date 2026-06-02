@@ -180,11 +180,25 @@ export async function updateQuarterConfig(systemType, q1StartMonth, modifiedBy, 
         await resetQuarterlyStats(newQuarter);
     }
 
+    // If the period DEFINITION changed (system or start month), the historical
+    // Hall of Fame is now sliced wrong — rebuild it under the new periods.
+    const periodSystemChanged = oldConfig.systemType !== systemType || oldConfig.q1StartMonth !== actualStartMonth;
+    let hallOfFameRecomputed = false;
+    if (periodSystemChanged) {
+        try {
+            await recomputeHallOfFameAll();
+            hallOfFameRecomputed = true;
+        } catch (e) {
+            console.error('Hall of Fame recompute after config change failed:', e.message);
+        }
+    }
+
     return {
         config,
         quarterChanged,
         oldQuarter,
-        newQuarter
+        newQuarter,
+        hallOfFameRecomputed
     };
 }
 
@@ -196,7 +210,9 @@ export async function archiveQuarterWinners(quarterString = null) {
     try {
         const quarter = quarterString || await getCurrentQuarter();
         const quarterDates = await getQuarterDateRange(quarter);
-        const [year, quarterNum] = quarter.split('-Q');
+        // Parse label tolerant of Q or T prefix (e.g. 2025-Q1 / 2025-T3)
+        const year = quarter.split('-')[0];
+        const quarterNum = quarter.split('-')[1].replace(/\D/g, '');
 
         console.log(`Archiving winners for ${quarter}`);
 
@@ -916,9 +932,9 @@ export async function recomputeHallOfFame(quarterString) {
         };
     };
 
-    const [yearStr, qPart] = quarter.split('-Q');
-    const year = parseInt(yearStr);
-    const quarterNumber = parseInt(qPart);
+    // Parse label tolerant of Q or T prefix (e.g. 2025-Q1 / 2025-T3)
+    const year = parseInt(quarter.split('-')[0]);
+    const quarterNumber = parseInt(quarter.split('-')[1].replace(/\D/g, ''));
 
     // Split ranked into DevOps and non-DevOps categories
     const rankedByCategory = {
@@ -997,6 +1013,8 @@ export async function recomputeHallOfFame(quarterString) {
 export async function recomputeHallOfFameAll() {
     const config = await getQuarterConfig();
     const q1Start = config.q1StartMonth;
+    const pm = periodMonths(config.systemType);
+    const prefix = periodPrefix(config.systemType);
 
     // Aggregate ranges across all relevant tables to ensure full historical coverage
     const phRange = await prisma.pointHistory.aggregate({ _min: { timestamp: true }, _max: { timestamp: true } });
@@ -1011,24 +1029,24 @@ export async function recomputeHallOfFameAll() {
     const minTs = minCandidates.length ? new Date(Math.min(...minCandidates.map(d => d.getTime()))) : null;
     const maxTs = maxCandidates.length ? new Date(Math.max(...maxCandidates.map(d => d.getTime()))) : null;
 
+    // Drop Hall of Fame rows from a different period system (e.g. leftover
+    // "-Q" rows after switching to tertiles), so history reflects the new system.
+    await prisma.quarterlyWinner.deleteMany({
+        where: { quarter: { not: { contains: '-' + prefix } } }
+    });
+
     if (!minTs || !maxTs) {
         return { updatedQuarters: [], message: 'No historical activity found' };
     }
 
-    // Helper: get quarter string for a date based on q1Start
+    // Helper: get the period string for a date (works for quarters or tertiles).
     const quarterFromDate = (date) => {
         const year = date.getUTCFullYear();
         const month = date.getUTCMonth() + 1; // 1-12
-        let qYear = year;
-        let quarterNum;
-        if (month < q1Start) {
-            quarterNum = 4;
-            qYear = year - 1;
-        } else {
-            const monthsSinceQ1 = month - q1Start;
-            quarterNum = Math.floor(monthsSinceQ1 / 3) + 1;
-        }
-        return `${qYear}-Q${quarterNum}`;
+        const monthsSinceQ1 = (month - q1Start + 12) % 12;
+        const quarterNum = Math.floor(monthsSinceQ1 / pm) + 1;
+        const qYear = month >= q1Start ? year : year - 1;
+        return `${qYear}-${prefix}${quarterNum}`;
     };
 
     // Generate all quarter strings in range

@@ -422,6 +422,36 @@ describe('QuarterlyService', () => {
             expect(winner.top3[1].username).toBe('second');
             expect(winner.top3[2].username).toBe('third');
         });
+
+        it('should archive tertile winners with the correct period number (T label)', async () => {
+            await prisma.quarterSettings.create({
+                data: { id: 'quarter-config', systemType: 'tertile', q1StartMonth: 10 }
+            });
+
+            await prisma.contributor.create({
+                data: createTestContributor({
+                    username: 'tert-champ',
+                    avatarUrl: 'https://github.com/tert-champ.png',
+                    quarterlyStats: {
+                        currentQuarter: '2025-T3',
+                        prsThisQuarter: 12,
+                        reviewsThisQuarter: 9,
+                        pointsThisQuarter: 210
+                    }
+                })
+            });
+
+            await archiveQuarterWinners('2025-T3');
+
+            const winner = await prisma.quarterlyWinner.findUnique({
+                where: { quarter_category: { quarter: '2025-T3', category: 'general' } }
+            });
+
+            expect(winner).toBeDefined();
+            expect(winner.winner.username).toBe('tert-champ');
+            expect(winner.year).toBe(2025);
+            expect(winner.quarterNumber).toBe(3); // parsed from the "T3" label, not NaN
+        });
     });
 
     describe('checkAndResetIfNewQuarter', () => {

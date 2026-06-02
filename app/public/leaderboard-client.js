@@ -259,6 +259,10 @@ function updateQuarterInfoDisplay() {
     const tabEl = document.getElementById('tab-quarterly');
     if (tabEl) tabEl.textContent = `📅 This ${label}`;
 
+    // Relabel the Hall of Fame description to match the period.
+    const hofDesc = document.getElementById('hall-of-fame-description');
+    if (hofDesc) hofDesc.textContent = `Past ${label.toLowerCase()} champions and top performers`;
+
     if (titleEl) {
         titleEl.textContent = `Current ${label}: ${currentQuarterInfo.currentQuarter}`;
     }
