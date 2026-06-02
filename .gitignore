@@ -67,3 +67,4 @@ Claude Prompt to continue conversation:.md.markdown
 app/public/toast-test.html
 app/scripts/create-test-challenge.js
 .claude/settings.local.json
+docker-compose.override.yml

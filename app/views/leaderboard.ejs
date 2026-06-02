@@ -4,10 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Leaderboard - Game Ops</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700;800&family=Roboto+Mono:wght@400;500&display=swap">
     <link rel="stylesheet" href="/modern-design-system.css">
     <link rel="stylesheet" href="/styles.css">
     <link rel="stylesheet" href="/leaderboard.css">
     <link rel="stylesheet" href="/animations.css">
+    <!-- Ops Terminal theme — loaded last to override -->
+    <link rel="stylesheet" href="/game-ops-theme.css">
 </head>
 <body>
 <a href="#main-content" class="skip-link">Skip to main content</a>
@@ -20,6 +25,17 @@
         </div>
     </div>
 
+    <!-- Arcade contribution-graph header (self-hosted Canvas; real activity) -->
+    <section class="arcade-header" aria-label="Arcade contribution animation">
+        <div id="arcade-graph" class="arcade-graph" role="img" aria-label="Arcade contribution animation"></div>
+        <div class="arcade-controls">
+            <span class="arcade-score" id="arcade-score" aria-live="polite"></span>
+            <button type="button" class="arcade-play" id="arcade-play" aria-pressed="false">▶ Play</button>
+            <label for="arcade-select">🕹️</label>
+            <select id="arcade-select" aria-label="Choose which arcade game to play"></select>
+        </div>
+    </section>
+
     <!-- Search and Filter Bar -->
     <div class="controls-section" role="search" aria-label="Leaderboard controls">
         <div class="search-bar">
@@ -31,12 +47,12 @@
             />
         </div>
         <div class="filter-dropdown">
-            <label for="sort-select">Sort by:</label>
-            <select id="sort-select" aria-label="Sort leaderboard by criteria">
-                <option value="prCount">Pull Requests</option>
-                <option value="reviewCount">Reviews</option>
-                <option value="totalPoints">Total Points</option>
-                <option value="currentStreak">Current Streak</option>
+            <label for="sort-select">View:</label>
+            <select id="sort-select" aria-label="Choose leaderboard ranking">
+                <option value="totalPoints" selected>Top Points</option>
+                <option value="prCount">Top Contributors</option>
+                <option value="reviewCount">Top Reviewers</option>
+                <option value="currentStreak">Top Streaks</option>
                 <option value="longestStreak">Longest Streak</option>
             </select>
         </div>
@@ -60,10 +76,6 @@
         <button class="tab-button active" data-tab="all-time" role="tab" aria-selected="true" aria-controls="all-time" id="tab-all-time">🌟 All-Time</button>
         <button class="tab-button" data-tab="quarterly" role="tab" aria-selected="false" aria-controls="quarterly" id="tab-quarterly">📅 This Quarter</button>
         <button class="tab-button" data-tab="hall-of-fame" role="tab" aria-selected="false" aria-controls="hall-of-fame" id="tab-hall-of-fame">🏆 Hall of Fame</button>
-        <button class="tab-button" data-tab="contributors" role="tab" aria-selected="false" aria-controls="contributors" id="tab-contributors">👨‍💻 Top Contributors</button>
-        <button class="tab-button" data-tab="reviewers" role="tab" aria-selected="false" aria-controls="reviewers" id="tab-reviewers">👀 Top Reviewers</button>
-        <button class="tab-button" data-tab="points" role="tab" aria-selected="false" aria-controls="points" id="tab-points">⭐ Top Points</button>
-        <button class="tab-button" data-tab="streaks" role="tab" aria-selected="false" aria-controls="streaks" id="tab-streaks">🔥 Top Streaks</button>
     </div>
 
     <!-- All-Time Leaderboard Tab -->
@@ -72,7 +84,19 @@
             <div class="quarter-info" id="all-time-info">
                 <p class="quarter-description">All-time top contributors based on total points earned</p>
             </div>
-            <div class="leaderboard-grid" id="all-time-grid" aria-live="polite" aria-atomic="false"></div>
+            <table class="leaderboard-table" id="all-time-table">
+                <thead>
+                    <tr>
+                        <th class="rank-col" scope="col">Rank</th>
+                        <th class="dev-col" scope="col">Developer</th>
+                        <th class="num-col" data-sortkey="prCount" scope="col">PRs</th>
+                        <th class="num-col" data-sortkey="reviewCount" scope="col">Reviews</th>
+                        <th class="num-col" data-sortkey="allTimePoints" scope="col">Points</th>
+                        <th class="num-col" data-sortkey="currentStreak" scope="col">Streak</th>
+                    </tr>
+                </thead>
+                <tbody class="leaderboard-grid" id="all-time-grid" aria-live="polite" aria-atomic="false"></tbody>
+            </table>
         </div>
 
         <!-- Quarterly Leaderboard Tab -->
@@ -81,7 +105,19 @@
                 <h3 id="current-quarter-title">Loading...</h3>
                 <p id="current-quarter-dates" class="quarter-description">Loading quarter information...</p>
             </div>
-            <div class="leaderboard-grid" id="quarterly-grid" aria-live="polite" aria-atomic="false"></div>
+            <table class="leaderboard-table" id="quarterly-table">
+                <thead>
+                    <tr>
+                        <th class="rank-col" scope="col">Rank</th>
+                        <th class="dev-col" scope="col">Developer</th>
+                        <th class="num-col" scope="col">PRs</th>
+                        <th class="num-col" scope="col">Reviews</th>
+                        <th class="num-col" scope="col">Points</th>
+                        <th class="num-col" scope="col">Streak</th>
+                    </tr>
+                </thead>
+                <tbody class="leaderboard-grid" id="quarterly-grid" aria-live="polite" aria-atomic="false"></tbody>
+            </table>
         </div>
 
         <!-- Hall of Fame Tab -->
@@ -92,25 +128,6 @@
             <div class="hall-of-fame-container" id="hall-of-fame-container" aria-live="polite" aria-atomic="false"></div>
         </div>
 
-        <!-- Top Contributors Tab -->
-        <div class="tab-content" id="contributors" role="tabpanel" aria-labelledby="tab-contributors" hidden>
-            <div class="leaderboard-grid" id="contributors-grid" aria-live="polite" aria-atomic="false"></div>
-        </div>
-
-        <!-- Top Reviewers Tab -->
-        <div class="tab-content" id="reviewers" role="tabpanel" aria-labelledby="tab-reviewers" hidden>
-            <div class="leaderboard-grid" id="reviewers-grid" aria-live="polite" aria-atomic="false"></div>
-        </div>
-
-        <!-- Top Points Tab -->
-        <div class="tab-content" id="points" role="tabpanel" aria-labelledby="tab-points" hidden>
-            <div class="leaderboard-grid" id="points-grid" aria-live="polite" aria-atomic="false"></div>
-        </div>
-
-        <!-- Top Streaks Tab -->
-        <div class="tab-content" id="streaks" role="tabpanel" aria-labelledby="tab-streaks" hidden>
-            <div class="leaderboard-grid" id="streaks-grid" aria-live="polite" aria-atomic="false"></div>
-        </div>
     </main>
 </div>
 
@@ -123,5 +140,7 @@
 <script nonce="<%= nonce %>" src="/leaderboard-client.js"></script>
 <script nonce="<%= nonce %>" src="/theme-toggle.js"></script>
 <script src="/init.js"></script>
+<!-- Self-hosted arcade header (Canvas; no external deps) -->
+<script src="/arcade.js"></script>
 </body>
 </html>

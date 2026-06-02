@@ -22,7 +22,8 @@ import {
     getPointsSummaryController,
     getStreakLeaderboardController,
     getStreakStatsController,
-    getContributorController
+    getContributorController,
+    getContributionGridController
 } from '../controllers/contributorController.js';
 import {
     getContributors,
@@ -109,6 +110,7 @@ router.post('/admin/fix-duplicates', ensureDevOpsTeamMember, fixDuplicatesContro
 
 // Public Quarter Info (no auth required)
 router.get('/quarter-info', getQuarterInfoController);
+router.get('/contributions/grid', getContributionGridController);
 
 // Quarter Configuration (admin only)
 router.get('/admin/quarter-config', ensureDevOpsTeamMember, getQuarterConfigController);
@@ -159,6 +161,12 @@ router.get('/badges', (req, res) => {
 
 router.get('/auth/status', (req, res) => {
     try {
+        // Local dev bypass: when DISABLE_AUTH is set (never honored in production),
+        // report authenticated so admin / challenge-management content is viewable
+        // without a GitHub session. Mirrors the middleware bypass guard.
+        if (process.env.DISABLE_AUTH === 'true' && process.env.NODE_ENV !== 'production') {
+            return res.json({ isAuthenticated: true, username: 'local-dev', isDevOps: true });
+        }
         const isAuthed = typeof req.isAuthenticated === 'function' ? !!req.isAuthenticated() : false;
         if (isAuthed) {
             return res.json({ isAuthenticated: true, username: req.user?.username });

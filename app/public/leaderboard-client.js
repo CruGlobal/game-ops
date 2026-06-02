@@ -22,7 +22,7 @@ let quarterlyLeaderboard = [];
 let hallOfFame = [];
 let currentQuarterInfo = null;
 let currentTab = 'all-time';
-let currentSort = 'prCount';
+let currentSort = 'totalPoints';
 let searchTerm = '';
 let userDevOpsStatus = { isDevOps: false, showDevOpsMembers: true, isAuthenticated: false };
 
@@ -115,6 +115,7 @@ function initializeEventListeners() {
     if (sortSelect) {
         sortSelect.addEventListener('change', (e) => {
             currentSort = e.target.value;
+            updateViewDescription();
             renderCurrentTab();
         });
     }
@@ -210,17 +211,13 @@ async function loadLeaderboardData() {
     try {
         showLoading();
 
-        const [contributorsData, reviewersData, allTimeData, quarterlyData, hallOfFameData, quarterInfoData] = await Promise.all([
-            fetchData('/api/top-contributors'),
-            fetchData('/api/top-reviewers'),
+        const [allTimeData, quarterlyData, hallOfFameData, quarterInfoData] = await Promise.all([
             fetchData('/api/leaderboard/all-time'),
             fetchData('/api/leaderboard/quarterly'),
             fetchData('/api/leaderboard/hall-of-fame'),
             fetchData('/api/quarter-info')
         ]);
 
-        allContributors = contributorsData;
-        allReviewers = reviewersData;
         // Server returns { success, data: [...] } for all-time
         allTimeLeaderboard = allTimeData?.data || allTimeData || [];
         // Server returns { success, data: [...] } for quarterly (array of contributors)
@@ -261,8 +258,8 @@ function updateQuarterInfoDisplay() {
     }
 
     if (datesEl) {
-        const startDate = new Date(currentQuarterInfo.quarterDates.start).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
-        const endDate = new Date(currentQuarterInfo.quarterDates.end).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+        const startDate = new Date(currentQuarterInfo.quarterDates.start).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+        const endDate = new Date(currentQuarterInfo.quarterDates.end).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
         datesEl.textContent = `${startDate} - ${endDate}`;
     }
 }
@@ -386,18 +383,6 @@ function renderCurrentTab() {
         case 'hall-of-fame':
             renderHallOfFame();
             break;
-        case 'contributors':
-            renderTopContributors();
-            break;
-        case 'reviewers':
-            renderTopReviewers();
-            break;
-        case 'points':
-            renderTopPoints();
-            break;
-        case 'streaks':
-            renderTopStreaks();
-            break;
     }
 }
 
@@ -460,10 +445,40 @@ function renderTopStreaks() {
     renderLeaderboard('streaks-grid', sortedUsers, 'streaks');
 }
 
+// Human-readable ranking labels for the View selector
+const VIEW_LABELS = {
+    totalPoints: 'total points earned',
+    prCount: 'pull requests merged',
+    reviewCount: 'code reviews completed',
+    currentStreak: 'current contribution streak',
+    longestStreak: 'longest contribution streak'
+};
+
+function updateViewDescription() {
+    const el = document.querySelector('#all-time-info .quarter-description');
+    if (el) {
+        el.textContent = `All-time contributors ranked by ${VIEW_LABELS[currentSort] || 'total points earned'}`;
+    }
+    updateSortIndicator();
+}
+
+/** Highlight the table column the current View ranks by. */
+function updateSortIndicator() {
+    const keyMap = {
+        totalPoints: 'allTimePoints', prCount: 'prCount', reviewCount: 'reviewCount',
+        currentStreak: 'currentStreak', longestStreak: 'currentStreak'
+    };
+    const activeKey = keyMap[currentSort] || 'allTimePoints';
+    document.querySelectorAll('#all-time-table thead th').forEach(th => {
+        th.classList.toggle('sorted', th.dataset.sortkey === activeKey);
+    });
+}
+
 function renderAllTimeLeaderboard() {
     const filteredUsers = filterUsers(allTimeLeaderboard);
     const sortedUsers = sortUsers(filteredUsers, currentSort);
 
+    updateViewDescription();
     renderLeaderboard('all-time-grid', sortedUsers, 'all-time');
 }
 
@@ -482,82 +497,34 @@ function renderQuarterlyGrid(gridId, users) {
     grid.innerHTML = '';
 
     if (users.length === 0) {
-        grid.innerHTML = `
-            <div class="empty-state">
-                <div class="empty-state-icon">📅</div>
-                <div class="empty-state-text">No contributors this quarter yet</div>
-            </div>
-        `;
+        grid.innerHTML = tableMessageRow('📅', 'No contributors this quarter yet');
         return;
     }
 
+    const maxPoints = maxPointsOf(users, 'pointsThisQuarter');
     users.forEach((user, index) => {
-        const card = createQuarterlyCard(user, index + 1);
+        const card = createQuarterlyCard(user, index + 1, maxPoints);
         grid.appendChild(card);
     });
 }
 
-function createQuarterlyCard(user, rank) {
-    const card = document.createElement('div');
-    card.className = 'leaderboard-card';
-    card.setAttribute('data-username', user.username);
-    card.setAttribute('data-rank', rank);
-    card.style.cursor = 'pointer';
-
-    // Make card clickable to navigate to profile
-    card.addEventListener('click', () => {
-        window.location.href = `/profile/${user.username}`;
-    });
-
-    // Rank display: medal + number for top 3, just number for others
-    const rankBadgeClass = rank <= 3 ? `rank-badge rank-${rank}` : 'rank-badge';
-    const medalEmoji = rank === 1 ? '🥇 ' : rank === 2 ? '🥈 ' : rank === 3 ? '🥉 ' : '';
-    const rankDisplay = `${medalEmoji}#${rank}`;
+function createQuarterlyCard(user, rank, maxPoints = 0) {
+    const row = makeRow(user, rank);
 
     const quarterStats = user.quarterlyStats || {};
     const prsThisQuarter = (typeof user.prsThisQuarter === 'number') ? user.prsThisQuarter : (quarterStats.prsThisQuarter || 0);
     const reviewsThisQuarter = (typeof user.reviewsThisQuarter === 'number') ? user.reviewsThisQuarter : (quarterStats.reviewsThisQuarter || 0);
     const pointsThisQuarter = (typeof user.pointsThisQuarter === 'number') ? user.pointsThisQuarter : (quarterStats.pointsThisQuarter || 0);
 
-    card.innerHTML = `
-        <div class="${rankBadgeClass}" data-rank-display>${rankDisplay}</div>
-
-        <div class="contributor-info">
-            <div class="contributor-header">
-                <img src="${escapeHtml(user.avatarUrl)}" alt="${escapeHtml(user.username)}" class="contributor-avatar">
-                <div class="contributor-name">${escapeHtml(user.username)}</div>
-            </div>
-            <div class="stats-row">
-                <div class="stat-item">
-                    <span class="stat-icon">📝</span>
-                    <div>
-                        <div class="stat-label">PRs</div>
-                        <div class="stat-value" data-stat="prsThisQuarter">${prsThisQuarter}</div>
-                    </div>
-                </div>
-                <div class="stat-item">
-                    <span class="stat-icon">👀</span>
-                    <div>
-                        <div class="stat-label">Reviews</div>
-                        <div class="stat-value" data-stat="reviewsThisQuarter">${reviewsThisQuarter}</div>
-                    </div>
-                </div>
-                <div class="stat-item">
-                    <span class="stat-icon">⭐</span>
-                    <div>
-                        <div class="stat-label">Points</div>
-                        <div class="stat-value" data-stat="pointsThisQuarter">${pointsThisQuarter}</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="badges-section">
-            <div class="quarter-badge">📅 This Quarter</div>
-        </div>
+    row.innerHTML = `
+        ${rankCellHTML(rank)}
+        ${devCellHTML(user)}
+        ${numCellHTML('prsThisQuarter', prsThisQuarter)}
+        ${numCellHTML('reviewsThisQuarter', reviewsThisQuarter)}
+        ${pointsCellHTML('pointsThisQuarter', pointsThisQuarter, maxPoints)}
+        ${numCellHTML('currentStreak', user.currentStreak || 0, { suffix: ' days' })}
     `;
-
-    return card;
+    return row;
 }
 
 function renderHallOfFame() {
@@ -602,7 +569,7 @@ function createHallOfFameCard(winner, index) {
     card.innerHTML = `
         <div class="hall-card-header">
             <div class="quarter-badge">${escapeHtml(winner.quarter)}${categoryLabel}</div>
-            <div class="quarter-date">${new Date(winner.quarterStart).toLocaleDateString()} - ${new Date(winner.quarterEnd).toLocaleDateString()}</div>
+            <div class="quarter-date">${new Date(winner.quarterStart).toLocaleDateString('en-US', { timeZone: 'UTC' })} - ${new Date(winner.quarterEnd).toLocaleDateString('en-US', { timeZone: 'UTC' })}</div>
         </div>
 
         <div class="hall-champion">
@@ -662,11 +629,33 @@ function filterUsers(users) {
 }
 
 function sortUsers(users, sortBy) {
-    return [...users].sort((a, b) => {
-        const aVal = a[sortBy] || 0;
-        const bVal = b[sortBy] || 0;
-        return bVal - aVal;
-    });
+    // "Total Points" means lifetime points (allTimePoints) on the all-time board,
+    // not the quarter-resettable totalPoints. Fall back to totalPoints if absent.
+    const pick = (u) => sortBy === 'totalPoints'
+        ? (u.allTimePoints ?? u.totalPoints ?? 0)
+        : (u[sortBy] ?? 0);
+    return [...users].sort((a, b) => Number(pick(b)) - Number(pick(a)));
+}
+
+/**
+ * A full-width message row for the table body (empty/error/loading states).
+ * `<tbody>` may only contain rows, so messages live in a colspan cell.
+ */
+function tableMessageRow(icon, text) {
+    return `<tr class="lb-message-row"><td colspan="6">
+        <div class="empty-state">
+            <div class="empty-state-icon">${icon}</div>
+            <div class="empty-state-text">${text}</div>
+        </div>
+    </td></tr>`;
+}
+
+/** Max of the points metric across the rows, for sizing the magnitude bar. */
+function maxPointsOf(users, key) {
+    return users.reduce((m, u) => {
+        const v = key === 'allTimePoints' ? (u.allTimePoints ?? u.totalPoints ?? 0) : (u[key] ?? 0);
+        return Math.max(m, Number(v) || 0);
+    }, 0);
 }
 
 function renderLeaderboard(gridId, users, type) {
@@ -676,155 +665,104 @@ function renderLeaderboard(gridId, users, type) {
     grid.innerHTML = '';
 
     if (users.length === 0) {
-        grid.innerHTML = `
-            <div class="empty-state">
-                <div class="empty-state-icon">🔍</div>
-                <div class="empty-state-text">No contributors found</div>
-            </div>
-        `;
+        grid.innerHTML = tableMessageRow('🔍', 'No contributors found');
         return;
     }
 
+    const maxPoints = maxPointsOf(users, 'allTimePoints');
     users.forEach((user, index) => {
-        const card = createLeaderboardCard(user, index + 1, type);
+        const card = createLeaderboardCard(user, index + 1, type, maxPoints);
         grid.appendChild(card);
     });
 }
 
-function createLeaderboardCard(user, rank, type) {
-    const card = document.createElement('div');
-    card.className = 'leaderboard-card';
-    card.setAttribute('data-username', user.username);
-    card.setAttribute('data-rank', rank);
-    card.style.cursor = 'pointer';
-
-    // Make card clickable to navigate to profile
-    card.addEventListener('click', () => {
-        window.location.href = `/profile/${user.username}`;
-    });
-
-    // Rank display: medal + number for top 3, just number for others
+/**
+ * Build the shared rank cell. `data-rank-display` is read by the live-update
+ * rank animation, so its text format must match animateRankChange().
+ */
+function rankCellHTML(rank) {
     const rankBadgeClass = rank <= 3 ? `rank-badge rank-${rank}` : 'rank-badge';
     const medalEmoji = rank === 1 ? '🥇 ' : rank === 2 ? '🥈 ' : rank === 3 ? '🥉 ' : '';
-    const rankDisplay = `${medalEmoji}#${rank}`;
-
-    // Stats based on type
-    const statsHTML = generateStatsHTML(user, type);
-
-    // Badges
-    const badgesHTML = generateBadgesHTML(user);
-
-    card.innerHTML = `
-        <div class="${rankBadgeClass}" data-rank-display>${rankDisplay}</div>
-
-        <div class="contributor-info">
-            <div class="contributor-header">
-                <img src="${escapeHtml(user.avatarUrl)}" alt="${escapeHtml(user.username)}" class="contributor-avatar">
-                <div class="contributor-name">${escapeHtml(user.username)}</div>
-            </div>
-            <div class="stats-row">
-                ${statsHTML}
-            </div>
-        </div>
-
-        <div class="badges-section">
-            ${type === 'all-time' ? '<div class="alltime-badge">🌟 All-Time</div>' : ''}
-            ${badgesHTML}
-        </div>
-    `;
-
-    return card;
+    return `<td class="rank-cell"><span class="${rankBadgeClass}" data-rank-display>${medalEmoji}#${rank}</span></td>`;
 }
 
-function generateStatsHTML(user, type) {
-    const stats = [];
+/**
+ * Build a numeric stat cell. The value lives in a bare `data-stat` span (no
+ * icon/suffix inside it) so updateStatsInPlace can overwrite textContent without
+ * clobbering decoration. `suffix` (e.g. " days") matches the in-place formatter.
+ */
+function numCellHTML(statKey, value, { suffix = '', extraClass = '' } = {}) {
+    return `<td class="num-cell ${extraClass}"><span class="stat-value" data-stat="${statKey}">${value}${suffix}</span></td>`;
+}
 
-    // Always show PRs and Reviews for 'all-time' tab
-    if (type === 'all-time' || type === 'contributors') {
-        stats.push(`
-            <div class="stat-item">
-                <span class="stat-icon">📝</span>
-                <div>
-                    <div class="stat-label">PRs</div>
-                    <div class="stat-value" data-stat="prCount">${user.prCount || 0}</div>
+/**
+ * Developer cell: avatar + name, with earned badges and an optional bills chip
+ * on a second line. The bills value is a bare `data-stat` span for live updates.
+ */
+function devCellHTML(user) {
+    const badgesHTML = generateBadgesHTML(user);
+    const billsChip = user.totalBillsAwarded
+        ? `<span class="bill-chip"><span class="stat-icon">💵</span><span class="stat-value" data-stat="totalBillsAwarded">${user.totalBillsAwarded}</span></span>`
+        : '';
+    const meta = (badgesHTML || billsChip)
+        ? `<div class="row-badges">${badgesHTML}${billsChip}</div>`
+        : '';
+    return `
+        <td class="dev-cell">
+            <div class="dev-cell-inner">
+                <img src="${escapeHtml(user.avatarUrl)}" alt="${escapeHtml(user.username)}" class="contributor-avatar">
+                <div class="dev-meta">
+                    <span class="contributor-name">${escapeHtml(user.username)}</span>
+                    ${meta}
                 </div>
             </div>
-        `);
-    }
+        </td>`;
+}
 
-    if (type === 'all-time' || type === 'reviewers') {
-        stats.push(`
-            <div class="stat-item">
-                <span class="stat-icon">👀</span>
-                <div>
-                    <div class="stat-label">Reviews</div>
-                    <div class="stat-value" data-stat="reviewCount">${user.reviewCount || 0}</div>
-                </div>
-            </div>
-        `);
-    }
+/**
+ * Points cell with a magnitude bar (relative to the column max) so the eye can
+ * scan ranking strength down the table — the leaderboard's primary axis.
+ */
+function pointsCellHTML(statKey, points, maxPoints) {
+    const pct = maxPoints > 0 ? Math.max(2, Math.round((Number(points) / maxPoints) * 100)) : 0;
+    return `<td class="num-cell points-cell">
+        <span class="points-bar" style="width:${pct}%" aria-hidden="true"></span>
+        <span class="stat-value" data-stat="${statKey}">${points}</span>
+    </td>`;
+}
 
-    if (type === 'all-time' || type === 'points') {
-        stats.push(`
-            <div class="stat-item">
-                <span class="stat-icon">⭐</span>
-                <div>
-                    <div class="stat-label">Points</div>
-                    <div class="stat-value" data-stat="totalPoints">${user.totalPoints || 0}</div>
-                </div>
-            </div>
-        `);
-    }
+function makeRow(user, rank) {
+    const row = document.createElement('tr');
+    row.className = 'leaderboard-row';
+    row.setAttribute('data-username', user.username);
+    row.setAttribute('data-rank', rank);
+    row.style.cursor = 'pointer';
+    row.addEventListener('click', () => {
+        window.location.href = `/profile/${user.username}`;
+    });
+    return row;
+}
 
-    if (type === 'all-time' || type === 'streaks') {
-        stats.push(`
-            <div class="stat-item">
-                <span class="stat-icon">🔥</span>
-                <div>
-                    <div class="stat-label">Streak</div>
-                    <div class="stat-value" data-stat="currentStreak">${user.currentStreak || 0} days</div>
-                </div>
-            </div>
-        `);
-    }
+function createLeaderboardCard(user, rank, type, maxPoints = 0) {
+    const row = makeRow(user, rank);
+    const lifetimePoints = user.allTimePoints ?? user.totalPoints ?? 0;
 
-    // Bills awarded
-    if (user.totalBillsAwarded) {
-        stats.push(`
-            <div class="stat-item">
-                <span class="stat-icon">💵</span>
-                <div>
-                    <div class="stat-label">Bills</div>
-                    <div class="stat-value" data-stat="totalBillsAwarded">${user.totalBillsAwarded}</div>
-                </div>
-            </div>
-        `);
-    }
-
-    return stats.join('');
+    row.innerHTML = `
+        ${rankCellHTML(rank)}
+        ${devCellHTML(user)}
+        ${numCellHTML('prCount', user.prCount || 0)}
+        ${numCellHTML('reviewCount', user.reviewCount || 0)}
+        ${pointsCellHTML('allTimePoints', lifetimePoints, maxPoints)}
+        ${numCellHTML('currentStreak', user.currentStreak || 0, { suffix: ' days' })}
+    `;
+    return row;
 }
 
 function generateBadgesHTML(user) {
     const elements = [];
 
-    // Points badge
-    if (user.totalPoints && user.totalPoints > 0) {
-        elements.push(`
-            <div class="points-badge">
-                ⭐ ${user.totalPoints} points
-            </div>
-        `);
-    }
-
-    // Current streak
-    if (user.currentStreak && user.currentStreak > 0) {
-        const isActive = user.currentStreak > 0;
-        elements.push(`
-            <div class="streak-indicator ${isActive ? 'active' : ''}">
-                🔥 ${user.currentStreak} day streak
-            </div>
-        `);
-    }
+    // Points and current streak are already shown in the card's stats grid, so
+    // they are not repeated here as chips — only earned badges are rendered below.
 
     // Streak badges
     if (user.streakBadges) {
@@ -873,30 +811,23 @@ function generateBadgesHTML(user) {
 }
 
 function showLoading() {
-    const grids = ['all-time-grid', 'quarterly-grid', 'contributors-grid', 'reviewers-grid', 'points-grid', 'streaks-grid'];
+    const grids = ['all-time-grid', 'quarterly-grid'];
     grids.forEach(gridId => {
         const grid = document.getElementById(gridId);
         if (grid) {
-            grid.innerHTML = `
-                <div class="loading-spinner">
-                    <div class="spinner"></div>
-                </div>
-            `;
+            grid.innerHTML = `<tr class="lb-message-row"><td colspan="6">
+                <div class="loading-spinner"><div class="spinner"></div></div>
+            </td></tr>`;
         }
     });
 }
 
 function showError(message) {
-    const grids = ['all-time-grid', 'quarterly-grid', 'contributors-grid', 'reviewers-grid', 'points-grid', 'streaks-grid'];
+    const grids = ['all-time-grid', 'quarterly-grid'];
     grids.forEach(gridId => {
         const grid = document.getElementById(gridId);
         if (grid) {
-            grid.innerHTML = `
-                <div class="empty-state">
-                    <div class="empty-state-icon">⚠️</div>
-                    <div class="empty-state-text">${message}</div>
-                </div>
-            `;
+            grid.innerHTML = tableMessageRow('⚠️', message);
         }
     });
 }
@@ -1369,19 +1300,16 @@ function showError(message) {
         grid.innerHTML = '';
         if (newData.length === 0) {
             grid.style.visibility = '';
-            grid.innerHTML = `
-                <div class="empty-state">
-                    <div class="empty-state-icon">🔍</div>
-                    <div class="empty-state-text">No contributors found</div>
-                </div>
-            `;
+            grid.innerHTML = tableMessageRow('🔍', 'No contributors found');
             return;
         }
 
         if (type === 'quarterly') {
-            newData.forEach((user, index) => grid.appendChild(createQuarterlyCard(user, index + 1)));
+            const maxPoints = maxPointsOf(newData, 'pointsThisQuarter');
+            newData.forEach((user, index) => grid.appendChild(createQuarterlyCard(user, index + 1, maxPoints)));
         } else {
-            newData.forEach((user, index) => grid.appendChild(createLeaderboardCard(user, index + 1, type)));
+            const maxPoints = maxPointsOf(newData, 'allTimePoints');
+            newData.forEach((user, index) => grid.appendChild(createLeaderboardCard(user, index + 1, type, maxPoints)));
         }
 
         // Force layout calculation while hidden, then reveal
