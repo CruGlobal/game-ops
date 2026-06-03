@@ -30,6 +30,7 @@ import { socketConfig, SOCKET_EVENTS } from './config/websocket-config.js';
 import { setSocketIO } from './utils/socketEmitter.js';
 import testRoutes from './routes/testRoutes.js';
 import { ensureAppSettingsTable, getCronEnabled } from './lib/appSettings.js';
+import { mountMcp } from './mcp/index.js';
 
 
 dotenv.config();
@@ -249,6 +250,9 @@ if (process.env.NODE_ENV !== 'production') {
     app.use('/api', testRoutes);
     logger.info('Test routes enabled for WebSocket testing');
 }
+
+// MCP server (/mcp) — gated by the same GitHub DevOps-team auth as admin.
+mountMcp(app);
 
 // Error-handling middleware must be registered AFTER all routes so it can
 // catch errors thrown by them.
