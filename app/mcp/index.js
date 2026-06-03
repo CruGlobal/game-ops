@@ -5,6 +5,7 @@
 // Stateless transport: each POST builds a fresh server + transport, so there is
 // no session state to leak between callers. Mutating tools accept `dry_run`
 // (default true) and always echo it back, mirroring the ticketmd MCP.
+import crypto from 'crypto';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { z } from 'zod';
@@ -210,13 +211,38 @@ export function buildMcpServer(actor) {
     return server;
 }
 
+// Constant-time string compare (length-guarded so timingSafeEqual never throws).
+function safeEqual(a, b) {
+    const ba = Buffer.from(String(a)), bb = Buffer.from(String(b));
+    return ba.length === bb.length && crypto.timingSafeEqual(ba, bb);
+}
+
+// Auth for /mcp. Two paths so both browser sessions and headless agents work:
+//   1. Bearer token — `Authorization: Bearer <MCP_BEARER_TOKEN>` (the token is
+//      stored in AWS Parameter Store and injected as the MCP_BEARER_TOKEN env var
+//      on the ECS task). Validated in constant time; a present-but-wrong token is
+//      rejected (no fallthrough). This is the path for headless / remote agents.
+//   2. No bearer header — local/test bypass (DISABLE_AUTH, non-prod), otherwise
+//      the same GitHub DevOps-team session gate as the admin pages.
+function mcpAuth(req, res, next) {
+    const hdr = req.header('Authorization') || '';
+    if (hdr.startsWith('Bearer ')) {
+        const expected = process.env.MCP_BEARER_TOKEN;
+        if (expected && safeEqual(hdr.slice(7).trim(), expected)) { req.mcpActor = 'mcp-token'; return next(); }
+        return res.status(401).json({ jsonrpc: '2.0', error: { code: -32001, message: 'Unauthorized: invalid bearer token' }, id: null });
+    }
+    if (process.env.NODE_ENV === 'test' || (process.env.DISABLE_AUTH === 'true' && process.env.NODE_ENV !== 'production')) return next();
+    return ensureDevOpsTeamMember(req, res, next);
+}
+
 /**
- * Mount the MCP endpoint on the Express app at /mcp, behind the admin GitHub auth.
+ * Mount the MCP endpoint on the Express app at /mcp.
  * Stateless streamable-HTTP: POST carries JSON-RPC; GET/DELETE are not used.
  */
 export function mountMcp(app) {
-    app.post('/mcp', ensureDevOpsTeamMember, async (req, res) => {
-        const server = buildMcpServer(req.user && req.user.username);
+    app.post('/mcp', mcpAuth, async (req, res) => {
+        const actor = req.mcpActor || (req.user && req.user.username) || 'mcp';
+        const server = buildMcpServer(actor);
         const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
         res.on('close', () => { transport.close(); server.close(); });
         try {
@@ -228,7 +254,7 @@ export function mountMcp(app) {
         }
     });
     const methodNotAllowed = (req, res) => res.status(405).json({ jsonrpc: '2.0', error: { code: -32000, message: 'Method not allowed (stateless server: use POST)' }, id: null });
-    app.get('/mcp', ensureDevOpsTeamMember, methodNotAllowed);
-    app.delete('/mcp', ensureDevOpsTeamMember, methodNotAllowed);
+    app.get('/mcp', mcpAuth, methodNotAllowed);
+    app.delete('/mcp', mcpAuth, methodNotAllowed);
     logger.info('MCP server mounted at /mcp');
 }

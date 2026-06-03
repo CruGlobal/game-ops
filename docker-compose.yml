@@ -14,6 +14,7 @@ services:
       NODE_ENV: development
       ADMIN_PASSWORD: admin
       DISABLE_AUTH: "true"
+      MCP_BEARER_TOKEN: "local-dev-mcp-token"   # prod: sourced from Parameter Store
     env_file:
       - .env
     depends_on:
