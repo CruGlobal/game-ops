@@ -421,20 +421,34 @@
             });
             g.c += best.x; g.r += best.y; g.dir = best;
         }
+        // Attract-mode brain: BFS over open corridors to the nearest pellet and
+        // step along that path. (Greedy Manhattan steering oscillated in place
+        // once pellets only sat on the sparse contribution blocks.)
         function aiPacDir() {
-            var t = null, bd = 1e9, c, r;
-            for (c = 0; c < COLS; c++) for (r = 0; r < ROWS; r++) if (pellets[c][r]) {
-                var d = Math.abs(c - pac.c) + Math.abs(r - pac.r); if (d < bd) { bd = d; t = { c: c, r: r }; }
+            var startK = pac.c + ',' + pac.r;
+            var prev = {}; prev[startK] = { fromK: null, step: null };
+            var q = [{ c: pac.c, r: pac.r }], qi = 0, target = null;
+            var dirs = [{ x: 1, y: 0 }, { x: -1, y: 0 }, { x: 0, y: 1 }, { x: 0, y: -1 }];
+            while (qi < q.length) {
+                var cur = q[qi++];
+                if ((cur.c !== pac.c || cur.r !== pac.r) && pellets[cur.c][cur.r]) { target = cur; break; }
+                for (var i = 0; i < dirs.length; i++) {
+                    var d = dirs[i];
+                    if (!canMove(maze, cur.c, cur.r, d.x, d.y)) continue;
+                    var nk = (cur.c + d.x) + ',' + (cur.r + d.y);
+                    if (prev[nk]) continue;
+                    prev[nk] = { fromK: cur.c + ',' + cur.r, step: d };
+                    q.push({ c: cur.c + d.x, r: cur.r + d.y });
+                }
             }
-            var moves = validMoves(pac.c, pac.r, dir); if (!moves.length) moves = validMoves(pac.c, pac.r, null);
-            if (!moves.length) return dir;
-            if (!t) return moves[0];
-            var best = moves[0], bb = 1e9;
-            moves.forEach(function (m) {
-                var dist = Math.abs(pac.c + m.x - t.c) + Math.abs(pac.r + m.y - t.r) + Math.random() * 0.5;
-                if (dist < bb) { bb = dist; best = m; }
-            });
-            return best;
+            if (!target) { // no reachable pellet — keep drifting forward
+                var mv = validMoves(pac.c, pac.r, dir);
+                if (!mv.length) mv = validMoves(pac.c, pac.r, null);
+                return mv.length ? mv[0] : dir;
+            }
+            var k = target.c + ',' + target.r;            // walk back to the first step out of pac
+            while (prev[k].fromK !== startK) k = prev[k].fromK;
+            return prev[k].step;
         }
         function chaseTarget(g) {
             if (g.kind === 0) return { c: pac.c, r: pac.r };                               // Blinky: direct
