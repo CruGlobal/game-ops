@@ -1043,24 +1043,30 @@ export async function recomputeHallOfFameAll() {
 
     const currentPeriod = await getCurrentQuarter();
 
-    // Drop Hall of Fame rows that no longer belong, before rebuilding:
-    //  - a different period system (leftover "-Q" rows after switching to tertiles)
-    //  - the in-progress period, or anything with a future end date
-    // (the Hall of Fame is completed periods only). Runs even when there's no
-    // new history to scan.
-    await prisma.quarterlyWinner.deleteMany({
-        where: {
-            OR: [
-                { quarter: { not: { contains: '-' + prefix } } },
-                { quarter: currentPeriod },
-                { quarterEnd: { gt: new Date() } }
-            ]
-        }
-    });
-
     if (!minTs || !maxTs) {
+        // No history to rebuild from — only drop obviously-stale rows (a different
+        // period system, the in-progress period, or future-dated) and stop.
+        await prisma.quarterlyWinner.deleteMany({
+            where: {
+                OR: [
+                    { quarter: { not: { contains: '-' + prefix } } },
+                    { quarter: currentPeriod },
+                    { quarterEnd: { gt: new Date() } }
+                ]
+            }
+        });
         return { updatedQuarters: [], message: 'No historical activity found' };
     }
+
+    // Full rebuild: wipe every existing Hall of Fame row before regenerating.
+    // recomputeHallOfFame keys rows by the `quarter` LABEL, and a config change
+    // re-slices time and relabels periods (e.g. the tertile end-year offset shifts
+    // a period's year). Deleting only wrong-prefix/current/future rows left the
+    // old completed-period rows under their previous labels in place, so the
+    // rebuild added freshly-labeled rows alongside them — producing duplicate
+    // periods under year-off-by-one labels. Every completed period in range is
+    // regenerated from authoritative history below, so a full wipe is safe.
+    await prisma.quarterlyWinner.deleteMany({});
 
     // Helper: get the period string for a date (works for quarters or tertiles).
     const quarterFromDate = (date) => {

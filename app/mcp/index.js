@@ -16,7 +16,7 @@ import {
 } from '../services/contributorService.js';
 import {
     getQuarterConfig, getCurrentQuarter, getQuarterDateRange, updateQuarterConfig,
-    getQuarterlyLeaderboard, getAllTimeLeaderboard, getHallOfFame
+    getQuarterlyLeaderboard, getAllTimeLeaderboard, getHallOfFame, recomputeHallOfFameAll
 } from '../services/quarterlyService.js';
 import {
     getActiveChallenges, getAllChallenges, getChallengeById, getChallengeLeaderboard,
@@ -184,6 +184,15 @@ export function buildMcpServer(actor) {
             if (dry_run) return ok({ dry_run: true, would: 'create challenge', challenge: data });
             const challenge = await createChallenge(data);
             return ok({ dry_run: false, actor, challenge });
+        }));
+
+    server.tool('recompute_hall_of_fame',
+        'Rebuild the Hall of Fame from point history — drops stale/duplicate rows and regenerates every completed period.',
+        { dry_run: z.boolean().default(true) },
+        guard(async ({ dry_run }) => {
+            if (dry_run) return ok({ dry_run: true, would: 'wipe + rebuild the Hall of Fame from point history (completed periods only)' });
+            const result = await recomputeHallOfFameAll();
+            return ok({ dry_run: false, actor, result });
         }));
 
     server.tool('set_quarter_config',
