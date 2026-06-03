@@ -34,6 +34,7 @@
     var PM_COLS = 21;
     var PM_LO = Math.floor((COLS - PM_COLS) / 2);
     var PM_HI = PM_LO + PM_COLS;
+    var PM_OPEN = 0.3;          // fraction of maze walls removed — lower = denser maze
     function pmIn(c, r) { return c >= PM_LO && c < PM_HI && r >= 0 && r < ROWS; }
     var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -200,6 +201,22 @@
         if (top - 2 >= 0) hW[c][top - 2] = false;
     }
 
+    // Remove straight single-block wall segments so every maze line is >= 2 blocks
+    // long. Only clears walls (never seals a passage): a segment is dropped only
+    // when it has no collinear neighbour — vertical runs stack along r, horizontal
+    // runs along c — so runs of length >= 2 are always kept.
+    function stripSingletons(vW, hW) {
+        var c, r;
+        for (c = PM_LO; c < PM_HI - 1; c++) for (r = 0; r < ROWS; r++) if (vW[c][r]) {
+            var up = r > 0 && vW[c][r - 1], dn = r < ROWS - 1 && vW[c][r + 1];
+            if (!up && !dn) vW[c][r] = false;
+        }
+        for (r = 0; r < ROWS - 1; r++) for (c = PM_LO; c < PM_HI; c++) if (hW[c][r]) {
+            var lf = c > PM_LO && hW[c - 1][r], rg = c < PM_HI - 1 && hW[c + 1][r];
+            if (!lf && !rg) hW[c][r] = false;
+        }
+    }
+
     function genMaze() {
         var rng = makeRng(0x9E3779B1); // fixed seed -> same maze always
         var vW = [], hW = [], vis = [], c, r;
@@ -217,8 +234,9 @@
             vis[n.c][n.r] = true; stack.push({ c: n.c, r: n.r });
         }
         // Open the maze up — fewer walls = easier, but compact (keeps structure).
-        for (c = PM_LO; c < PM_HI - 1; c++) for (r = 0; r < ROWS; r++) if (vW[c][r] && rng() < 0.72) vW[c][r] = false;
-        for (c = PM_LO; c < PM_HI; c++) for (r = 0; r < ROWS - 1; r++) if (hW[c][r] && rng() < 0.72) hW[c][r] = false;
+        for (c = PM_LO; c < PM_HI - 1; c++) for (r = 0; r < ROWS; r++) if (vW[c][r] && rng() < PM_OPEN) vW[c][r] = false;
+        for (c = PM_LO; c < PM_HI; c++) for (r = 0; r < ROWS - 1; r++) if (hW[c][r] && rng() < PM_OPEN) hW[c][r] = false;
+        stripSingletons(vW, hW);
         stampGhostHouse(vW, hW);
         return { vW: vW, hW: hW };
     }
