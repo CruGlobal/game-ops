@@ -669,12 +669,434 @@
         };
     }
 
+    // ---- Galaga --------------------------------------------------------------
+    // A compact fixed-shooter on the contribution grid: lit cells in the top rows
+    // become an enemy swarm, the player ship defends the bottom. The formation
+    // sways side to side and enemies peel off to dive at the ship; clear a wave to
+    // advance to a faster one. The ship auto-fires (there is no dedicated fire key
+    // wired through); you only steer it (arrows / A-D / mouse). Attract mode flies
+    // the ship itself.
+    function Galaga() {
+        var env, mode, status, score, lives, level;
+        var player, pw, shipY, swarm, sway, swayDir, swayAmp;
+        var pb, eb;                 // player bullets, enemy bullets
+        var fireCd, diveCd, fireTimer, restTimer;
+        var GCOL, pSpd, eSpd, diveSpd, swaySpd;
+
+        function tune() {
+            var L = env.L;
+            pw = L.cell * 2.0;
+            shipY = L.oy + L.gh + 2;
+            swayAmp = L.step * 1.4;
+            pSpd = L.step * 13;
+            eSpd = L.step * (6 + (level - 1) * 0.6);
+            diveSpd = L.step * (4.5 + (level - 1) * 0.5);
+            swaySpd = L.step * (1.4 + (level - 1) * 0.25);
+        }
+        function buildSwarm() {
+            var L = env.L;
+            GCOL = [env.colors.danger, env.colors.highlight, '#f78fd0', '#27c0e0', env.colors.accent];
+            swarm = [];
+            var rows = Math.min(3, ROWS - 2);
+            for (var c = 0; c < COLS; c++) for (var r = 0; r < rows; r++) {
+                if (env.levels[c][r] > 0) {
+                    var p = cellXY(L, c, r);
+                    swarm.push({ hx: p.x + L.cell / 2, hy: p.y + L.cell / 2, x: 0, y: 0, alive: true, kind: env.levels[c][r], dive: false, t: 0, sx: 0 });
+                }
+            }
+            // guarantee a playable swarm if the contribution grid is sparse
+            for (var i = swarm.length, g = 0; i < 12 && g < 12; g++) {
+                var cc = 3 + g * 4, rr = g % rows;
+                if (cc >= COLS) break;
+                var q = cellXY(L, cc, rr);
+                swarm.push({ hx: q.x + L.cell / 2, hy: q.y + L.cell / 2, x: 0, y: 0, alive: true, kind: 1 + (g % 4), dive: false, t: 0, sx: 0 });
+                i++;
+            }
+        }
+        function newWave() {
+            var L = env.L;
+            tune();
+            player = L.ox + L.gw / 2; pb = []; eb = [];
+            sway = 0; swayDir = 1; fireCd = 0; diveCd = 1.4; fireTimer = 0.6; restTimer = 0;
+            buildSwarm();
+        }
+        function reset(full) {
+            if (full) { score = 0; lives = 3; level = 1; status = 'running'; }
+            newWave();
+        }
+        function aliveCount() { var n = 0; for (var i = 0; i < swarm.length; i++) if (swarm[i].alive) n++; return n; }
+        function ePos(e) { return e.dive ? { x: e.x, y: e.y } : { x: e.hx + sway, y: e.hy }; }
+        function startDive() {
+            var pool = [];
+            for (var i = 0; i < swarm.length; i++) if (swarm[i].alive && !swarm[i].dive) pool.push(swarm[i]);
+            if (!pool.length) return;
+            var e = pool[Math.floor(Math.random() * pool.length)];
+            e.dive = true; e.t = 0; e.x = e.hx + sway; e.y = e.hy; e.sx = e.x;
+        }
+        function enemyFire() {
+            var pool = [];
+            for (var i = 0; i < swarm.length; i++) if (swarm[i].alive) pool.push(swarm[i]);
+            if (!pool.length) return;
+            var e = pool[Math.floor(Math.random() * pool.length)], p = ePos(e);
+            eb.push({ x: p.x, y: p.y });
+        }
+        function hitPlayer() {
+            if (mode === 'play') {
+                Sfx.death(); lives--; if (lives <= 0) { status = 'lost'; return; }
+                pb = []; eb = []; player = env.L.ox + env.L.gw / 2; restTimer = 0.6;
+                for (var i = 0; i < swarm.length; i++) swarm[i].dive = false;
+            } else { eb = []; }
+        }
+        function aiTarget() {
+            // steer toward the nearest threat: a diver if any, else the lowest enemy
+            var best = null, bestScore = -1;
+            for (var i = 0; i < swarm.length; i++) {
+                var e = swarm[i]; if (!e.alive) continue;
+                var p = ePos(e), s = p.y + (e.dive ? 1000 : 0) - Math.abs(p.x - player) * 0.1;
+                if (s > bestScore) { bestScore = s; best = p.x; }
+            }
+            return best == null ? player : best;
+        }
+
+        return {
+            label: '🚀 Galaga',
+            init: function (e, o) { env = e; mode = o.mode; reset(true); },
+            update: function (dt, ctrl) {
+                if (status !== 'running') return;
+                var L = env.L;
+                if (restTimer > 0) { restTimer -= dt; return; }
+
+                // ship steering
+                if (mode === 'play') {
+                    if (ctrl.mouseX != null) player = ctrl.mouseX;
+                    else { var ps = L.cssW * 1.3; if (ctrl.held.left) player -= ps * dt; if (ctrl.held.right) player += ps * dt; }
+                } else {
+                    var tx = aiTarget(); player += Math.max(-L.cssW * dt, Math.min(L.cssW * dt, (tx - player) * Math.min(1, dt * 7)));
+                }
+                player = Math.max(L.ox + pw / 2, Math.min(L.ox + L.gw - pw / 2, player));
+
+                // formation sway
+                sway += swayDir * swaySpd * dt;
+                if (sway > swayAmp) { sway = swayAmp; swayDir = -1; }
+                else if (sway < -swayAmp) { sway = -swayAmp; swayDir = 1; }
+
+                // auto-fire
+                fireCd -= dt;
+                if (fireCd <= 0 && pb.length < 4) { pb.push({ x: player, y: shipY }); fireCd = 0.42; if (mode === 'play') Sfx.waka(true); }
+
+                // dives + enemy fire
+                diveCd -= dt; if (diveCd <= 0) { startDive(); diveCd = Math.max(0.5, 1.6 - level * 0.1); }
+                fireTimer -= dt; if (fireTimer <= 0) { enemyFire(); fireTimer = Math.max(0.35, 0.9 - level * 0.05); }
+
+                // divers
+                for (var i = 0; i < swarm.length; i++) {
+                    var e = swarm[i]; if (!e.alive || !e.dive) continue;
+                    e.t += dt;
+                    e.y += diveSpd * dt;
+                    e.x = e.sx + Math.sin(e.t * 6) * L.step * 1.2 + (player - e.sx) * Math.min(0.6, e.t * 0.4);
+                    if (e.y > shipY + L.cell) { e.dive = false; }      // peeled off — rejoin formation
+                    else if (Math.abs(e.x - player) < L.cell * 0.7 && e.y > shipY - L.cell) { hitPlayer(); if (status !== 'running') return; }
+                }
+
+                // player bullets travel up
+                for (var b = pb.length - 1; b >= 0; b--) {
+                    pb[b].y -= pSpd * dt;
+                    if (pb[b].y < L.oy - L.cell) { pb.splice(b, 1); continue; }
+                    for (var j = 0; j < swarm.length; j++) {
+                        var en = swarm[j]; if (!en.alive) continue;
+                        var ep = ePos(en);
+                        if (Math.abs(ep.x - pb[b].x) < L.cell * 0.55 && Math.abs(ep.y - pb[b].y) < L.cell * 0.55) {
+                            en.alive = false; score += 10 * en.kind; pb.splice(b, 1);
+                            if (mode === 'play') Sfx.eatGhost();
+                            break;
+                        }
+                    }
+                }
+
+                // enemy bullets travel down
+                for (var k = eb.length - 1; k >= 0; k--) {
+                    eb[k].y += eSpd * dt;
+                    if (eb[k].y > shipY + L.cell) { eb.splice(k, 1); continue; }
+                    if (Math.abs(eb[k].x - player) < pw / 2 && Math.abs(eb[k].y - shipY) < L.cell * 0.6) { eb.splice(k, 1); hitPlayer(); if (status !== 'running') return; }
+                }
+
+                if (aliveCount() === 0) {
+                    if (mode === 'play') { level++; Sfx.level(); newWave(); } else newWave();
+                }
+            },
+            draw: function () {
+                var L = env.L, colors = env.colors, ctx = L.ctx, i;
+                drawGrid(L, colors, env.levels, function () { return 0.12; });
+                // swarm
+                for (i = 0; i < swarm.length; i++) {
+                    var e = swarm[i]; if (!e.alive) continue;
+                    var p = ePos(e);
+                    drawBug(ctx, p.x, p.y, L.cell, GCOL[(e.kind - 1) % GCOL.length]);
+                }
+                // bullets
+                ctx.fillStyle = colors.highlight;
+                for (i = 0; i < pb.length; i++) { var w = Math.max(2, L.cell * 0.12); roundRect(ctx, pb[i].x - w / 2, pb[i].y - L.cell * 0.3, w, L.cell * 0.6, w / 2); ctx.fill(); }
+                ctx.fillStyle = colors.danger;
+                for (i = 0; i < eb.length; i++) { var w2 = Math.max(2, L.cell * 0.12); roundRect(ctx, eb[i].x - w2 / 2, eb[i].y - L.cell * 0.3, w2, L.cell * 0.6, w2 / 2); ctx.fill(); }
+                // ship
+                var s = L.cell;
+                ctx.fillStyle = colors.accent;
+                ctx.beginPath();
+                ctx.moveTo(player, shipY - s * 0.55);
+                ctx.lineTo(player - pw / 2, shipY + s * 0.35);
+                ctx.lineTo(player + pw / 2, shipY + s * 0.35);
+                ctx.closePath(); ctx.fill();
+                ctx.fillStyle = colors.highlight;
+                ctx.beginPath(); ctx.arc(player, shipY - s * 0.05, Math.max(1.5, s * 0.14), 0, 7); ctx.fill();
+            },
+            getStatus: function () { return status; },
+            getScore: function () { return score; },
+            getLives: function () { return lives; },
+            getLevel: function () { return level; }
+        };
+    }
+
+    // A little Galaga-style enemy: rounded body, swept wings, two eyes.
+    function drawBug(ctx, x, y, s, color) {
+        var w = s * 0.78, h = s * 0.66, gx = x - w / 2, gy = y - h / 2;
+        ctx.fillStyle = color;
+        ctx.beginPath();                                   // swept wings
+        ctx.moveTo(gx, gy + h * 0.25); ctx.lineTo(gx - s * 0.24, gy); ctx.lineTo(gx - s * 0.06, gy + h * 0.8); ctx.closePath();
+        ctx.moveTo(gx + w, gy + h * 0.25); ctx.lineTo(gx + w + s * 0.24, gy); ctx.lineTo(gx + w + s * 0.06, gy + h * 0.8); ctx.closePath();
+        ctx.fill();
+        roundRect(ctx, gx, gy, w, h, s * 0.22); ctx.fill(); // body
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath(); ctx.arc(x - w * 0.22, y, Math.max(1, s * 0.09), 0, 7); ctx.fill();
+        ctx.beginPath(); ctx.arc(x + w * 0.22, y, Math.max(1, s * 0.09), 0, 7); ctx.fill();
+        ctx.fillStyle = '#1b2a6b';
+        ctx.beginPath(); ctx.arc(x - w * 0.22, y, Math.max(1, s * 0.045), 0, 7); ctx.fill();
+        ctx.beginPath(); ctx.arc(x + w * 0.22, y, Math.max(1, s * 0.045), 0, 7); ctx.fill();
+    }
+
+    // ---- Puzzle Bobble -------------------------------------------------------
+    // A bubble shooter on a hex-packed wall seeded from the contribution grid.
+    // The shooter at the bottom auto-launches a bubble along the current aim; a
+    // bubble that lands adjacent to two or more of its own color pops the whole
+    // matching cluster, and any bubbles left dangling (no path to the ceiling)
+    // drop too. Every few shots the ceiling presses down a row. Steer the aim
+    // (arrows / A-D / mouse); attract mode aims itself. Clear the wall to win;
+    // let it reach the shooter and it's over.
+    function PuzzleBobble() {
+        var env, mode, status, score;
+        var rad, rowH, originX, originY, bcols, shooterX, shooterY, dangerY;
+        var grid, cur, next, fly, angle, shotCd, pushCd, shots, COLORS;
+
+        function colsForRow(r) { return bcols - (r % 2); }
+        function center(r, c) { return { x: originX + rad + c * 2 * rad + (r % 2) * rad, y: originY + rad + r * rowH }; }
+        function ensureRow(r) { while (grid.length <= r) grid.push(new Array(colsForRow(grid.length)).fill(null)); }
+        function neighbors(r, c) {
+            var odd = r % 2, out = [
+                [r, c - 1], [r, c + 1],
+                [r - 1, c - (odd ? 0 : 1)], [r - 1, c + (odd ? 1 : 0)],
+                [r + 1, c - (odd ? 0 : 1)], [r + 1, c + (odd ? 1 : 0)]
+            ];
+            return out;
+        }
+        function at(r, c) { return (grid[r] && c >= 0 && c < grid[r].length) ? grid[r][c] : undefined; }
+        function colorsInPlay() {
+            var set = {}, list = [];
+            for (var r = 0; r < grid.length; r++) for (var c = 0; c < (grid[r] || []).length; c++) { var b = grid[r][c]; if (b && !set[b]) { set[b] = 1; list.push(b); } }
+            return list.length ? list : COLORS;
+        }
+        function randColor() { var p = colorsInPlay(); return p[Math.floor(Math.random() * p.length)]; }
+
+        function seed() {
+            var L = env.L, rows = Math.min(3, Math.max(2, Math.floor((dangerY - originY) / rowH) - 1));
+            grid = [];
+            for (var r = 0; r < rows; r++) {
+                var row = new Array(colsForRow(r)).fill(null);
+                for (var c = 0; c < row.length; c++) {
+                    var gc = Math.min(COLS - 1, Math.floor((c + 0.5) * COLS / bcols)), gr = Math.min(ROWS - 1, r);
+                    var lvl = env.levels[gc][gr];
+                    var h = Math.abs(Math.sin(c * 12.9898 + r * 78.233) * 43758.5453) % 1;
+                    if (lvl > 0 || h < 0.62) row[c] = COLORS[Math.floor((Math.abs(Math.sin((c + 1) * (r + 3) * 7.1)) % 1) * COLORS.length)];
+                }
+                grid.push(row);
+            }
+        }
+        function tune() {
+            var L = env.L;
+            rad = Math.max(4, L.cell * 0.72);
+            rowH = rad * 1.7;
+            originX = L.ox; originY = L.oy;
+            shooterX = L.ox + L.gw / 2; shooterY = L.oy + L.gh + 2;
+            dangerY = shooterY - rad * 1.6;
+            bcols = Math.max(6, Math.floor((L.gw - rad) / (2 * rad)));
+        }
+        function reset(full) {
+            tune();
+            COLORS = [env.colors.accent, env.colors.highlight, env.colors.danger, '#27c0e0'];
+            seed();
+            angle = 0; fly = null; shotCd = 0.5; pushCd = 0; shots = 0;
+            cur = randColor(); next = randColor();
+            if (full) { score = 0; status = 'running'; }
+        }
+
+        function launch() {
+            var sp = env.L.gw * 1.7;
+            fly = { x: shooterX, y: shooterY - rad, vx: Math.sin(angle) * sp, vy: -Math.cos(angle) * sp, color: cur };
+            cur = next; next = randColor();
+            shots++;
+            if (mode === 'play') Sfx.waka(true);
+        }
+        function settle() {
+            // nearest grid cell to the flown bubble
+            var r = Math.max(0, Math.round((fly.y - originY - rad) / rowH));
+            ensureRow(r);
+            var off = (r % 2) * rad;
+            var c = Math.round((fly.x - originX - rad - off) / (2 * rad));
+            c = Math.max(0, Math.min(colsForRow(r) - 1, c));
+            if (grid[r][c]) {
+                // bumped — try the open neighbor closest to where it struck
+                var nb = neighbors(r, c), bestD = 1e9, br = r, bc = c, found = false;
+                for (var i = 0; i < nb.length; i++) {
+                    var nr = nb[i][0], ncc = nb[i][1]; if (nr < 0) continue;
+                    ensureRow(nr); if (ncc < 0 || ncc >= colsForRow(nr) || grid[nr][ncc]) continue;
+                    var p = center(nr, ncc), d = (p.x - fly.x) * (p.x - fly.x) + (p.y - fly.y) * (p.y - fly.y);
+                    if (d < bestD) { bestD = d; br = nr; bc = ncc; found = true; }
+                }
+                if (!found) { ensureRow(r + 1); for (var s = 0; s < colsForRow(r + 1); s++) if (!grid[r + 1][s]) { br = r + 1; bc = s; found = true; break; } }
+                r = br; c = bc;
+            }
+            grid[r][c] = fly.color;
+            var popped = resolve(r, c);
+            if (mode === 'play') { if (popped) Sfx.eatGhost(); else Sfx.fright(); }
+            fly = null;
+
+            // periodic ceiling press-down
+            pushCd++;
+            if (pushCd >= 6) { pushCd = 0; pushRow(); }
+
+            if (lost()) { if (mode === 'play') status = 'lost'; else reset(false); return; }
+            if (empty()) { score += 200; if (mode === 'play') { Sfx.level(); status = 'won'; } else reset(false); }
+        }
+        function resolve(r, c) {
+            var color = grid[r][c], seen = {}, stack = [[r, c]], cluster = [];
+            while (stack.length) {
+                var cell = stack.pop(), key = cell[0] + ',' + cell[1];
+                if (seen[key]) continue; seen[key] = 1;
+                if (at(cell[0], cell[1]) !== color) continue;
+                cluster.push(cell);
+                var nb = neighbors(cell[0], cell[1]);
+                for (var i = 0; i < nb.length; i++) if (nb[i][0] >= 0) stack.push(nb[i]);
+            }
+            if (cluster.length < 3) return 0;
+            for (var j = 0; j < cluster.length; j++) grid[cluster[j][0]][cluster[j][1]] = null;
+            score += cluster.length * 10;
+            dropFloating();
+            return cluster.length;
+        }
+        function dropFloating() {
+            var keep = {}, stack = [];
+            for (var c = 0; c < (grid[0] || []).length; c++) if (grid[0][c]) { keep['0,' + c] = 1; stack.push([0, c]); }
+            while (stack.length) {
+                var cell = stack.pop(), nb = neighbors(cell[0], cell[1]);
+                for (var i = 0; i < nb.length; i++) {
+                    var nr = nb[i][0], nc = nb[i][1], key = nr + ',' + nc;
+                    if (nr < 0 || keep[key]) continue;
+                    if (at(nr, nc)) { keep[key] = 1; stack.push([nr, nc]); }
+                }
+            }
+            for (var r = 0; r < grid.length; r++) for (var cc = 0; cc < grid[r].length; cc++) if (grid[r][cc] && !keep[r + ',' + cc]) { grid[r][cc] = null; score += 20; }
+        }
+        function pushRow() {
+            var row = new Array(colsForRow(0)).fill(null);
+            for (var c = 0; c < row.length; c++) row[c] = randColor();
+            grid.unshift(row);                              // every existing bubble shifts down a row
+        }
+        function empty() { for (var r = 0; r < grid.length; r++) for (var c = 0; c < grid[r].length; c++) if (grid[r][c]) return false; return true; }
+        function lost() {
+            for (var r = 0; r < grid.length; r++) for (var c = 0; c < grid[r].length; c++) if (grid[r][c] && center(r, c).y + rad >= dangerY) return true;
+            return false;
+        }
+        function aiAim() {
+            // aim straight at the lowest bubble matching the current color
+            var tx = null, ty = -1;
+            for (var r = grid.length - 1; r >= 0 && tx == null; r--) for (var c = 0; c < grid[r].length; c++) {
+                if (grid[r][c] === cur) { var p = center(r, c); if (p.y > ty) { ty = p.y; tx = p.x; } }
+            }
+            if (tx == null) { angle = (Math.sin(shots * 1.3) * 0.9); return; }
+            angle = Math.max(-1.15, Math.min(1.15, Math.atan2(tx - shooterX, shooterY - ty)));
+        }
+
+        return {
+            label: '🫧 Puzzle Bobble',
+            init: function (e, o) { env = e; mode = o.mode; reset(true); },
+            update: function (dt, ctrl) {
+                if (status !== 'running') return;
+                var L = env.L;
+                // aim
+                if (mode === 'play') {
+                    if (ctrl.mouseX != null) angle = Math.max(-1.2, Math.min(1.2, Math.atan2(ctrl.mouseX - shooterX, Math.max(1, shooterY - L.oy))));
+                    else { var aSpd = 1.8; if (ctrl.held.left) angle -= aSpd * dt; if (ctrl.held.right) angle += aSpd * dt; angle = Math.max(-1.2, Math.min(1.2, angle)); }
+                }
+                if (fly) {
+                    fly.x += fly.vx * dt; fly.y += fly.vy * dt;
+                    if (fly.x < originX + rad) { fly.x = originX + rad; fly.vx = Math.abs(fly.vx); }
+                    if (fly.x > originX + L.gw - rad) { fly.x = originX + L.gw - rad; fly.vx = -Math.abs(fly.vx); }
+                    var hit = fly.y <= originY + rad;
+                    if (!hit) {
+                        for (var r = 0; r < grid.length && !hit; r++) for (var c = 0; c < grid[r].length; c++) {
+                            if (!grid[r][c]) continue; var p = center(r, c);
+                            if ((p.x - fly.x) * (p.x - fly.x) + (p.y - fly.y) * (p.y - fly.y) < (rad * 1.8) * (rad * 1.8)) { hit = true; break; }
+                        }
+                    }
+                    if (hit) settle();
+                } else {
+                    if (mode === 'attract') aiAim();
+                    shotCd -= dt;
+                    if (shotCd <= 0) { launch(); shotCd = mode === 'play' ? 0.7 : 1.1; }
+                }
+            },
+            draw: function () {
+                var L = env.L, colors = env.colors, ctx = L.ctx, r, c;
+                drawGrid(L, colors, env.levels, function () { return 0.1; });
+                // wall
+                for (r = 0; r < grid.length; r++) for (c = 0; c < grid[r].length; c++) {
+                    if (!grid[r][c]) continue; var p = center(r, c);
+                    if (p.y - rad > L.cssH) continue;
+                    drawBubble(ctx, p.x, p.y, rad, grid[r][c]);
+                }
+                // danger line
+                ctx.strokeStyle = colors.danger; ctx.globalAlpha = 0.35; ctx.lineWidth = 1; ctx.setLineDash([4, 4]);
+                ctx.beginPath(); ctx.moveTo(originX, dangerY); ctx.lineTo(originX + L.gw, dangerY); ctx.stroke();
+                ctx.setLineDash([]); ctx.globalAlpha = 1;
+                // aim guide (play only)
+                if (mode === 'play' && !fly) {
+                    ctx.strokeStyle = colors.ink; ctx.globalAlpha = 0.3; ctx.setLineDash([3, 5]); ctx.lineWidth = 1.5;
+                    ctx.beginPath(); ctx.moveTo(shooterX, shooterY - rad);
+                    ctx.lineTo(shooterX + Math.sin(angle) * rad * 6, shooterY - rad - Math.cos(angle) * rad * 6); ctx.stroke();
+                    ctx.setLineDash([]); ctx.globalAlpha = 1;
+                }
+                // flying + chambered bubbles
+                if (fly) drawBubble(ctx, fly.x, fly.y, rad, fly.color);
+                else drawBubble(ctx, shooterX, shooterY - rad, rad, cur);
+                drawBubble(ctx, shooterX + rad * 2.2, shooterY - rad * 0.6, rad * 0.7, next);
+            },
+            getStatus: function () { return status; },
+            getScore: function () { return score; },
+            getLives: function () { return null; }
+        };
+    }
+
+    function drawBubble(ctx, x, y, rad, color) {
+        ctx.fillStyle = color;
+        ctx.beginPath(); ctx.arc(x, y, rad * 0.92, 0, 7); ctx.fill();
+        ctx.fillStyle = 'rgba(255,255,255,0.45)';                 // glossy highlight
+        ctx.beginPath(); ctx.arc(x - rad * 0.28, y - rad * 0.28, rad * 0.28, 0, 7); ctx.fill();
+    }
+
     // Date.now() is blocked in some sandboxes (workflow scripts); in the browser
     // it's fine, but guard anyway for the chomp animation.
     function Date_now() { try { return Date.now(); } catch (e) { return performance.now(); } }
 
-    var REGISTRY = { pacman: PacMan, snake: Snake, breakout: Breakout };
-    var GAME_IDS = ['pacman', 'snake', 'breakout'];
+    var REGISTRY = { pacman: PacMan, snake: Snake, breakout: Breakout, galaga: Galaga, puzzlebobble: PuzzleBobble };
+    var GAME_IDS = ['pacman', 'snake', 'breakout', 'galaga', 'puzzlebobble'];
 
     // ===========================================================================
     // Engine
