@@ -52,6 +52,7 @@ COPY --from=builder /usr/src/app/services ./services
 COPY --from=builder /usr/src/app/utils ./utils
 COPY --from=builder /usr/src/app/views ./views
 COPY --from=builder /usr/src/app/public ./public
+COPY --from=builder /usr/src/app/mcp ./mcp
 
 # Add DataDog label for log processing
 LABEL "com.datadoghq.ad.logs"='[{"source": "node", "service": "game-ops", "log_processing_rules": [{"type": "exclude_at_match", "name": "exclude_health_checks", "pattern": "/health|/monitors/lb"}]}]'

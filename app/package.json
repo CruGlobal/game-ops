@@ -18,11 +18,12 @@
     "format:check": "prettier --check .",
     "recompute:quarter:fallback": "node scripts/recompute-quarter-fallback.js",
     "recompute:quarter:history": "node scripts/recompute-quarter-history.js",
-  "recompute:alltime:history": "node scripts/recompute-alltime-from-history.js",
+    "recompute:alltime:history": "node scripts/recompute-alltime-from-history.js",
     "backdate:point-history": "node scripts/backdate-point-history.js",
     "verify:quarter:user": "node scripts/verify-quarter-user.js"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "@octokit/rest": "^20.0.0",
     "@prisma/client": "^6.17.1",
     "aws-sdk": "^2.1048.0",
@@ -41,7 +42,8 @@
     "passport-github2": "^0.1.12",
     "pg": "^8.16.3",
     "prisma": "^6.17.1",
-    "socket.io": "^4.8.1"
+    "socket.io": "^4.8.1",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@jest/globals": "^29.7.0",
