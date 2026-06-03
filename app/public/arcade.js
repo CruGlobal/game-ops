@@ -679,7 +679,7 @@
     function Galaga() {
         var env, mode, status, score, lives, level;
         var player, pw, shipY, swarm, sway, swayDir, swayAmp;
-        var pb, eb;                 // player bullets, enemy bullets
+        var pb, eb, shields;        // player bullets, enemy bullets, shield blocks (the rest of the graph)
         var fireCd, diveCd, fireTimer, restTimer;
         var pSpd, eSpd, diveSpd, swaySpd;
 
@@ -693,20 +693,20 @@
             diveSpd = L.step * (4.5 + (level - 1) * 0.5);
             swaySpd = L.step * (1.4 + (level - 1) * 0.25);
         }
+        var ENEMY_ROWS = 2;         // swarm occupies the top rows; the rest is shields
         function buildSwarm() {
             var L = env.L;
             swarm = [];
-            // The whole contribution graph IS the swarm: every lit cell becomes an
-            // enemy ranked by its contribution level (per the galaga /
-            // pacman-contribution-graph design — the graph is the play area).
-            for (var c = 0; c < COLS; c++) for (var r = 0; r < ROWS; r++) {
+            // Top rows of the contribution graph become the enemy swarm, ranked by
+            // contribution level. The remaining lit cells become shields (below).
+            for (var c = 0; c < COLS; c++) for (var r = 0; r < ENEMY_ROWS; r++) {
                 var lvl = env.levels[c][r];
                 if (lvl > 0) { var p = cellXY(L, c, r); swarm.push(mkEnemy(p.x + L.cell / 2, p.y + L.cell / 2, lvl)); }
             }
-            // fallback only if the grid is entirely empty
+            // fallback only if the top rows are entirely empty
             if (!swarm.length) for (var g = 0; g < 12; g++) {
                 var cc = 3 + g * 4; if (cc >= COLS) break;
-                var q = cellXY(L, cc, g % 3); swarm.push(mkEnemy(q.x + L.cell / 2, q.y + L.cell / 2, 1 + (g % 4)));
+                var q = cellXY(L, cc, g % ENEMY_ROWS); swarm.push(mkEnemy(q.x + L.cell / 2, q.y + L.cell / 2, 1 + (g % 4)));
             }
         }
         // Rank by contribution level: brighter cells are higher-value enemies.
@@ -715,12 +715,27 @@
             var pts = lvl >= 4 ? 30 : lvl === 3 ? 20 : 10;
             return { hx: hx, hy: hy, x: 0, y: 0, alive: true, sp: sp, pts: pts, dive: false, t: 0, sx: 0 };
         }
+        // Shields = the rest of the contribution graph (rows below the swarm). Each
+        // lit cell is one block; a single laser hit (player or enemy) destroys it.
+        function buildShields() {
+            shields = [];
+            for (var c = 0; c < COLS; c++) {
+                shields[c] = new Array(ROWS).fill(0);
+                for (var r = ENEMY_ROWS; r < ROWS; r++) if (env.levels[c][r] > 0) shields[c][r] = env.levels[c][r];
+            }
+        }
+        function shieldHit(x, y) {
+            var L = env.L, c = Math.floor((x - L.ox) / L.step), r = Math.floor((y - L.oy) / L.step);
+            if (r >= ENEMY_ROWS && c >= 0 && c < COLS && r < ROWS && shields[c] && shields[c][r] > 0) { shields[c][r] = 0; return true; }
+            return false;
+        }
         function newWave() {
             var L = env.L;
             tune();
             player = L.ox + L.gw / 2; pb = []; eb = [];
             sway = 0; swayDir = 1; fireCd = 0; diveCd = 1.4; fireTimer = 0.6; restTimer = 0;
             buildSwarm();
+            buildShields();
         }
         function reset(full) {
             if (full) { score = 0; lives = 3; level = 1; status = 'running'; }
@@ -804,6 +819,7 @@
                 for (var b = pb.length - 1; b >= 0; b--) {
                     pb[b].y -= pSpd * dt;
                     if (pb[b].y < L.oy - L.cell) { pb.splice(b, 1); continue; }
+                    if (shieldHit(pb[b].x, pb[b].y)) { pb.splice(b, 1); continue; }   // player fire erodes shields
                     for (var j = 0; j < swarm.length; j++) {
                         var en = swarm[j]; if (!en.alive) continue;
                         var ep = ePos(en);
@@ -819,6 +835,7 @@
                 for (var k = eb.length - 1; k >= 0; k--) {
                     eb[k].y += eSpd * dt;
                     if (eb[k].y > shipY + L.cell) { eb.splice(k, 1); continue; }
+                    if (shieldHit(eb[k].x, eb[k].y)) { eb.splice(k, 1); continue; } // a shield block absorbs the laser
                     if (Math.abs(eb[k].x - player) < pw / 2 && Math.abs(eb[k].y - shipY) < L.cell * 0.6) { eb.splice(k, 1); hitPlayer(); if (status !== 'running') return; }
                 }
 
@@ -828,7 +845,19 @@
             },
             draw: function () {
                 var L = env.L, colors = env.colors, ctx = L.ctx, i;
-                drawGrid(L, colors, env.levels, function () { return 0.12; });
+                ctx.clearRect(0, 0, L.cssW, L.cssH);
+                var grad = Math.max(1, L.cell * 0.22);
+                // faint empty lattice — the contribution-graph board
+                ctx.globalAlpha = 0.5; ctx.fillStyle = colors.ramp[0];
+                for (var lc = 0; lc < COLS; lc++) for (var lr = 0; lr < ROWS; lr++) { var lp = cellXY(L, lc, lr); roundRect(ctx, lp.x, lp.y, L.cell, L.cell, grad); ctx.fill(); }
+                ctx.globalAlpha = 1;
+                // shields — the remaining contribution blocks (one laser hit destroys)
+                for (var shc = 0; shc < COLS; shc++) for (var shr = ENEMY_ROWS; shr < ROWS; shr++) {
+                    if (!shields[shc] || shields[shc][shr] <= 0) continue;
+                    var shp = cellXY(L, shc, shr);
+                    ctx.fillStyle = colors.ramp[shields[shc][shr]];
+                    roundRect(ctx, shp.x, shp.y, L.cell, L.cell, grad); ctx.fill();
+                }
                 // swarm
                 for (i = 0; i < swarm.length; i++) {
                     var e = swarm[i]; if (!e.alive) continue;
