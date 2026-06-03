@@ -29,6 +29,12 @@
     var STORAGE_KEY = 'arcade-game';
     var COLS = 53, ROWS = 7;
     var GH_COL = Math.floor(COLS / 2), GH_ROW = Math.floor(ROWS / 2); // ghost-house centre
+    // Pac-Man maze occupies a centred band of columns — the full 53-wide grid is
+    // too spread out. PM_COLS is the tweak knob; the band is centred on GH_COL.
+    var PM_COLS = 21;
+    var PM_LO = Math.floor((COLS - PM_COLS) / 2);
+    var PM_HI = PM_LO + PM_COLS;
+    function pmIn(c, r) { return c >= PM_LO && c < PM_HI && r >= 0 && r < ROWS; }
     var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
     // ---- palette (from the page's Cru/Cornerstone CSS variables) -------------
@@ -198,11 +204,11 @@
         var rng = makeRng(0x9E3779B1); // fixed seed -> same maze always
         var vW = [], hW = [], vis = [], c, r;
         for (c = 0; c < COLS; c++) { vW[c] = new Array(ROWS).fill(true); hW[c] = new Array(ROWS).fill(true); vis[c] = new Array(ROWS).fill(false); }
-        var stack = [{ c: 0, r: 0 }]; vis[0][0] = true;
+        var stack = [{ c: PM_LO, r: 0 }]; vis[PM_LO][0] = true;
         while (stack.length) {
             var cur = stack[stack.length - 1], nb = [];
-            if (cur.c < COLS - 1 && !vis[cur.c + 1][cur.r]) nb.push({ c: cur.c + 1, r: cur.r, e: 'v', ec: cur.c, er: cur.r });
-            if (cur.c > 0 && !vis[cur.c - 1][cur.r]) nb.push({ c: cur.c - 1, r: cur.r, e: 'v', ec: cur.c - 1, er: cur.r });
+            if (cur.c < PM_HI - 1 && !vis[cur.c + 1][cur.r]) nb.push({ c: cur.c + 1, r: cur.r, e: 'v', ec: cur.c, er: cur.r });
+            if (cur.c > PM_LO && !vis[cur.c - 1][cur.r]) nb.push({ c: cur.c - 1, r: cur.r, e: 'v', ec: cur.c - 1, er: cur.r });
             if (cur.r < ROWS - 1 && !vis[cur.c][cur.r + 1]) nb.push({ c: cur.c, r: cur.r + 1, e: 'h', ec: cur.c, er: cur.r });
             if (cur.r > 0 && !vis[cur.c][cur.r - 1]) nb.push({ c: cur.c, r: cur.r - 1, e: 'h', ec: cur.c, er: cur.r - 1 });
             if (!nb.length) { stack.pop(); continue; }
@@ -211,13 +217,13 @@
             vis[n.c][n.r] = true; stack.push({ c: n.c, r: n.r });
         }
         // Open the maze up — fewer walls = easier, but compact (keeps structure).
-        for (c = 0; c < COLS - 1; c++) for (r = 0; r < ROWS; r++) if (vW[c][r] && rng() < 0.72) vW[c][r] = false;
-        for (c = 0; c < COLS; c++) for (r = 0; r < ROWS - 1; r++) if (hW[c][r] && rng() < 0.72) hW[c][r] = false;
+        for (c = PM_LO; c < PM_HI - 1; c++) for (r = 0; r < ROWS; r++) if (vW[c][r] && rng() < 0.72) vW[c][r] = false;
+        for (c = PM_LO; c < PM_HI; c++) for (r = 0; r < ROWS - 1; r++) if (hW[c][r] && rng() < 0.72) hW[c][r] = false;
         stampGhostHouse(vW, hW);
         return { vW: vW, hW: hW };
     }
     function canMove(m, c, r, dx, dy) {
-        if (!inBounds(c + dx, r + dy)) return false;
+        if (!pmIn(c + dx, r + dy)) return false;
         if (dx === 1) return !m.vW[c][r];
         if (dx === -1) return !m.vW[c - 1][r];
         if (dy === 1) return !m.hW[c][r];
@@ -229,11 +235,11 @@
         ctx.strokeStyle = colors.ink;
         ctx.lineCap = 'round';
         ctx.lineWidth = Math.max(1.5, L.gap); // thin lines, like the reference
-        for (c = 0; c < COLS - 1; c++) for (r = 0; r < ROWS; r++) if (m.vW[c][r]) {
+        for (c = PM_LO; c < PM_HI - 1; c++) for (r = 0; r < ROWS; r++) if (m.vW[c][r]) {
             var x = L.ox + c * L.step + L.cell + L.gap / 2, y0 = L.oy + r * L.step, y1 = y0 + L.cell;
             ctx.beginPath(); ctx.moveTo(x, y0); ctx.lineTo(x, y1); ctx.stroke();
         }
-        for (c = 0; c < COLS; c++) for (r = 0; r < ROWS - 1; r++) if (m.hW[c][r]) {
+        for (c = PM_LO; c < PM_HI; c++) for (r = 0; r < ROWS - 1; r++) if (m.hW[c][r]) {
             var y = L.oy + r * L.step + L.cell + L.gap / 2, x0 = L.ox + c * L.step, x1 = x0 + L.cell;
             ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x1, y); ctx.stroke();
         }
@@ -314,14 +320,14 @@
         var DOOR = { c: GH_COL, r: GH_ROW - 2 };           // exit cell above the box opening
         var PEN = { c: GH_COL, r: GH_ROW - 1 };             // inside the box (eyes return here)
         var GCOL = ['#d6453d', '#f78fd0', '#27c0e0', '#e08a3c']; // blinky, pinky, inky, clyde
-        var CORNERS = [{ c: COLS - 1, r: 0 }, { c: 0, r: 0 }, { c: COLS - 1, r: ROWS - 1 }, { c: 0, r: ROWS - 1 }];
+        var CORNERS = [{ c: PM_HI - 1, r: 0 }, { c: PM_LO, r: 0 }, { c: PM_HI - 1, r: ROWS - 1 }, { c: PM_LO, r: ROWS - 1 }];
 
         function countPellets() { var n = 0; for (var c = 0; c < COLS; c++) for (var r = 0; r < ROWS; r++) if (pellets[c][r]) n++; return n; }
 
         function placeEnergizers() {
             // four power pellets spread across the board (corners-ish, on the grid)
             energizers = {};
-            var spots = [{ c: 2, r: 1 }, { c: COLS - 3, r: 1 }, { c: 2, r: ROWS - 2 }, { c: COLS - 3, r: ROWS - 2 }];
+            var spots = [{ c: PM_LO + 1, r: 1 }, { c: PM_HI - 2, r: 1 }, { c: PM_LO + 1, r: ROWS - 2 }, { c: PM_HI - 2, r: ROWS - 2 }];
             spots.forEach(function (s) { energizers[s.c + ',' + s.r] = true; pellets[s.c][s.r] = true; });
         }
         function isEnergizer(c, r) { return energizers[c + ',' + r] === true; }
@@ -342,6 +348,7 @@
         function newBoard() {
             maze = genMaze();
             pellets = fullMask();
+            for (var pc = 0; pc < COLS; pc++) if (pc < PM_LO || pc >= PM_HI) for (var pr = 0; pr < ROWS; pr++) pellets[pc][pr] = false;
             pac = { c: START.c, r: START.r }; dir = { x: 1, y: 0 }; want = { x: 1, y: 0 };
             pellets[pac.c][pac.r] = false;
             placeEnergizers();
