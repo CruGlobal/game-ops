@@ -685,7 +685,7 @@
 
         function tune() {
             var L = env.L;
-            pw = L.cell * 1.8;
+            pw = L.cell * 1.4;
             shipY = L.oy + L.gh + 2;
             swayAmp = L.step * 1.4;
             pSpd = L.step * 13;
@@ -845,7 +845,7 @@
                 ctx.fillStyle = colors.danger;
                 for (i = 0; i < eb.length; i++) { var w2 = Math.max(2, L.cell * 0.12); roundRect(ctx, eb[i].x - w2 / 2, eb[i].y - L.cell * 0.3, w2, L.cell * 0.6, w2 / 2); ctx.fill(); }
                 // ship (pixel fighter, nose up, sitting on the bottom line)
-                drawSprite(ctx, player, shipY - L.cell * 0.95, L.cell * 2.1, GA_SHIP);
+                drawSprite(ctx, player, shipY - L.cell * 0.7, L.cell * 1.5, GA_SHIP);
             },
             getStatus: function () { return status; },
             getScore: function () { return score; },
