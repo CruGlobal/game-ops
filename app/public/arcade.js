@@ -685,7 +685,7 @@
 
         function tune() {
             var L = env.L;
-            pw = L.cell * 2.0;
+            pw = L.cell * 1.8;
             shipY = L.oy + L.gh + 2;
             swayAmp = L.step * 1.4;
             pSpd = L.step * 13;
@@ -837,7 +837,7 @@
                 for (i = 0; i < swarm.length; i++) {
                     var e = swarm[i]; if (!e.alive) continue;
                     var p = ePos(e);
-                    drawSprite(ctx, p.x, p.y, L.cell * 1.7, e.sp);
+                    drawSprite(ctx, p.x, p.y, L.cell * 1.25, e.sp);
                 }
                 // bullets
                 ctx.fillStyle = colors.highlight;
@@ -845,7 +845,7 @@
                 ctx.fillStyle = colors.danger;
                 for (i = 0; i < eb.length; i++) { var w2 = Math.max(2, L.cell * 0.12); roundRect(ctx, eb[i].x - w2 / 2, eb[i].y - L.cell * 0.3, w2, L.cell * 0.6, w2 / 2); ctx.fill(); }
                 // ship (pixel fighter, nose up, sitting on the bottom line)
-                drawSprite(ctx, player, shipY - L.cell * 0.55, pw * 1.2, GA_SHIP);
+                drawSprite(ctx, player, shipY - L.cell * 0.95, L.cell * 2.1, GA_SHIP);
             },
             getStatus: function () { return status; },
             getScore: function () { return score; },
@@ -864,7 +864,7 @@
         '......a......', '......a......', '......a......', '.....aaa.....', '.....aaa.....',
         '..bb.aaa.b...', '..bbaaaaab...', 'c...aacaac..c', 'c..aacccaa..c', 'a.caaaaaaac.a',
         'aaaacaaacaaaa', 'aaaccaaacbaaa', 'aa.cc.a.cb.aa', 'a.....a.....a'],
-        pal: { a: '#ffffff', b: '#c81414', c: '#ef4d44' } };
+        pal: { a: '#2b3a55', b: '#d11f1f', c: '#ef4d44' } };  // dark slate hull so it reads on the light grid
     var GA_BEE = { rows: [
         'a....b....c', 'a.bbdbdbd.a', '.cdddbdddc.', '.adddbdddc.', '..bbbbbbd..', '....bbb....',
         '.ccadddaac.', '.aaadddcaa.', '.aaadddcca.', '.a..bbb..c.', 'aa..bbb..aa', 'ca..ddd..aa',
@@ -889,10 +889,11 @@
         }
         return { cv: cv, cols: cols, rows: rows.length };
     }
-    // Draw sprite `sp` centered at (cx,cy), scaled so its width is `targetW`.
-    function drawSprite(ctx, cx, cy, targetW, sp) {
+    // Draw sprite `sp` centered at (cx,cy), scaled so its LARGER dimension fits
+    // `box` (keeps tall sprites — e.g. the bee — from overflowing their cell).
+    function drawSprite(ctx, cx, cy, box, sp) {
         if (!sp._c) sp._c = makeSpriteCanvas(sp);
-        var s = sp._c, px = Math.max(1, targetW / s.cols), w = s.cols * px, h = s.rows * px;
+        var s = sp._c, px = Math.max(1, box / Math.max(s.cols, s.rows)), w = s.cols * px, h = s.rows * px;
         var prev = ctx.imageSmoothingEnabled;
         ctx.imageSmoothingEnabled = false;
         ctx.drawImage(s.cv, Math.round(cx - w / 2), Math.round(cy - h / 2), Math.round(w), Math.round(h));
