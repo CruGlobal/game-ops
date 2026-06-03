@@ -31,7 +31,7 @@
     var GH_COL = Math.floor(COLS / 2), GH_ROW = Math.floor(ROWS / 2); // ghost-house centre
     // Pac-Man maze occupies a centred band of columns — the full 53-wide grid is
     // too spread out. PM_COLS is the tweak knob; the band is centred on GH_COL.
-    var PM_COLS = 21;
+    var PM_COLS = COLS;        // maze spans the full contribution-graph width
     var PM_LO = Math.floor((COLS - PM_COLS) / 2);
     var PM_HI = PM_LO + PM_COLS;
     var PM_OPEN = 0.3;          // fraction of maze walls removed — lower = denser maze
@@ -373,7 +373,9 @@
         function newBoard() {
             maze = genMaze();
             pellets = fullMask();
-            for (var pc = 0; pc < COLS; pc++) if (pc < PM_LO || pc >= PM_HI) for (var pr = 0; pr < ROWS; pr++) pellets[pc][pr] = false;
+            // Pellets only on the darker contribution blocks (lit cells) — Pac eats
+            // the graph's contributions; empty cells are just open corridor.
+            for (var pc = 0; pc < COLS; pc++) for (var pr = 0; pr < ROWS; pr++) pellets[pc][pr] = (env.levels[pc][pr] > 0);
             pac = { c: START.c, r: START.r }; dir = { x: 1, y: 0 }; want = { x: 1, y: 0 };
             pellets[pac.c][pac.r] = false;
             placeEnergizers();
