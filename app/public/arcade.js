@@ -356,10 +356,19 @@
         function countPellets() { var n = 0; for (var c = 0; c < COLS; c++) for (var r = 0; r < ROWS; r++) if (pellets[c][r]) n++; return n; }
 
         function placeEnergizers() {
-            // four power pellets spread across the board (corners-ish, on the grid)
+            // Promote the four corner-most dark blocks to power pellets — no new
+            // pellets on empty cells, so every pellet is a contribution block and
+            // clearing them all wins the round.
             energizers = {};
-            var spots = [{ c: PM_LO + 1, r: 1 }, { c: PM_HI - 2, r: 1 }, { c: PM_LO + 1, r: ROWS - 2 }, { c: PM_HI - 2, r: ROWS - 2 }];
-            spots.forEach(function (s) { energizers[s.c + ',' + s.r] = true; pellets[s.c][s.r] = true; });
+            var corners = [{ c: PM_LO, r: 0 }, { c: PM_HI - 1, r: 0 }, { c: PM_LO, r: ROWS - 1 }, { c: PM_HI - 1, r: ROWS - 1 }];
+            corners.forEach(function (cn) {
+                var best = null, bd = 1e9;
+                for (var c = PM_LO; c < PM_HI; c++) for (var r = 0; r < ROWS; r++) if (pellets[c][r]) {
+                    var d = Math.abs(c - cn.c) + Math.abs(r - cn.r);
+                    if (d < bd) { bd = d; best = { c: c, r: r }; }
+                }
+                if (best) energizers[best.c + ',' + best.r] = true;
+            });
         }
         function isEnergizer(c, r) { return energizers[c + ',' + r] === true; }
 
@@ -382,6 +391,11 @@
             // Pellets only on the darker contribution blocks (lit cells) — Pac eats
             // the graph's contributions; empty cells are just open corridor.
             for (var pc = 0; pc < COLS; pc++) for (var pr = 0; pr < ROWS; pr++) pellets[pc][pr] = (env.levels[pc][pr] > 0);
+            // fallback: if the graph has no contributions yet, dot the whole band so
+            // there is still something to clear
+            var any = false;
+            for (var ac = PM_LO; ac < PM_HI && !any; ac++) for (var ar = 0; ar < ROWS; ar++) if (pellets[ac][ar]) { any = true; break; }
+            if (!any) for (var fc = PM_LO; fc < PM_HI; fc++) for (var fr = 0; fr < ROWS; fr++) pellets[fc][fr] = true;
             pac = { c: START.c, r: START.r }; dir = { x: 1, y: 0 }; want = { x: 1, y: 0 };
             pellets[pac.c][pac.r] = false;
             placeEnergizers();
