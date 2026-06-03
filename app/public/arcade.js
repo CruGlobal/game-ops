@@ -958,7 +958,7 @@
         function randColor() { var p = colorsInPlay(); return p[Math.floor(Math.random() * p.length)]; }
 
         function seed() {
-            var L = env.L, rows = Math.min(4, Math.max(2, Math.floor((dangerY - originY) / rowH) - 1));
+            var L = env.L, rows = Math.min(5, Math.max(2, Math.floor((dangerY - originY) / rowH) - 1));
             grid = [];
             for (var r = 0; r < rows; r++) {
                 var row = new Array(colsForRow(r)).fill(null);
@@ -973,7 +973,7 @@
         }
         function tune() {
             var L = env.L;
-            rad = Math.max(3, L.cell * 0.55);
+            rad = Math.max(3, L.cell * 0.4);
             rowH = rad * 1.7;
             originX = L.ox; originY = L.oy;
             shooterX = L.ox + L.gw / 2; shooterY = L.oy + L.gh + 2;
