@@ -681,7 +681,7 @@
         var player, pw, shipY, swarm, sway, swayDir, swayAmp;
         var pb, eb;                 // player bullets, enemy bullets
         var fireCd, diveCd, fireTimer, restTimer;
-        var GCOL, pSpd, eSpd, diveSpd, swaySpd;
+        var pSpd, eSpd, diveSpd, swaySpd;
 
         function tune() {
             var L = env.L;
@@ -695,13 +695,12 @@
         }
         function buildSwarm() {
             var L = env.L;
-            GCOL = [env.colors.danger, env.colors.highlight, '#f78fd0', '#27c0e0', env.colors.accent];
             swarm = [];
             var rows = Math.min(3, ROWS - 2);
             for (var c = 0; c < COLS; c++) for (var r = 0; r < rows; r++) {
                 if (env.levels[c][r] > 0) {
                     var p = cellXY(L, c, r);
-                    swarm.push({ hx: p.x + L.cell / 2, hy: p.y + L.cell / 2, x: 0, y: 0, alive: true, kind: env.levels[c][r], dive: false, t: 0, sx: 0 });
+                    swarm.push(mkEnemy(p.x + L.cell / 2, p.y + L.cell / 2, r));
                 }
             }
             // guarantee a playable swarm if the contribution grid is sparse
@@ -709,9 +708,16 @@
                 var cc = 3 + g * 4, rr = g % rows;
                 if (cc >= COLS) break;
                 var q = cellXY(L, cc, rr);
-                swarm.push({ hx: q.x + L.cell / 2, hy: q.y + L.cell / 2, x: 0, y: 0, alive: true, kind: 1 + (g % 4), dive: false, t: 0, sx: 0 });
+                swarm.push(mkEnemy(q.x + L.cell / 2, q.y + L.cell / 2, rr));
                 i++;
             }
+        }
+        // Rank by row, classic Galaga: front row = bee (top score), then green, then blue.
+        function mkEnemy(hx, hy, row) {
+            var rank = row % 3;
+            var sp = rank === 0 ? GA_BEE : rank === 1 ? GA_GREEN : GA_BLUE;
+            var pts = rank === 0 ? 30 : rank === 1 ? 20 : 10;
+            return { hx: hx, hy: hy, x: 0, y: 0, alive: true, sp: sp, pts: pts, dive: false, t: 0, sx: 0 };
         }
         function newWave() {
             var L = env.L;
@@ -806,7 +812,7 @@
                         var en = swarm[j]; if (!en.alive) continue;
                         var ep = ePos(en);
                         if (Math.abs(ep.x - pb[b].x) < L.cell * 0.55 && Math.abs(ep.y - pb[b].y) < L.cell * 0.55) {
-                            en.alive = false; score += 10 * en.kind; pb.splice(b, 1);
+                            en.alive = false; score += en.pts; pb.splice(b, 1);
                             if (mode === 'play') Sfx.eatGhost();
                             break;
                         }
@@ -831,23 +837,15 @@
                 for (i = 0; i < swarm.length; i++) {
                     var e = swarm[i]; if (!e.alive) continue;
                     var p = ePos(e);
-                    drawBug(ctx, p.x, p.y, L.cell, GCOL[(e.kind - 1) % GCOL.length]);
+                    drawSprite(ctx, p.x, p.y, L.cell * 1.7, e.sp);
                 }
                 // bullets
                 ctx.fillStyle = colors.highlight;
                 for (i = 0; i < pb.length; i++) { var w = Math.max(2, L.cell * 0.12); roundRect(ctx, pb[i].x - w / 2, pb[i].y - L.cell * 0.3, w, L.cell * 0.6, w / 2); ctx.fill(); }
                 ctx.fillStyle = colors.danger;
                 for (i = 0; i < eb.length; i++) { var w2 = Math.max(2, L.cell * 0.12); roundRect(ctx, eb[i].x - w2 / 2, eb[i].y - L.cell * 0.3, w2, L.cell * 0.6, w2 / 2); ctx.fill(); }
-                // ship
-                var s = L.cell;
-                ctx.fillStyle = colors.accent;
-                ctx.beginPath();
-                ctx.moveTo(player, shipY - s * 0.55);
-                ctx.lineTo(player - pw / 2, shipY + s * 0.35);
-                ctx.lineTo(player + pw / 2, shipY + s * 0.35);
-                ctx.closePath(); ctx.fill();
-                ctx.fillStyle = colors.highlight;
-                ctx.beginPath(); ctx.arc(player, shipY - s * 0.05, Math.max(1.5, s * 0.14), 0, 7); ctx.fill();
+                // ship (pixel fighter, nose up, sitting on the bottom line)
+                drawSprite(ctx, player, shipY - L.cell * 0.55, pw * 1.2, GA_SHIP);
             },
             getStatus: function () { return status; },
             getScore: function () { return score; },
@@ -856,21 +854,49 @@
         };
     }
 
-    // A little Galaga-style enemy: rounded body, swept wings, two eyes.
-    function drawBug(ctx, x, y, s, color) {
-        var w = s * 0.78, h = s * 0.66, gx = x - w / 2, gy = y - h / 2;
-        ctx.fillStyle = color;
-        ctx.beginPath();                                   // swept wings
-        ctx.moveTo(gx, gy + h * 0.25); ctx.lineTo(gx - s * 0.24, gy); ctx.lineTo(gx - s * 0.06, gy + h * 0.8); ctx.closePath();
-        ctx.moveTo(gx + w, gy + h * 0.25); ctx.lineTo(gx + w + s * 0.24, gy); ctx.lineTo(gx + w + s * 0.06, gy + h * 0.8); ctx.closePath();
-        ctx.fill();
-        roundRect(ctx, gx, gy, w, h, s * 0.22); ctx.fill(); // body
-        ctx.fillStyle = '#ffffff';
-        ctx.beginPath(); ctx.arc(x - w * 0.22, y, Math.max(1, s * 0.09), 0, 7); ctx.fill();
-        ctx.beginPath(); ctx.arc(x + w * 0.22, y, Math.max(1, s * 0.09), 0, 7); ctx.fill();
-        ctx.fillStyle = '#1b2a6b';
-        ctx.beginPath(); ctx.arc(x - w * 0.22, y, Math.max(1, s * 0.045), 0, 7); ctx.fill();
-        ctx.beginPath(); ctx.arc(x + w * 0.22, y, Math.max(1, s * 0.045), 0, 7); ctx.fill();
+    // ---- pixel sprites (Galaga) ----------------------------------------------
+    // Tiny pixel-art for the player fighter + the three enemy ranks, traced from
+    // the classic Galaga/Galaxian arcade sprites: a yellow bee ("fly") and a
+    // green and a blue bug. Each is a grid of single-char rows keyed to a palette
+    // ('.' = transparent). Rendered once into an offscreen canvas and blitted
+    // (no smoothing) so dozens of them are cheap and stay crisp at any size.
+    var GA_SHIP = { rows: [
+        '......a......', '......a......', '......a......', '.....aaa.....', '.....aaa.....',
+        '..bb.aaa.b...', '..bbaaaaab...', 'c...aacaac..c', 'c..aacccaa..c', 'a.caaaaaaac.a',
+        'aaaacaaacaaaa', 'aaaccaaacbaaa', 'aa.cc.a.cb.aa', 'a.....a.....a'],
+        pal: { a: '#ffffff', b: '#c81414', c: '#ef4d44' } };
+    var GA_BEE = { rows: [
+        'a....b....c', 'a.bbdbdbd.a', '.cdddbdddc.', '.adddbdddc.', '..bbbbbbd..', '....bbb....',
+        '.ccadddaac.', '.aaadddcaa.', '.aaadddcca.', '.a..bbb..c.', 'aa..bbb..aa', 'ca..ddd..aa',
+        'ca...d...ac', 'ca...a...ac', 'ca.......ac'],
+        pal: { a: '#1c5f6b', b: '#ffe11f', c: '#0e2f38', d: '#e3a82e' } };
+    var GA_GREEN = { rows: [
+        '..a.....a..', 'a..a...a..a', 'a.aaaaaaa.a', 'aaa.aaa.aaa', 'aaaaaaaaaaa', '.aaaaaaaaa.', '..a.....a..', '.a.......a.'],
+        pal: { a: '#33c93a' } };
+    var GA_BLUE = { rows: [
+        '..b.....b..', '...b...b...', '..bbbbbbb..', '.bb.bbb.bb.', 'bbbbbbbbbbb', 'b.bbbbbbb.b', 'b.b.....b.b', '...bb.bb...'],
+        pal: { b: '#28a8e6' } };
+
+    function makeSpriteCanvas(sp) {
+        var rows = sp.rows, cols = 0, r, c;
+        for (r = 0; r < rows.length; r++) cols = Math.max(cols, rows[r].length);
+        var px = 4, cv = document.createElement('canvas');
+        cv.width = cols * px; cv.height = rows.length * px;
+        var g = cv.getContext('2d');
+        for (r = 0; r < rows.length; r++) for (c = 0; c < rows[r].length; c++) {
+            var ch = rows[r][c]; if (ch === '.' || !sp.pal[ch]) continue;
+            g.fillStyle = sp.pal[ch]; g.fillRect(c * px, r * px, px, px);
+        }
+        return { cv: cv, cols: cols, rows: rows.length };
+    }
+    // Draw sprite `sp` centered at (cx,cy), scaled so its width is `targetW`.
+    function drawSprite(ctx, cx, cy, targetW, sp) {
+        if (!sp._c) sp._c = makeSpriteCanvas(sp);
+        var s = sp._c, px = Math.max(1, targetW / s.cols), w = s.cols * px, h = s.rows * px;
+        var prev = ctx.imageSmoothingEnabled;
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(s.cv, Math.round(cx - w / 2), Math.round(cy - h / 2), Math.round(w), Math.round(h));
+        ctx.imageSmoothingEnabled = prev;
     }
 
     // ---- Puzzle Bobble -------------------------------------------------------
