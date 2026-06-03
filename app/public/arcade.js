@@ -29,6 +29,15 @@
     var STORAGE_KEY = 'arcade-game';
     var COLS = 53, ROWS = 7;
     var GH_COL = Math.floor(COLS / 2), GH_ROW = Math.floor(ROWS / 2); // ghost-house centre
+    // Pac-Man maze occupies a centred band of columns — the full 53-wide grid is
+    // too spread out. PM_COLS is the tweak knob; the band is centred on GH_COL.
+    var PM_COLS = COLS;        // maze spans the full contribution-graph width
+    var PM_LO = Math.floor((COLS - PM_COLS) / 2);
+    var PM_HI = PM_LO + PM_COLS;
+    var PM_OPEN = 0.3;          // fraction of maze walls removed — lower = denser maze
+    function pmIn(c, r) { return c >= PM_LO && c < PM_HI && r >= 0 && r < ROWS; }
+    var PM_WARP_ROW = GH_ROW;   // tunnel row: stepping off either edge warps to the far side
+    function wrapCol(c) { return c < PM_LO ? PM_HI - 1 : c >= PM_HI ? PM_LO : c; }
     var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
     // ---- palette (from the page's Cru/Cornerstone CSS variables) -------------
@@ -194,15 +203,35 @@
         if (top - 2 >= 0) hW[c][top - 2] = false;
     }
 
+    // Remove straight single-block wall segments so every maze line is >= 2 blocks
+    // long. Only clears walls (never seals a passage): a segment is dropped only
+    // when it has no collinear neighbour — vertical runs stack along r, horizontal
+    // runs along c — so runs of length >= 2 are always kept.
+    function stripSingletons(vW, hW) {
+        var c, r;
+        for (c = PM_LO; c < PM_HI - 1; c++) for (r = 0; r < ROWS; r++) if (vW[c][r]) {
+            var up = r > 0 && vW[c][r - 1], dn = r < ROWS - 1 && vW[c][r + 1];
+            if (!up && !dn) vW[c][r] = false;
+        }
+        for (r = 0; r < ROWS - 1; r++) for (c = PM_LO; c < PM_HI; c++) if (hW[c][r]) {
+            var lf = c > PM_LO && hW[c - 1][r], rg = c < PM_HI - 1 && hW[c + 1][r];
+            if (!lf && !rg) hW[c][r] = false;
+        }
+    }
+
     function genMaze() {
         var rng = makeRng(0x9E3779B1); // fixed seed -> same maze always
         var vW = [], hW = [], vis = [], c, r;
         for (c = 0; c < COLS; c++) { vW[c] = new Array(ROWS).fill(true); hW[c] = new Array(ROWS).fill(true); vis[c] = new Array(ROWS).fill(false); }
-        var stack = [{ c: 0, r: 0 }]; vis[0][0] = true;
+        // Generate only the LEFT half, then mirror it to the right, so the maze is
+        // left-right symmetric like the real Pac-Man board. MID = the centre axis
+        // column; AX-1-c / AX-c map a left edge to its mirrored right edge.
+        var MID = GH_COL, AX = PM_LO + PM_HI - 1;
+        var stack = [{ c: PM_LO, r: 0 }]; vis[PM_LO][0] = true;
         while (stack.length) {
             var cur = stack[stack.length - 1], nb = [];
-            if (cur.c < COLS - 1 && !vis[cur.c + 1][cur.r]) nb.push({ c: cur.c + 1, r: cur.r, e: 'v', ec: cur.c, er: cur.r });
-            if (cur.c > 0 && !vis[cur.c - 1][cur.r]) nb.push({ c: cur.c - 1, r: cur.r, e: 'v', ec: cur.c - 1, er: cur.r });
+            if (cur.c < MID && !vis[cur.c + 1][cur.r]) nb.push({ c: cur.c + 1, r: cur.r, e: 'v', ec: cur.c, er: cur.r });
+            if (cur.c > PM_LO && !vis[cur.c - 1][cur.r]) nb.push({ c: cur.c - 1, r: cur.r, e: 'v', ec: cur.c - 1, er: cur.r });
             if (cur.r < ROWS - 1 && !vis[cur.c][cur.r + 1]) nb.push({ c: cur.c, r: cur.r + 1, e: 'h', ec: cur.c, er: cur.r });
             if (cur.r > 0 && !vis[cur.c][cur.r - 1]) nb.push({ c: cur.c, r: cur.r - 1, e: 'h', ec: cur.c, er: cur.r - 1 });
             if (!nb.length) { stack.pop(); continue; }
@@ -210,14 +239,22 @@
             if (n.e === 'v') vW[n.ec][n.er] = false; else hW[n.ec][n.er] = false;
             vis[n.c][n.r] = true; stack.push({ c: n.c, r: n.r });
         }
-        // Open the maze up — fewer walls = easier, but compact (keeps structure).
-        for (c = 0; c < COLS - 1; c++) for (r = 0; r < ROWS; r++) if (vW[c][r] && rng() < 0.72) vW[c][r] = false;
-        for (c = 0; c < COLS; c++) for (r = 0; r < ROWS - 1; r++) if (hW[c][r] && rng() < 0.72) hW[c][r] = false;
+        // Open the left half up — fewer walls = easier, but compact (keeps structure).
+        for (c = PM_LO; c < MID; c++) for (r = 0; r < ROWS; r++) if (vW[c][r] && rng() < PM_OPEN) vW[c][r] = false;
+        for (c = PM_LO; c <= MID; c++) for (r = 0; r < ROWS - 1; r++) if (hW[c][r] && rng() < PM_OPEN) hW[c][r] = false;
+        // Mirror the left half onto the right (seam at MID stays connected).
+        for (c = PM_LO; c < MID; c++) for (r = 0; r < ROWS; r++) vW[AX - 1 - c][r] = vW[c][r];
+        for (c = PM_LO; c < MID; c++) for (r = 0; r < ROWS - 1; r++) hW[AX - c][r] = hW[c][r];
+        stripSingletons(vW, hW);
         stampGhostHouse(vW, hW);
+        // Open the two rows directly above Pac's spawn so it leaves the area easily.
+        for (var wc = GH_COL - 1; wc <= GH_COL + 1; wc++) { hW[wc][ROWS - 2] = false; hW[wc][ROWS - 3] = false; }
         return { vW: vW, hW: hW };
     }
     function canMove(m, c, r, dx, dy) {
-        if (!inBounds(c + dx, r + dy)) return false;
+        // tunnel: on the warp row, stepping off either horizontal edge is allowed
+        if (dy === 0 && r === PM_WARP_ROW && (c + dx < PM_LO || c + dx >= PM_HI)) return true;
+        if (!pmIn(c + dx, r + dy)) return false;
         if (dx === 1) return !m.vW[c][r];
         if (dx === -1) return !m.vW[c - 1][r];
         if (dy === 1) return !m.hW[c][r];
@@ -229,11 +266,11 @@
         ctx.strokeStyle = colors.ink;
         ctx.lineCap = 'round';
         ctx.lineWidth = Math.max(1.5, L.gap); // thin lines, like the reference
-        for (c = 0; c < COLS - 1; c++) for (r = 0; r < ROWS; r++) if (m.vW[c][r]) {
+        for (c = PM_LO; c < PM_HI - 1; c++) for (r = 0; r < ROWS; r++) if (m.vW[c][r]) {
             var x = L.ox + c * L.step + L.cell + L.gap / 2, y0 = L.oy + r * L.step, y1 = y0 + L.cell;
             ctx.beginPath(); ctx.moveTo(x, y0); ctx.lineTo(x, y1); ctx.stroke();
         }
-        for (c = 0; c < COLS; c++) for (r = 0; r < ROWS - 1; r++) if (m.hW[c][r]) {
+        for (c = PM_LO; c < PM_HI; c++) for (r = 0; r < ROWS - 1; r++) if (m.hW[c][r]) {
             var y = L.oy + r * L.step + L.cell + L.gap / 2, x0 = L.ox + c * L.step, x1 = x0 + L.cell;
             ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x1, y); ctx.stroke();
         }
@@ -314,15 +351,24 @@
         var DOOR = { c: GH_COL, r: GH_ROW - 2 };           // exit cell above the box opening
         var PEN = { c: GH_COL, r: GH_ROW - 1 };             // inside the box (eyes return here)
         var GCOL = ['#d6453d', '#f78fd0', '#27c0e0', '#e08a3c']; // blinky, pinky, inky, clyde
-        var CORNERS = [{ c: COLS - 1, r: 0 }, { c: 0, r: 0 }, { c: COLS - 1, r: ROWS - 1 }, { c: 0, r: ROWS - 1 }];
+        var CORNERS = [{ c: PM_HI - 1, r: 0 }, { c: PM_LO, r: 0 }, { c: PM_HI - 1, r: ROWS - 1 }, { c: PM_LO, r: ROWS - 1 }];
 
         function countPellets() { var n = 0; for (var c = 0; c < COLS; c++) for (var r = 0; r < ROWS; r++) if (pellets[c][r]) n++; return n; }
 
         function placeEnergizers() {
-            // four power pellets spread across the board (corners-ish, on the grid)
+            // Promote the four corner-most dark blocks to power pellets — no new
+            // pellets on empty cells, so every pellet is a contribution block and
+            // clearing them all wins the round.
             energizers = {};
-            var spots = [{ c: 2, r: 1 }, { c: COLS - 3, r: 1 }, { c: 2, r: ROWS - 2 }, { c: COLS - 3, r: ROWS - 2 }];
-            spots.forEach(function (s) { energizers[s.c + ',' + s.r] = true; pellets[s.c][s.r] = true; });
+            var corners = [{ c: PM_LO, r: 0 }, { c: PM_HI - 1, r: 0 }, { c: PM_LO, r: ROWS - 1 }, { c: PM_HI - 1, r: ROWS - 1 }];
+            corners.forEach(function (cn) {
+                var best = null, bd = 1e9;
+                for (var c = PM_LO; c < PM_HI; c++) for (var r = 0; r < ROWS; r++) if (pellets[c][r]) {
+                    var d = Math.abs(c - cn.c) + Math.abs(r - cn.r);
+                    if (d < bd) { bd = d; best = { c: c, r: r }; }
+                }
+                if (best) energizers[best.c + ',' + best.r] = true;
+            });
         }
         function isEnergizer(c, r) { return energizers[c + ',' + r] === true; }
 
@@ -342,6 +388,14 @@
         function newBoard() {
             maze = genMaze();
             pellets = fullMask();
+            // Pellets only on the darker contribution blocks (lit cells) — Pac eats
+            // the graph's contributions; empty cells are just open corridor.
+            for (var pc = 0; pc < COLS; pc++) for (var pr = 0; pr < ROWS; pr++) pellets[pc][pr] = (env.levels[pc][pr] > 0);
+            // fallback: if the graph has no contributions yet, dot the whole band so
+            // there is still something to clear
+            var any = false;
+            for (var ac = PM_LO; ac < PM_HI && !any; ac++) for (var ar = 0; ar < ROWS; ar++) if (pellets[ac][ar]) { any = true; break; }
+            if (!any) for (var fc = PM_LO; fc < PM_HI; fc++) for (var fr = 0; fr < ROWS; fr++) pellets[fc][fr] = true;
             pac = { c: START.c, r: START.r }; dir = { x: 1, y: 0 }; want = { x: 1, y: 0 };
             pellets[pac.c][pac.r] = false;
             placeEnergizers();
@@ -385,22 +439,37 @@
                 var d = Math.abs(g.c + m.x - tc) + Math.abs(g.r + m.y - tr) + (away ? Math.random() * 1.5 : 0);
                 if (away ? d > bb : d < bb) { bb = d; best = m; }
             });
-            g.c += best.x; g.r += best.y; g.dir = best;
+            g.c = wrapCol(g.c + best.x); g.r += best.y; g.dir = best;
         }
+        // Attract-mode brain: BFS over open corridors to the nearest pellet and
+        // step along that path. (Greedy Manhattan steering oscillated in place
+        // once pellets only sat on the sparse contribution blocks.)
         function aiPacDir() {
-            var t = null, bd = 1e9, c, r;
-            for (c = 0; c < COLS; c++) for (r = 0; r < ROWS; r++) if (pellets[c][r]) {
-                var d = Math.abs(c - pac.c) + Math.abs(r - pac.r); if (d < bd) { bd = d; t = { c: c, r: r }; }
+            var startK = pac.c + ',' + pac.r;
+            var prev = {}; prev[startK] = { fromK: null, step: null };
+            var q = [{ c: pac.c, r: pac.r }], qi = 0, target = null;
+            var dirs = [{ x: 1, y: 0 }, { x: -1, y: 0 }, { x: 0, y: 1 }, { x: 0, y: -1 }];
+            while (qi < q.length) {
+                var cur = q[qi++];
+                if ((cur.c !== pac.c || cur.r !== pac.r) && pellets[cur.c][cur.r]) { target = cur; break; }
+                for (var i = 0; i < dirs.length; i++) {
+                    var d = dirs[i];
+                    if (!canMove(maze, cur.c, cur.r, d.x, d.y)) continue;
+                    var ncx = wrapCol(cur.c + d.x), ncy = cur.r + d.y;
+                    var nk = ncx + ',' + ncy;
+                    if (prev[nk]) continue;
+                    prev[nk] = { fromK: cur.c + ',' + cur.r, step: d };
+                    q.push({ c: ncx, r: ncy });
+                }
             }
-            var moves = validMoves(pac.c, pac.r, dir); if (!moves.length) moves = validMoves(pac.c, pac.r, null);
-            if (!moves.length) return dir;
-            if (!t) return moves[0];
-            var best = moves[0], bb = 1e9;
-            moves.forEach(function (m) {
-                var dist = Math.abs(pac.c + m.x - t.c) + Math.abs(pac.r + m.y - t.r) + Math.random() * 0.5;
-                if (dist < bb) { bb = dist; best = m; }
-            });
-            return best;
+            if (!target) { // no reachable pellet — keep drifting forward
+                var mv = validMoves(pac.c, pac.r, dir);
+                if (!mv.length) mv = validMoves(pac.c, pac.r, null);
+                return mv.length ? mv[0] : dir;
+            }
+            var k = target.c + ',' + target.r;            // walk back to the first step out of pac
+            while (prev[k].fromK !== startK) k = prev[k].fromK;
+            return prev[k].step;
         }
         function chaseTarget(g) {
             if (g.kind === 0) return { c: pac.c, r: pac.r };                               // Blinky: direct
@@ -481,7 +550,7 @@
                     acc = 0;
                     var w = mode === 'play' ? want : aiPacDir();
                     if (canMove(maze, pac.c, pac.r, w.x, w.y)) dir = w;
-                    if (canMove(maze, pac.c, pac.r, dir.x, dir.y)) { pac.c += dir.x; pac.r += dir.y; }
+                    if (canMove(maze, pac.c, pac.r, dir.x, dir.y)) { pac.c = wrapCol(pac.c + dir.x); pac.r += dir.y; }
                     if (pellets[pac.c][pac.r]) {
                         pellets[pac.c][pac.r] = false;
                         if (isEnergizer(pac.c, pac.r)) { energizers[pac.c + ',' + pac.r] = false; score += 50; frightenAll(); if (mode === 'play') Sfx.power(); }
