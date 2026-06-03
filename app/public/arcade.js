@@ -221,10 +221,14 @@
         var rng = makeRng(0x9E3779B1); // fixed seed -> same maze always
         var vW = [], hW = [], vis = [], c, r;
         for (c = 0; c < COLS; c++) { vW[c] = new Array(ROWS).fill(true); hW[c] = new Array(ROWS).fill(true); vis[c] = new Array(ROWS).fill(false); }
+        // Generate only the LEFT half, then mirror it to the right, so the maze is
+        // left-right symmetric like the real Pac-Man board. MID = the centre axis
+        // column; AX-1-c / AX-c map a left edge to its mirrored right edge.
+        var MID = GH_COL, AX = PM_LO + PM_HI - 1;
         var stack = [{ c: PM_LO, r: 0 }]; vis[PM_LO][0] = true;
         while (stack.length) {
             var cur = stack[stack.length - 1], nb = [];
-            if (cur.c < PM_HI - 1 && !vis[cur.c + 1][cur.r]) nb.push({ c: cur.c + 1, r: cur.r, e: 'v', ec: cur.c, er: cur.r });
+            if (cur.c < MID && !vis[cur.c + 1][cur.r]) nb.push({ c: cur.c + 1, r: cur.r, e: 'v', ec: cur.c, er: cur.r });
             if (cur.c > PM_LO && !vis[cur.c - 1][cur.r]) nb.push({ c: cur.c - 1, r: cur.r, e: 'v', ec: cur.c - 1, er: cur.r });
             if (cur.r < ROWS - 1 && !vis[cur.c][cur.r + 1]) nb.push({ c: cur.c, r: cur.r + 1, e: 'h', ec: cur.c, er: cur.r });
             if (cur.r > 0 && !vis[cur.c][cur.r - 1]) nb.push({ c: cur.c, r: cur.r - 1, e: 'h', ec: cur.c, er: cur.r - 1 });
@@ -233,9 +237,12 @@
             if (n.e === 'v') vW[n.ec][n.er] = false; else hW[n.ec][n.er] = false;
             vis[n.c][n.r] = true; stack.push({ c: n.c, r: n.r });
         }
-        // Open the maze up — fewer walls = easier, but compact (keeps structure).
-        for (c = PM_LO; c < PM_HI - 1; c++) for (r = 0; r < ROWS; r++) if (vW[c][r] && rng() < PM_OPEN) vW[c][r] = false;
-        for (c = PM_LO; c < PM_HI; c++) for (r = 0; r < ROWS - 1; r++) if (hW[c][r] && rng() < PM_OPEN) hW[c][r] = false;
+        // Open the left half up — fewer walls = easier, but compact (keeps structure).
+        for (c = PM_LO; c < MID; c++) for (r = 0; r < ROWS; r++) if (vW[c][r] && rng() < PM_OPEN) vW[c][r] = false;
+        for (c = PM_LO; c <= MID; c++) for (r = 0; r < ROWS - 1; r++) if (hW[c][r] && rng() < PM_OPEN) hW[c][r] = false;
+        // Mirror the left half onto the right (seam at MID stays connected).
+        for (c = PM_LO; c < MID; c++) for (r = 0; r < ROWS; r++) vW[AX - 1 - c][r] = vW[c][r];
+        for (c = PM_LO; c < MID; c++) for (r = 0; r < ROWS - 1; r++) hW[AX - c][r] = hW[c][r];
         stripSingletons(vW, hW);
         stampGhostHouse(vW, hW);
         return { vW: vW, hW: hW };
