@@ -36,6 +36,8 @@
     var PM_HI = PM_LO + PM_COLS;
     var PM_OPEN = 0.3;          // fraction of maze walls removed — lower = denser maze
     function pmIn(c, r) { return c >= PM_LO && c < PM_HI && r >= 0 && r < ROWS; }
+    var PM_WARP_ROW = GH_ROW;   // tunnel row: stepping off either edge warps to the far side
+    function wrapCol(c) { return c < PM_LO ? PM_HI - 1 : c >= PM_HI ? PM_LO : c; }
     var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
     // ---- palette (from the page's Cru/Cornerstone CSS variables) -------------
@@ -245,9 +247,13 @@
         for (c = PM_LO; c < MID; c++) for (r = 0; r < ROWS - 1; r++) hW[AX - c][r] = hW[c][r];
         stripSingletons(vW, hW);
         stampGhostHouse(vW, hW);
+        // Open the two rows directly above Pac's spawn so it leaves the area easily.
+        for (var wc = GH_COL - 1; wc <= GH_COL + 1; wc++) { hW[wc][ROWS - 2] = false; hW[wc][ROWS - 3] = false; }
         return { vW: vW, hW: hW };
     }
     function canMove(m, c, r, dx, dy) {
+        // tunnel: on the warp row, stepping off either horizontal edge is allowed
+        if (dy === 0 && r === PM_WARP_ROW && (c + dx < PM_LO || c + dx >= PM_HI)) return true;
         if (!pmIn(c + dx, r + dy)) return false;
         if (dx === 1) return !m.vW[c][r];
         if (dx === -1) return !m.vW[c - 1][r];
@@ -419,7 +425,7 @@
                 var d = Math.abs(g.c + m.x - tc) + Math.abs(g.r + m.y - tr) + (away ? Math.random() * 1.5 : 0);
                 if (away ? d > bb : d < bb) { bb = d; best = m; }
             });
-            g.c += best.x; g.r += best.y; g.dir = best;
+            g.c = wrapCol(g.c + best.x); g.r += best.y; g.dir = best;
         }
         // Attract-mode brain: BFS over open corridors to the nearest pellet and
         // step along that path. (Greedy Manhattan steering oscillated in place
@@ -435,10 +441,11 @@
                 for (var i = 0; i < dirs.length; i++) {
                     var d = dirs[i];
                     if (!canMove(maze, cur.c, cur.r, d.x, d.y)) continue;
-                    var nk = (cur.c + d.x) + ',' + (cur.r + d.y);
+                    var ncx = wrapCol(cur.c + d.x), ncy = cur.r + d.y;
+                    var nk = ncx + ',' + ncy;
                     if (prev[nk]) continue;
                     prev[nk] = { fromK: cur.c + ',' + cur.r, step: d };
-                    q.push({ c: cur.c + d.x, r: cur.r + d.y });
+                    q.push({ c: ncx, r: ncy });
                 }
             }
             if (!target) { // no reachable pellet — keep drifting forward
@@ -529,7 +536,7 @@
                     acc = 0;
                     var w = mode === 'play' ? want : aiPacDir();
                     if (canMove(maze, pac.c, pac.r, w.x, w.y)) dir = w;
-                    if (canMove(maze, pac.c, pac.r, dir.x, dir.y)) { pac.c += dir.x; pac.r += dir.y; }
+                    if (canMove(maze, pac.c, pac.r, dir.x, dir.y)) { pac.c = wrapCol(pac.c + dir.x); pac.r += dir.y; }
                     if (pellets[pac.c][pac.r]) {
                         pellets[pac.c][pac.r] = false;
                         if (isEnergizer(pac.c, pac.r)) { energizers[pac.c + ',' + pac.r] = false; score += 50; frightenAll(); if (mode === 'play') Sfx.power(); }
