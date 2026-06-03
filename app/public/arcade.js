@@ -687,7 +687,7 @@
             var L = env.L;
             pw = L.cell * 1.4;
             shipY = L.oy + L.gh + 2;
-            swayAmp = L.step * 1.4;
+            swayAmp = 0;            // static formation — the contribution graph itself
             pSpd = L.step * 13;
             eSpd = L.step * (6 + (level - 1) * 0.6);
             diveSpd = L.step * (4.5 + (level - 1) * 0.5);
@@ -696,27 +696,23 @@
         function buildSwarm() {
             var L = env.L;
             swarm = [];
-            var rows = Math.min(3, ROWS - 2);
-            for (var c = 0; c < COLS; c++) for (var r = 0; r < rows; r++) {
-                if (env.levels[c][r] > 0) {
-                    var p = cellXY(L, c, r);
-                    swarm.push(mkEnemy(p.x + L.cell / 2, p.y + L.cell / 2, r));
-                }
+            // The whole contribution graph IS the swarm: every lit cell becomes an
+            // enemy ranked by its contribution level (per the galaga /
+            // pacman-contribution-graph design — the graph is the play area).
+            for (var c = 0; c < COLS; c++) for (var r = 0; r < ROWS; r++) {
+                var lvl = env.levels[c][r];
+                if (lvl > 0) { var p = cellXY(L, c, r); swarm.push(mkEnemy(p.x + L.cell / 2, p.y + L.cell / 2, lvl)); }
             }
-            // guarantee a playable swarm if the contribution grid is sparse
-            for (var i = swarm.length, g = 0; i < 12 && g < 12; g++) {
-                var cc = 3 + g * 4, rr = g % rows;
-                if (cc >= COLS) break;
-                var q = cellXY(L, cc, rr);
-                swarm.push(mkEnemy(q.x + L.cell / 2, q.y + L.cell / 2, rr));
-                i++;
+            // fallback only if the grid is entirely empty
+            if (!swarm.length) for (var g = 0; g < 12; g++) {
+                var cc = 3 + g * 4; if (cc >= COLS) break;
+                var q = cellXY(L, cc, g % 3); swarm.push(mkEnemy(q.x + L.cell / 2, q.y + L.cell / 2, 1 + (g % 4)));
             }
         }
-        // Rank by row, classic Galaga: front row = bee (top score), then green, then blue.
-        function mkEnemy(hx, hy, row) {
-            var rank = row % 3;
-            var sp = rank === 0 ? GA_BEE : rank === 1 ? GA_GREEN : GA_BLUE;
-            var pts = rank === 0 ? 30 : rank === 1 ? 20 : 10;
+        // Rank by contribution level: brighter cells are higher-value enemies.
+        function mkEnemy(hx, hy, lvl) {
+            var sp = lvl >= 4 ? GA_BEE : lvl === 3 ? GA_GREEN : GA_BLUE;
+            var pts = lvl >= 4 ? 30 : lvl === 3 ? 20 : 10;
             return { hx: hx, hy: hy, x: 0, y: 0, alive: true, sp: sp, pts: pts, dive: false, t: 0, sx: 0 };
         }
         function newWave() {
@@ -837,7 +833,7 @@
                 for (i = 0; i < swarm.length; i++) {
                     var e = swarm[i]; if (!e.alive) continue;
                     var p = ePos(e);
-                    drawSprite(ctx, p.x, p.y, L.cell * 1.25, e.sp);
+                    drawSprite(ctx, p.x, p.y, L.cell * 1.1, e.sp);
                 }
                 // bullets
                 ctx.fillStyle = colors.highlight;
@@ -933,7 +929,7 @@
         function randColor() { var p = colorsInPlay(); return p[Math.floor(Math.random() * p.length)]; }
 
         function seed() {
-            var L = env.L, rows = Math.min(3, Math.max(2, Math.floor((dangerY - originY) / rowH) - 1));
+            var L = env.L, rows = Math.min(4, Math.max(2, Math.floor((dangerY - originY) / rowH) - 1));
             grid = [];
             for (var r = 0; r < rows; r++) {
                 var row = new Array(colsForRow(r)).fill(null);
@@ -948,7 +944,7 @@
         }
         function tune() {
             var L = env.L;
-            rad = Math.max(4, L.cell * 0.72);
+            rad = Math.max(3, L.cell * 0.55);
             rowH = rad * 1.7;
             originX = L.ox; originY = L.oy;
             shooterX = L.ox + L.gw / 2; shooterY = L.oy + L.gh + 2;
