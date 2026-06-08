@@ -213,7 +213,9 @@ app.get('/analytics', ensureRepositoryAccess, (req, res) => {
 app.get('/auth/github', passport.authenticate('github', { scope: ['user:email'] }));
 
 app.get('/auth/github/callback',
-    passport.authenticate('github', { failureRedirect: '/' }),
+    // keepSessionInfo preserves req.session.returnTo across passport 0.6.0's
+    // login session regeneration; without it deep links fall back to /leaderboard.
+    passport.authenticate('github', { failureRedirect: '/', keepSessionInfo: true }),
     (req, res) => {
         if (!req.user) {
             logger.error('Failed to obtain access token during GitHub OAuth callback');
