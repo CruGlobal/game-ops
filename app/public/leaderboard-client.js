@@ -30,8 +30,22 @@ document.addEventListener('DOMContentLoaded', async () => {
     await checkDevOpsStatus();
     initializeEventListeners();
     await loadLeaderboardData();
+    applyTabFromUrl();
     checkAndShowWinnersBanner();
 });
+
+/**
+ * Open a specific tab from a ?tab= query param so deep links (e.g. the Slack
+ * winners post linking to the current period leaderboard) land on the right tab.
+ * Falls back silently to the default tab for missing/unknown values.
+ */
+function applyTabFromUrl() {
+    const requested = new URLSearchParams(window.location.search).get('tab');
+    const valid = ['all-time', 'quarterly', 'hall-of-fame'];
+    if (requested && valid.includes(requested)) {
+        switchTab(requested);
+    }
+}
 
 /**
  * Check if current user is in DevOps team
@@ -324,9 +338,11 @@ function checkAndShowWinnersBanner() {
     }
 
     const categoryLabel = recent.category === 'devops' ? 'DevOps ' : '';
+    // Match the configured period: "Tertile" when the system is tertile, else "Quarter".
+    const periodLabel = currentQuarterInfo?.periodLabel || 'Quarter';
 
     content.innerHTML = `
-        <div class="winners-banner-title">👑 ${escapeHtml(recent.quarter)} ${categoryLabel}Quarter Champions</div>
+        <div class="winners-banner-title">👑 ${escapeHtml(recent.quarter)} ${categoryLabel}${periodLabel} Champions</div>
         <div class="winners-banner-champion">
             <img src="${escapeHtml(winner.avatarUrl || '/images/default-avatar.png')}" alt="${escapeHtml(winner.username)}">
             <div class="winners-banner-champion-info">

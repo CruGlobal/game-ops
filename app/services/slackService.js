@@ -28,7 +28,12 @@ export async function postQuarterlyWinnersSlack(quarterString, billResults, quar
             return;
         }
 
-        const blocks = buildSlackBlocks(quarterString, billResults, quarterlyWinner);
+        // Match the configured period: "Tertile" for the tertile system, else "Quarter".
+        const periodLabel = settings.systemType === 'tertile' ? 'Tertile' : 'Quarter';
+        const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
+        const leaderboardUrl = `${baseUrl.replace(/\/$/, '')}/leaderboard?tab=quarterly`;
+
+        const blocks = buildSlackBlocks(quarterString, billResults, quarterlyWinner, periodLabel, leaderboardUrl);
 
         const response = await fetch(webhookUrl, {
             method: 'POST',
@@ -56,19 +61,23 @@ export async function postQuarterlyWinnersSlack(quarterString, billResults, quar
 }
 
 /**
- * Build Slack Block Kit blocks for the quarterly winners announcement.
+ * Build Slack Block Kit blocks for the period winners announcement.
+ *
+ * @param {String} periodLabel - "Tertile" or "Quarter" per the configured system
+ * @param {String} leaderboardUrl - Deep link to the current-period leaderboard tab
  */
-function buildSlackBlocks(quarterString, billResults, quarterlyWinner) {
+function buildSlackBlocks(quarterString, billResults, quarterlyWinner, periodLabel = 'Quarter', leaderboardUrl = null) {
     const winner = quarterlyWinner?.winner || {};
     const top3 = quarterlyWinner?.top3 || [];
     const totalParticipants = quarterlyWinner?.totalParticipants || 0;
+    const periodLower = periodLabel.toLowerCase();
 
     const blocks = [
         {
             type: 'header',
             text: {
                 type: 'plain_text',
-                text: `${quarterString} Quarterly Results`,
+                text: `${quarterString} ${periodLabel} Results`,
                 emoji: true
             }
         },
@@ -127,6 +136,20 @@ function buildSlackBlocks(quarterString, billResults, quarterlyWinner) {
         }
     }
 
+    // Leaderboard link (deep-links to the current-period tab)
+    if (leaderboardUrl) {
+        blocks.push(
+            { type: 'divider' },
+            {
+                type: 'section',
+                text: {
+                    type: 'mrkdwn',
+                    text: `:bar_chart: <${leaderboardUrl}|View the full This ${periodLabel} leaderboard>`
+                }
+            }
+        );
+    }
+
     // Footer
     blocks.push(
         { type: 'divider' },
@@ -135,7 +158,7 @@ function buildSlackBlocks(quarterString, billResults, quarterlyWinner) {
             elements: [
                 {
                     type: 'mrkdwn',
-                    text: `${totalParticipants} total contributors this quarter`
+                    text: `${totalParticipants} total contributors this ${periodLower}`
                 }
             ]
         }
