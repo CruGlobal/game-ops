@@ -48,6 +48,7 @@ A gamified GitHub Pull Request tracking and leaderboard system with real-time up
     - Documentation: base points
   - Points history with timestamps
   - Points leaderboard
+  - **Fair attribution & anti-farming** - points go to the human contributor, not automation, and can't be farmed (see [Contribution Attribution](#contribution-attribution--anti-farming))
 
 - **🎯 Weekly Challenges**
   - Auto-generated every Monday (3 new challenges)
@@ -348,6 +349,36 @@ export const POINTS = {
   DOCUMENTATION_BONUS: 0
 };
 ```
+
+### Contribution Attribution & Anti-Farming
+
+Points are awarded to the human who did the work, and the system guards against
+inflated scores from automation and repeat submissions. These rules apply across
+all ingest paths — the GitHub webhook, the 6-hour catch-up cron, and the historical
+backfill.
+
+**PR authorship**
+- PRs opened by a proxy-bot account (`terrabloks[bot]`, `cru-devops`) are
+  reattributed to the human who initiated them. The contributor is read from the
+  `Co-authored-by:` trailer that TerraBloks stamps on its bot commit (the GitHub
+  login is parsed from the `…@users.noreply.github.com` co-author email).
+- If the real author can't be resolved, the PR is skipped rather than crediting
+  the bot.
+
+**Reviews**
+- **Proxy-bot reviews are ignored.** TerraBloks posts an "Auto-approved by
+  TerraBloks" approval as `cru-devops` on every PR it opens — that is automation,
+  not a human review, and earns no points.
+- **One credit per reviewer per PR.** A reviewer earns at most one review credit on
+  a given PR no matter how many times they review it. Multiple distinct reviewers
+  still each earn one.
+- **Self-reviews don't count.** Reviewing your own PR earns nothing (proxy-bot PR
+  authors are resolved to the real initiator before this check).
+- **Only substantive reviews count.** Only `APPROVED` and `CHANGES_REQUESTED`
+  reviews earn a credit; `COMMENTED`, `DISMISSED`, and `PENDING` do not.
+
+Proxy-bot accounts are configured in `app/services/attributionService.js`
+(`PROXY_BOT_LOGINS`).
 
 ### Bill/Vonette Reward System
 

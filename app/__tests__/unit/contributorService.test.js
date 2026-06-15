@@ -3,7 +3,8 @@ import {
   awardBadges,
   getTopContributors,
   getTopReviewers,
-  initializeDatabase
+  initializeDatabase,
+  processSingleReview
 } from '../../services/contributorService.js';
 import { prisma, createTestContributor, mockGitHubApi } from '../setup.js';
 
@@ -171,6 +172,28 @@ describe('ContributorService', () => {
     });
   });
 
+
+  describe('processSingleReview guards', () => {
+    // These guards return before any DB/GitHub call, so no mocking is needed.
+    const base = {
+      reviewId: 1,
+      submittedAt: '2026-06-13T18:26:45Z',
+      prNumber: 999,
+      prAuthor: 'some-author'
+    };
+
+    it('skips proxy-bot reviews (TerraBloks auto-approval as cru-devops)', async () => {
+      const result = await processSingleReview({ ...base, username: 'cru-devops', state: 'APPROVED' });
+      expect(result).toEqual({ processed: false, reason: 'proxy_bot_review' });
+    });
+
+    it('skips non-crediting review states (COMMENTED/DISMISSED/PENDING, any case)', async () => {
+      for (const state of ['COMMENTED', 'DISMISSED', 'PENDING', 'commented', 'dismissed']) {
+        const result = await processSingleReview({ ...base, username: 'human-reviewer', state });
+        expect(result).toEqual({ processed: false, reason: 'non_crediting_state' });
+      }
+    });
+  });
 
   afterAll(async () => {
     // Disconnect Prisma to allow Jest to exit
