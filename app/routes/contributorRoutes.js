@@ -33,8 +33,8 @@ import {
     checkDuplicatesController,
     fixDuplicatesController,
     getQuarterInfoController,
-    getQuarterConfigController,
-    updateQuarterConfigController,
+
+
     getAllTimeLeaderboardController,
     getQuarterlyLeaderboardController,
     getQuarterlyLeaderboardByQuarterController,
@@ -59,7 +59,9 @@ import {
     toggleCronTaskController,
     searchContributorsController,
     bulkResetController,
-    recalculateAllTimePointsController
+    recalculateAllTimePointsController,
+    getQuarterConfigController,
+    updateQuarterConfigController
 } from '../controllers/adminController.js';
 import { authenticate } from '../middleware/authMiddleware.js';
 import { login } from '../controllers/authController.js';
