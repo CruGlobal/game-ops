@@ -4,6 +4,22 @@ All notable changes to Game Ops are documented in this file.
 
 ---
 
+## [Unreleased] - 2026-06-15
+
+### Fixed
+- **Contribution attribution & review anti-farming** - points now go to the human contributor and can no longer be farmed. Applied across all ingest paths (webhook, 6-hour catch-up cron, historical backfill):
+  - **PR authorship reattribution** - PRs opened by a proxy-bot account (`terrabloks[bot]`, `cru-devops`) are reattributed to the human who initiated them, parsed from the `Co-authored-by:` trailer TerraBloks stamps on its bot commit. Unresolvable PRs are skipped instead of crediting the bot.
+  - **Proxy-bot review points blocked** - TerraBloks' "Auto-approved by TerraBloks" approval (posted as `cru-devops`) no longer earns review points.
+  - **One review credit per reviewer per PR** - review dedupe is now keyed on `(contributor, PR)` instead of GitHub review id, closing the loophole where one person could submit many reviews on a single PR for repeated points. Distinct reviewers still each earn one.
+  - **Self-reviews excluded** - reviewing your own PR earns no points; proxy-bot PR authors are resolved to the real initiator before the comparison.
+  - **Only substantive review states count** - `APPROVED` and `CHANGES_REQUESTED` earn a credit; `COMMENTED`, `DISMISSED`, and `PENDING` do not.
+  - Review state is now normalized for case — webhook payloads send lowercase state (`approved`) while the REST API sends uppercase (`APPROVED`); the previous uppercase-only handling would have rejected every webhook-delivered review.
+
+### Added
+- `app/services/attributionService.js` - proxy-bot registry (`PROXY_BOT_LOGINS`) and `Co-authored-by` resolver used to attribute proxy-bot PRs to their real author.
+
+---
+
 ## [Unreleased] - 2026-03-13
 
 ### Added

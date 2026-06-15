@@ -9,6 +9,7 @@ import { checkAndAwardAchievements } from './achievementService.js';
 import { updateStreak, checkStreakBadges } from './streakService.js';
 import { awardBadges } from './contributorService.js';
 import { autoJoinContributorToActiveChallenges } from './challengeService.js';
+import { isProxyBot, resolveProxyAuthor } from './attributionService.js';
 
 const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
 const repoOwner = process.env.REPO_OWNER || 'CruGlobal';
@@ -266,10 +267,18 @@ async function processPR(pr) {
             });
 
             for (const review of reviews) {
-                if (review.state === 'APPROVED' || review.state === 'COMMENTED') {
+                if (['APPROVED', 'CHANGES_REQUESTED'].includes((review.state || '').toUpperCase())) {
                     const reviewerUsername = review.user.login;
 
-                    // Check if review already processed using the composite unique key
+                    // Skip proxy-bot auto-approvals (e.g. TerraBloks as cru-devops)
+                    // and self-reviews (proxy-bot PR authors resolved to the initiator).
+                    if (isProxyBot(reviewerUsername)) continue;
+                    let effectiveAuthor = pr.user.login;
+                    if (isProxyBot(effectiveAuthor)) {
+                        effectiveAuthor = (await resolveProxyAuthor(pr.number)) || effectiveAuthor;
+                    }
+                    if (effectiveAuthor === reviewerUsername) continue;
+
                     const reviewer = await prisma.contributor.findUnique({
                         where: { username: reviewerUsername }
                     });
@@ -295,14 +304,12 @@ async function processPR(pr) {
                         }
                     });
 
-                    // Check if this specific review was already processed
-                    const existingReview = await prisma.processedReview.findUnique({
+                    // One review credit per (reviewer, PR): skip if this reviewer
+                    // already has a counted review on this PR, regardless of review id.
+                    const existingReview = await prisma.processedReview.findFirst({
                         where: {
-                            contributorId_prNumber_reviewId: {
-                                contributorId: reviewerRecord.id,
-                                prNumber: BigInt(pr.number),
-                                reviewId: BigInt(review.id)
-                            }
+                            contributorId: reviewerRecord.id,
+                            prNumber: BigInt(pr.number)
                         }
                     });
 

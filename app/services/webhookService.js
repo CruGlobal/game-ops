@@ -73,7 +73,9 @@ const handlePullRequestReviewEvent = async (payload) => {
         reviewId: review.id,
         username: review.user.login,
         submittedAt: review.submitted_at,
-        prNumber: pr.number
+        prNumber: pr.number,
+        state: review.state,
+        prAuthor: pr.user.login
     });
 
     logger.info('Webhook: processed review', {

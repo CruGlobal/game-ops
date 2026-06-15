@@ -8,6 +8,7 @@ import { POINT_REASONS } from '../config/points-config.js';
 import { checkAndAwardAchievements } from './achievementService.js';
 import { updateChallengeProgress, autoJoinContributorToActiveChallenges } from './challengeService.js';
 import { checkAndResetIfNewQuarter, updateQuarterlyStats } from './quarterlyService.js';
+import { isProxyBot, resolveProxyAuthor } from './attributionService.js';
 
 // Initialize Octokit with GitHub token and custom fetch
 const octokit = new Octokit({
@@ -23,6 +24,12 @@ const domain = process.env.BASE_URL || process.env.DOMAIN || 'http://localhost:3
 
 // Function to sleep for a specified number of milliseconds
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+// GitHub review states that earn a review credit. APPROVED and CHANGES_REQUESTED
+// are substantive; COMMENTED / DISMISSED / PENDING do not count. Compared against
+// an UPPER-cased state — the REST API returns uppercase but webhook payloads use
+// lowercase ("approved"), so callers' values must be normalized before checking.
+const REVIEW_CREDIT_STATES = new Set(['APPROVED', 'CHANGES_REQUESTED']);
 
 // Function to initialize the database.
 // DESTRUCTIVE: deletes every contributor, then re-imports the full history from
@@ -271,8 +278,21 @@ const updateLastFetchDate = async (date) => {
  * @returns {Object} { processed: boolean, reason: string }
  */
 export const processSingleMergedPR = async (prData) => {
-    const { number, title, username, mergedAt, labels = [] } = prData;
+    const { number, title, mergedAt, labels = [] } = prData;
+    let username = prData.username;
     const date = new Date(mergedAt);
+
+    // TerraBloks (and similar automation accounts) open PRs on behalf of a real
+    // contributor. Award the points to the human who initiated the PR — parsed
+    // from the commit Co-authored-by trailer — instead of the bot. If the real
+    // author can't be resolved, skip rather than credit the bot.
+    if (isProxyBot(username)) {
+        const realAuthor = await resolveProxyAuthor(number);
+        if (!realAuthor) {
+            return { processed: false, reason: 'proxy_bot_unresolved' };
+        }
+        username = realAuthor;
+    }
 
     // Check if already processed
     let contributor = await prisma.contributor.findUnique({
@@ -382,27 +402,59 @@ export const processSingleMergedPR = async (prData) => {
  * @param {string} reviewData.username - Reviewer username
  * @param {string} reviewData.submittedAt - ISO date string of review submission
  * @param {number} reviewData.prNumber - PR number the review belongs to
+ * @param {string} [reviewData.state] - GitHub review state (APPROVED, DISMISSED, …)
+ * @param {string} [reviewData.prAuthor] - login of the PR author (for self-review exclusion)
  * @returns {Object} { processed: boolean, reason: string }
  */
 export const processSingleReview = async (reviewData) => {
-    const { reviewId, username, submittedAt, prNumber } = reviewData;
+    const { reviewId, username, submittedAt, prNumber, state, prAuthor } = reviewData;
     const reviewDate = new Date(submittedAt);
+    // REST returns uppercase state, webhooks lowercase — normalize before checks.
+    const normalizedState = (state || '').toUpperCase();
 
-    // Check if already processed BEFORE mutating counts. updateContributor
-    // unconditionally increments reviewCount and the daily Review aggregate, so a
-    // duplicate re-processed review here would inflate those even though the points
-    // dedupe short-circuits — exactly the drift checkForDuplicates exists to clean.
+    // TerraBloks posts a PR approval as a proxy-bot account (cru-devops) on every
+    // PR it opens ("Auto-approved by TerraBloks"). That's automation, not a human
+    // review — don't award review points for it. Unlike PR authorship there's no
+    // human to reattribute to, so just skip.
+    if (isProxyBot(username)) {
+        return { processed: false, reason: 'proxy_bot_review' };
+    }
+
+    // Only substantive reviews earn a credit. Drive-by COMMENTED reviews and
+    // superseded DISMISSED/PENDING reviews don't count.
+    if (!REVIEW_CREDIT_STATES.has(normalizedState)) {
+        return { processed: false, reason: 'non_crediting_state' };
+    }
+
+    // One review credit per (reviewer, PR). If this contributor already has a
+    // counted review on this PR, skip — regardless of the GitHub review id. This
+    // both dedupes webhook/cron replays of the same review AND closes the farm
+    // where one person submits many reviews on a single PR to rack up points.
+    // updateContributor unconditionally increments reviewCount and the daily
+    // Review aggregate, so this guard must run BEFORE any mutation.
     const existing = await prisma.contributor.findUnique({
         where: { username },
         include: {
             processedReviews: {
-                where: { reviewId: BigInt(reviewId) }
+                where: { prNumber: BigInt(prNumber) }
             }
         }
     });
 
     if (existing?.processedReviews && existing.processedReviews.length > 0) {
-        return { processed: false, reason: 'duplicate' };
+        return { processed: false, reason: 'already_reviewed_pr' };
+    }
+
+    // Don't award review points for reviewing your own PR. Resolve proxy-bot
+    // authors (e.g. TerraBloks PRs, opened as terrabloks[bot]) to the real
+    // initiator first, so a contributor approving the PR they initiated is still
+    // caught as a self-review.
+    let effectiveAuthor = prAuthor;
+    if (effectiveAuthor && isProxyBot(effectiveAuthor)) {
+        effectiveAuthor = (await resolveProxyAuthor(prNumber)) || effectiveAuthor;
+    }
+    if (effectiveAuthor && effectiveAuthor === username) {
+        return { processed: false, reason: 'self_review' };
     }
 
     // Update contributor review count (creates the contributor if first-seen)
@@ -542,7 +594,9 @@ export const fetchPullRequests = async () => {
                                 reviewId: review.id,
                                 username: review.user.login,
                                 submittedAt: review.submitted_at,
-                                prNumber: pr.number
+                                prNumber: pr.number,
+                                state: review.state,
+                                prAuthor: pr.user.login
                             });
                             if (result.processed) reviewsAdded++;
                         } catch (err) {
