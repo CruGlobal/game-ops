@@ -93,18 +93,23 @@ async function fetchWithRetry(url, retries = 5, backoff = 3000) {
 
 function displayResults(stats, blocked) {
     const resultsDiv = document.getElementById('activity-results');
+    const escapeHtml = (unsafe) => {
+        if (unsafe == null) return '';
+        return String(unsafe).replace(/[&<"'>]/g, match =>
+            ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', '\'': '&#39;' })[match]);
+    };
     resultsDiv.innerHTML = `
         <h2>Stats</h2>
         <pre>
 Name                 PRs   Approved  Commented     Change  Dismissed
 ----                 ---   --------  ---------     ------  ---------
-${stats.map(stat => `${stat[0].padEnd(20)} ${stat[5].toString().padEnd(3)} ${stat[1].toString().padEnd(10)} ${stat[2].toString().padEnd(10)} ${stat[3].toString().padEnd(10)} ${stat[4].toString().padEnd(10)}`).join('\n')}
+${stats.map(stat => `${escapeHtml(stat[0]).padEnd(20)} ${stat[5].toString().padEnd(3)} ${stat[1].toString().padEnd(10)} ${stat[2].toString().padEnd(10)} ${stat[3].toString().padEnd(10)} ${stat[4].toString().padEnd(10)}`).join('\n')}
         </pre>
         <h2>Blocked</h2>
         <pre>
 Blocked by   Raised by       Count
 ----------   ---------       -----
-${blocked.map(block => `${block[0].padEnd(12)} ${block[1].padEnd(12)} ${block[2].toString().padEnd(5)}`).join('\n')}
+${blocked.map(block => `${escapeHtml(block[0]).padEnd(12)} ${escapeHtml(block[1]).padEnd(12)} ${block[2].toString().padEnd(5)}`).join('\n')}
         </pre>
     `;
 }

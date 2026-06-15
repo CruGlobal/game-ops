@@ -23,11 +23,16 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (response.ok) {
                 const contributors = await response.json();
                 contributorsList.innerHTML = '';
+                const escapeHtml = (unsafe) => {
+                    if (unsafe == null) return '';
+                    return String(unsafe).replace(/[&<"'>]/g, match =>
+                        ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', '\'': '&#39;' })[match]);
+                };
                 contributors.forEach(contributor => {
                     const listItem = document.createElement('li');
                     listItem.innerHTML = `
-                        ${contributor.username}
-                        <button class="reset-contributor" data-username="${contributor.username}">Reset</button>
+                        ${escapeHtml(contributor.username)}
+                        <button class="reset-contributor" data-username="${escapeHtml(contributor.username)}">Reset</button>
                     `;
                     contributorsList.appendChild(listItem);
                 });
@@ -149,7 +154,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (e.target.classList.contains('reset-contributor')) {
             const username = e.target.dataset.username;
             try {
-                const response = await fetch(`/api/admin/reset-contributor`, {
+                const response = await fetch('/api/admin/reset-contributor', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'

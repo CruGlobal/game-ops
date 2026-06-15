@@ -12,14 +12,19 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Parse the JSON response to get the list of badges
         const badges = await response.json();
         // Iterate over each badge and create a corresponding HTML element
+        const escapeHtml = (unsafe) => {
+            if (unsafe == null) return '';
+            return String(unsafe).replace(/[&<"'>]/g, match =>
+                ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', '\'': '&#39;' })[match]);
+        };
         badges.forEach(badge => {
             // Create a div element for the badge
             const badgeItem = document.createElement('div');
             badgeItem.className = 'badge-item'; // Set the class for styling
             // Set the inner HTML of the badge item with the badge image and name
             badgeItem.innerHTML = `
-                <img src="/images/badges/${badge}" alt="${badge}">
-                <div>${badge.replace('.png', '').replace('-', ' ')}</div>
+                <img src="/images/badges/${escapeHtml(badge)}" alt="${escapeHtml(badge)}">
+                <div>${escapeHtml(badge.replace('.png', '').replace(/-/g, ' '))}</div>
             `;
             // Append the badge item to the badge list
             badgeList.appendChild(badgeItem);
