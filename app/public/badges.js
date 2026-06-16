@@ -18,8 +18,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             badgeItem.className = 'badge-item'; // Set the class for styling
             // Set the inner HTML of the badge item with the badge image and name
             badgeItem.innerHTML = `
-                <img src="/images/badges/${badge}" alt="${badge}">
-                <div>${badge.replace('.png', '').replace('-', ' ')}</div>
+                <img src="/images/badges/${escapeHtml(badge)}" alt="${escapeHtml(badge)}">
+                <div>${escapeHtml(badge.replace('.png', '').replace(/-/g, ' '))}</div>
             `;
             // Append the badge item to the badge list
             badgeList.appendChild(badgeItem);

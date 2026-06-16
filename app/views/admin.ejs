@@ -577,6 +577,7 @@
         </div>
     </main>
 </div>
+<script src="/escape-html.js"></script>
 <script src="/notification-settings.js"></script>
 <script src="/admin.js"></script>
 <script src="/init.js"></script>
@@ -1382,9 +1383,9 @@ function initAutocomplete(inputId, dropdownId) {
                 const data = await resp.json();
                 if (data.success && data.contributors.length > 0) {
                     dropdown.innerHTML = data.contributors.map(c =>
-                        `<div class="autocomplete-item" data-username="${c.username}">
-                            <img src="${c.avatarUrl || ''}" alt="" style="width:20px;height:20px;border-radius:50%;vertical-align:middle;margin-right:6px;">
-                            ${c.username}
+                        `<div class="autocomplete-item" data-username="${escapeHtml(c.username)}">
+                            <img src="${escapeHtml(c.avatarUrl || '')}" alt="" style="width:20px;height:20px;border-radius:50%;vertical-align:middle;margin-right:6px;">
+                            ${escapeHtml(c.username)}
                         </div>`
                     ).join('');
                     dropdown.style.display = 'block';
