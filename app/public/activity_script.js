@@ -93,11 +93,6 @@ async function fetchWithRetry(url, retries = 5, backoff = 3000) {
 
 function displayResults(stats, blocked) {
     const resultsDiv = document.getElementById('activity-results');
-    const escapeHtml = (unsafe) => {
-        if (unsafe == null) return '';
-        return String(unsafe).replace(/[&<"'>]/g, match =>
-            ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', '\'': '&#39;' })[match]);
-    };
     resultsDiv.innerHTML = `
         <h2>Stats</h2>
         <pre>

@@ -12,11 +12,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Parse the JSON response to get the list of badges
         const badges = await response.json();
         // Iterate over each badge and create a corresponding HTML element
-        const escapeHtml = (unsafe) => {
-            if (unsafe == null) return '';
-            return String(unsafe).replace(/[&<"'>]/g, match =>
-                ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', '\'': '&#39;' })[match]);
-        };
         badges.forEach(badge => {
             // Create a div element for the badge
             const badgeItem = document.createElement('div');

@@ -577,6 +577,7 @@
         </div>
     </main>
 </div>
+<script src="/escape-html.js"></script>
 <script src="/notification-settings.js"></script>
 <script src="/admin.js"></script>
 <script src="/init.js"></script>
@@ -1381,11 +1382,6 @@ function initAutocomplete(inputId, dropdownId) {
                 const resp = await fetch(`/api/admin/search-contributors?q=${encodeURIComponent(q)}`);
                 const data = await resp.json();
                 if (data.success && data.contributors.length > 0) {
-                    const escapeHtml = (unsafe) => {
-                        if (unsafe == null) return '';
-                        return String(unsafe).replace(/[&<"'>]/g, match =>
-                            ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[match]);
-                    };
                     dropdown.innerHTML = data.contributors.map(c =>
                         `<div class="autocomplete-item" data-username="${escapeHtml(c.username)}">
                             <img src="${escapeHtml(c.avatarUrl || '')}" alt="" style="width:20px;height:20px;border-radius:50%;vertical-align:middle;margin-right:6px;">

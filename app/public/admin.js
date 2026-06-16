@@ -23,11 +23,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (response.ok) {
                 const contributors = await response.json();
                 contributorsList.innerHTML = '';
-                const escapeHtml = (unsafe) => {
-                    if (unsafe == null) return '';
-                    return String(unsafe).replace(/[&<"'>]/g, match =>
-                        ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', '\'': '&#39;' })[match]);
-                };
                 contributors.forEach(contributor => {
                     const listItem = document.createElement('li');
                     listItem.innerHTML = `
