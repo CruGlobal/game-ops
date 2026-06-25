@@ -20,7 +20,6 @@ export default {
   testPathIgnorePatterns: [
     '/node_modules/',
     '/__tests__/setup.js',
-    '/__tests__/unit/controllers.test.js',
     '/__tests__/unit/githubIntegration.test.js'
   ],
   
