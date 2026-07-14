@@ -3,6 +3,7 @@ import { POINT_REASONS, POINT_VALUES } from '../config/points-config.js';
 import { emitBillAwarded } from '../utils/socketEmitter.js';
 import { postQuarterlyWinnersDiscussion } from './discussionService.js';
 import { postQuarterlyWinnersSlack } from './slackService.js';
+import { sendTertileWinnerBills } from './billsService.js';
 
 // DevOps participation threshold: contributions (PRs + reviews) needed to earn 1 Bill
 const DEVOPS_PARTICIPATION_THRESHOLD = 50;
@@ -135,7 +136,7 @@ export async function getQuarterDateRange(quarterString) {
  * @param {Boolean} enableGitHubDiscussions - Whether to post quarterly winner announcements as GitHub Discussions
  * @returns {Object} { config, quarterChanged, oldQuarter, newQuarter }
  */
-export async function updateQuarterConfig(systemType, q1StartMonth, modifiedBy, enableGitHubDiscussions = false, enableSlackNotifications = false, slackWebhookUrl = null) {
+export async function updateQuarterConfig(systemType, q1StartMonth, modifiedBy, enableGitHubDiscussions = false, enableSlackNotifications = false, slackWebhookUrl = null, enableBillsGifts = false) {
     // Get old config and quarter
     const oldConfig = await getQuarterConfig();
     const oldQuarter = await getCurrentQuarter();
@@ -160,6 +161,7 @@ export async function updateQuarterConfig(systemType, q1StartMonth, modifiedBy, 
             enableGitHubDiscussions,
             enableSlackNotifications,
             slackWebhookUrl,
+            enableBillsGifts,
             lastModified: new Date(),
             modifiedBy
         },
@@ -170,6 +172,7 @@ export async function updateQuarterConfig(systemType, q1StartMonth, modifiedBy, 
             enableGitHubDiscussions,
             enableSlackNotifications,
             slackWebhookUrl,
+            enableBillsGifts,
             lastModified: new Date(),
             modifiedBy
         }
@@ -1317,6 +1320,10 @@ export async function checkAndResetIfNewQuarter() {
             const quarterlyWinner = await archiveQuarterWinners(contributorQuarter);
             // Award bills/vonettes based on final standings before resetting
             const billResults = await awardQuarterlyBills(contributorQuarter);
+            // Deliver the podium winners' bill bucks via the Bills API (no-op unless
+            // enabled + BILLS_API_KEY set). Never throws — a Bills outage must not
+            // block announcing/resetting the period.
+            await sendTertileWinnerBills(contributorQuarter, billResults);
             await postQuarterlyWinnersDiscussion(contributorQuarter, billResults, quarterlyWinner);
             await postQuarterlyWinnersSlack(contributorQuarter, billResults, quarterlyWinner);
             await resetQuarterlyStats(currentQuarter);

@@ -28,6 +28,8 @@ model Contributor {
   first1000ReviewsAwarded Boolean                @default(false) @map("first_1000_reviews_awarded")
   badges                  Json                   @default("[]")
   totalBillsAwarded       BigInt                 @default(0) @map("total_bills_awarded")
+  billsEmail              String?                @map("bills_email")
+  billsEmailSource        String?                @map("bills_email_source") // 'github' | 'admin'
   currentStreak           BigInt                 @default(0) @map("current_streak")
   lastContributionDate    DateTime?              @map("last_contribution_date")
   longestStreak           BigInt                 @default(0) @map("longest_streak")
@@ -229,6 +231,7 @@ model QuarterSettings {
   enableGitHubDiscussions       Boolean   @default(false) @map("enable_github_discussions")
   enableSlackNotifications      Boolean   @default(false) @map("enable_slack_notifications")
   slackWebhookUrl               String?   @map("slack_webhook_url")
+  enableBillsGifts              Boolean   @default(false) @map("enable_bills_gifts")
   devOpsTeamMembers             Json      @default("[]") @map("devops_team_members")
   excludeDevOpsFromLeaderboards Boolean   @default(false) @map("exclude_devops_from_leaderboards")
   devOpsTeamSlug                String    @default("devops-engineering-team") @map("devops_team_slug")
@@ -276,6 +279,27 @@ model QuarterlyAward {
   results   Json?
 
   @@map("quarterly_awards")
+}
+
+// One row per (period, winner): the audit/retry record for a Bills API gift.
+model BillGift {
+  id          String    @id @default(cuid())
+  quarter     String
+  username    String
+  rank        Int
+  amount      Int
+  email       String?   @map("email") // recipient email used (or null if unresolved)
+  reason      String
+  status      String    @default("pending_email") // pending_email | failed | sent
+  billsGiftId String?   @map("bills_gift_id")
+  error       String?
+  attempts    Int       @default(0)
+  createdAt   DateTime  @default(now()) @map("created_at")
+  sentAt      DateTime? @map("sent_at")
+
+  @@unique([quarter, username])
+  @@index([status])
+  @@map("bill_gifts")
 }
 
 model WebhookEvent {

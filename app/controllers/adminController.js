@@ -25,6 +25,7 @@ import {
     toggleDevOpsTeamSync,
     getContributorCounts
 } from '../services/devOpsTeamService.js';
+import { retryBillGift } from '../services/billsService.js';
 
 // Function to get all contributors
 export const getContributors = async (req, res) => {
@@ -243,7 +244,7 @@ export async function getQuarterConfigController(req, res) {
  */
 export async function updateQuarterConfigController(req, res) {
     try {
-        const { systemType, q1StartMonth, enableGitHubDiscussions, enableSlackNotifications, slackWebhookUrl } = req.body;
+        const { systemType, q1StartMonth, enableGitHubDiscussions, enableSlackNotifications, slackWebhookUrl, enableBillsGifts } = req.body;
         const modifiedBy = req.user?.username || 'admin';
 
         // Validation expected by tests
@@ -261,7 +262,8 @@ export async function updateQuarterConfigController(req, res) {
             modifiedBy,
             enableGitHubDiscussions,
             enableSlackNotifications || false,
-            slackWebhookUrl || null
+            slackWebhookUrl || null,
+            enableBillsGifts || false
         );
 
         res.json({
@@ -661,6 +663,129 @@ export async function toggleDevOpsLeaderboardFilterController(req, res) {
         res.status(500).json({
             success: false,
             message: 'Failed to toggle DevOps leaderboard filter',
+            error: error.message
+        });
+    }
+}
+
+/**
+ * List recent Bills API gifts (audit/retry records).
+ * GET /api/admin/bill-gifts?quarter=2026-T2
+ */
+export async function getBillGiftsController(req, res) {
+    try {
+        const { quarter } = req.query;
+
+        const settings = await prisma.quarterSettings.findUnique({
+            where: { id: 'quarter-config' },
+            select: { enableBillsGifts: true }
+        });
+
+        const gifts = await prisma.billGift.findMany({
+            where: quarter ? { quarter } : undefined,
+            orderBy: { createdAt: 'desc' },
+            take: 100
+        });
+
+        res.json({
+            success: true,
+            enabled: Boolean(settings?.enableBillsGifts),
+            keyConfigured: Boolean(process.env.BILLS_API_KEY),
+            gifts
+        });
+    } catch (error) {
+        console.error('Error in getBillGiftsController:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to load bill gifts',
+            error: error.message
+        });
+    }
+}
+
+/**
+ * Retry sending a single Bills API gift.
+ * POST /api/admin/bill-gifts/:id/retry
+ */
+export async function retryBillGiftController(req, res) {
+    try {
+        const { id } = req.params;
+        const gift = await retryBillGift(id);
+
+        if (gift.status === 'sent') {
+            return res.json({
+                success: true,
+                message: `Bill gift sent to ${gift.email}`,
+                gift
+            });
+        }
+
+        // pending_email (no trusted email resolved) or failed
+        const message = gift.status === 'pending_email'
+            ? 'No trusted recipient email could be resolved. Set an email and try again.'
+            : (gift.error || 'Bill gift failed to send');
+
+        return res.status(400).json({
+            success: false,
+            message,
+            gift
+        });
+    } catch (error) {
+        if (error.code === 'not_found') {
+            return res.status(404).json({ success: false, message: error.message });
+        }
+        return res.status(400).json({ success: false, message: error.message });
+    }
+}
+
+/**
+ * Set or clear the Bills recipient email for a contributor (admin override).
+ * POST /api/admin/contributors/:username/bills-email  Body: { email }
+ * An empty email clears the mapping (both fields null). Any domain is allowed
+ * (admins may map contractors); only basic syntax is validated.
+ */
+export async function setBillsEmailController(req, res) {
+    try {
+        const { username } = req.params;
+        const rawEmail = typeof req.body?.email === 'string' ? req.body.email.trim() : '';
+
+        const contributor = await prisma.contributor.findUnique({
+            where: { username },
+            select: { username: true }
+        });
+
+        if (!contributor) {
+            return res.status(404).json({ success: false, message: 'Contributor not found' });
+        }
+
+        // Empty email clears the mapping.
+        if (rawEmail === '') {
+            const updated = await prisma.contributor.update({
+                where: { username },
+                data: { billsEmail: null, billsEmailSource: null },
+                select: { username: true, billsEmail: true, billsEmailSource: true }
+            });
+            return res.json({ success: true, message: 'Bills email cleared', contributor: updated });
+        }
+
+        // Basic email syntax validation (any domain allowed).
+        const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailPattern.test(rawEmail)) {
+            return res.status(400).json({ success: false, message: 'Invalid email address' });
+        }
+
+        const updated = await prisma.contributor.update({
+            where: { username },
+            data: { billsEmail: rawEmail, billsEmailSource: 'admin' },
+            select: { username: true, billsEmail: true, billsEmailSource: true }
+        });
+
+        res.json({ success: true, message: 'Bills email saved', contributor: updated });
+    } catch (error) {
+        console.error('Error in setBillsEmailController:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to set bills email',
             error: error.message
         });
     }
