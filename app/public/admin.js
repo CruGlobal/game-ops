@@ -90,7 +90,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         toast.className = `toast toast-${type} show`;
         toast.innerHTML = `
             <div class="toast-icon">${type === 'success' ? '✓' : 'ℹ'}</div>
-            <div class="toast-message">${message}</div>
+            <div class="toast-message">${escapeHtml(message)}</div>
         `;
 
         let container = document.getElementById('toast-container');
