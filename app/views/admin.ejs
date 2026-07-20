@@ -831,7 +831,7 @@ async function checkForDuplicates() {
                 if (data.details.length > 0) {
                     html += '<div class="duplicate-details"><h4>Details:</h4><ul>';
                     data.details.slice(0, 10).forEach(detail => {
-                        html += `<li><strong>${detail.type}:</strong> ${detail.issue}</li>`;
+                        html += `<li><strong>${escapeHtml(detail.type)}:</strong> ${escapeHtml(detail.issue)}</li>`;
                     });
                     if (data.details.length > 10) {
                         html += `<li><em>... and ${data.details.length - 10} more issues</em></li>`;
