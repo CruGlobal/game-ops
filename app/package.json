@@ -24,7 +24,7 @@
     "reconcile:challenge:awards": "node scripts/reconcile-challenge-awards.js"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "@octokit/rest": "^20.0.0",
     "@prisma/client": "^6.17.1",
     "aws-sdk": "^2.1048.0",
