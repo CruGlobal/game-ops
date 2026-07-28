@@ -6,6 +6,7 @@ import {
     getChallengeById,
     joinChallenge,
     updateChallengeProgress,
+    setChallengeProgressAbsolute,
     completeChallenge,
     getUserChallenges,
     generateWeeklyChallenges,
@@ -14,7 +15,9 @@ import {
     updateChallenge,
     duplicateChallenge,
     bulkUpdateChallenges,
-    bulkDeleteChallenges
+    bulkDeleteChallenges,
+    findMissingChallengeAwards,
+    reconcileMissingChallengeAwards
 } from '../../services/challengeService.js';
 import { prisma, createTestContributor } from '../setup.js';
 
@@ -466,6 +469,54 @@ describe('ChallengeService', () => {
 
             await expect(completeChallenge('user', 'fakeid')).rejects.toThrow();
         });
+
+        it('should not pay twice for the same participation', async () => {
+            const contributor = await prisma.contributor.create({
+                data: createTestContributor({
+                    username: 'doublepay',
+                    totalPoints: BigInt(0),
+                    allTimePoints: BigInt(0)
+                })
+            });
+
+            const challenge = await prisma.challenge.create({
+                data: {
+                    title: 'Sprint Master',
+                    description: 'Test',
+                    type: 'pr-merge',
+                    target: 5,
+                    reward: 250,
+                    status: 'active',
+                    startDate: new Date(),
+                    endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+                    difficulty: 'medium',
+                    category: 'individual',
+                    participants: {
+                        create: {
+                            contributorId: contributor.id,
+                            progress: 5,
+                            completed: true,
+                            joinedAt: new Date()
+                        }
+                    }
+                }
+            });
+
+            await completeChallenge('doublepay', challenge.id);
+            const second = await completeChallenge('doublepay', challenge.id);
+
+            expect(second.alreadyAwarded).toBe(true);
+
+            const completed = await prisma.completedChallenge.count({
+                where: { challengeId: challenge.id }
+            });
+            expect(completed).toBe(1);
+
+            const after = await prisma.contributor.findUnique({
+                where: { id: contributor.id }
+            });
+            expect(after.totalPoints).toBe(BigInt(250));
+        });
     });
 
     describe('getUserChallenges', () => {
@@ -534,6 +585,97 @@ describe('ChallengeService', () => {
             expect(result.completedChallenges).toHaveLength(0);
             expect(result.expiredIncomplete).toHaveLength(0);
             expect(result.totalCompleted).toBe(0);
+        });
+
+        it('should not report a completed participation as expired incomplete', async () => {
+            const contributor = await prisma.contributor.create({
+                data: createTestContributor({ username: 'exceeder' })
+            });
+
+            // Mirrors production: completing a challenge sets completed=true on the
+            // participant row and adds a CompletedChallenge; the participant row is kept,
+            // and progress keeps accruing past the target until the window closes.
+            const challenge = await prisma.challenge.create({
+                data: {
+                    title: 'Point Hunter',
+                    description: 'Test',
+                    type: 'points',
+                    target: 500,
+                    reward: 150,
+                    status: 'expired',
+                    startDate: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000),
+                    endDate: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
+                    difficulty: 'easy',
+                    category: 'individual',
+                    participants: {
+                        create: {
+                            contributorId: contributor.id,
+                            progress: 550,
+                            completed: true,
+                            joinedAt: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000)
+                        }
+                    }
+                }
+            });
+
+            await prisma.completedChallenge.create({
+                data: {
+                    contributorId: contributor.id,
+                    challengeId: challenge.id,
+                    reward: 150
+                }
+            });
+
+            const result = await getUserChallenges('exceeder');
+
+            expect(result.expiredIncomplete).toHaveLength(0);
+            expect(result.completedChallenges).toHaveLength(1);
+            expect(result.totalCompleted).toBe(1);
+        });
+
+        it('should not report a completed participation as an active challenge', async () => {
+            const contributor = await prisma.contributor.create({
+                data: createTestContributor({ username: 'earlyFinisher' })
+            });
+
+            // Completed mid-window: the challenge is still active but the participant
+            // is done, so it belongs in completedChallenges only.
+            const challenge = await prisma.challenge.create({
+                data: {
+                    title: 'Sprint Master',
+                    description: 'Test',
+                    type: 'pr-merge',
+                    target: 5,
+                    reward: 250,
+                    status: 'active',
+                    startDate: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
+                    endDate: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000),
+                    difficulty: 'medium',
+                    category: 'individual',
+                    participants: {
+                        create: {
+                            contributorId: contributor.id,
+                            progress: 10,
+                            completed: true,
+                            joinedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000)
+                        }
+                    }
+                }
+            });
+
+            await prisma.completedChallenge.create({
+                data: {
+                    contributorId: contributor.id,
+                    challengeId: challenge.id,
+                    reward: 250
+                }
+            });
+
+            const result = await getUserChallenges('earlyFinisher');
+
+            expect(result.activeChallenges).toHaveLength(0);
+            expect(result.expiredIncomplete).toHaveLength(0);
+            expect(result.completedChallenges).toHaveLength(1);
         });
     });
 
@@ -1172,6 +1314,515 @@ describe('ChallengeService', () => {
             });
             expect(participant.progress).toBe(7); // Exceeds target
             expect(participant.completed).toBe(true);
+        });
+    });
+
+    describe('challenge window enforcement', () => {
+        const DAY = 24 * 60 * 60 * 1000;
+
+        const seedWindow = async (username, { endsIn, progress = 4, target = 5 }) => {
+            const contributor = await prisma.contributor.create({
+                data: createTestContributor({
+                    username,
+                    totalPoints: BigInt(0),
+                    allTimePoints: BigInt(0)
+                })
+            });
+
+            const challenge = await prisma.challenge.create({
+                data: {
+                    title: 'Sprint Master',
+                    description: 'Test',
+                    type: 'pr-merge',
+                    target,
+                    reward: 250,
+                    status: 'active',
+                    startDate: new Date(Date.now() + endsIn - 7 * DAY),
+                    endDate: new Date(Date.now() + endsIn),
+                    difficulty: 'medium',
+                    category: 'individual',
+                    participants: {
+                        create: {
+                            contributorId: contributor.id,
+                            progress,
+                            completed: false,
+                            joinedAt: new Date(Date.now() + endsIn - 7 * DAY)
+                        }
+                    }
+                }
+            });
+
+            return { contributor, challenge };
+        };
+
+        const readParticipant = (challengeId, contributorId) =>
+            prisma.challengeParticipant.findUnique({
+                where: {
+                    challengeId_contributorId: { challengeId, contributorId }
+                }
+            });
+
+        it('should ignore progress for activity after the challenge ended', async () => {
+            const { contributor, challenge } = await seedWindow('lateprs', {
+                endsIn: -7 * DAY
+            });
+
+            await updateChallengeProgress('lateprs', challenge.id, 1, new Date());
+
+            const participant = await readParticipant(challenge.id, contributor.id);
+            expect(participant.progress).toBe(4);
+            expect(participant.completed).toBe(false);
+        });
+
+        it('should not award a target crossed after the challenge ended', async () => {
+            const { contributor, challenge } = await seedWindow('latecross', {
+                endsIn: -30 * DAY
+            });
+
+            await updateChallengeProgress('latecross', challenge.id, 30, new Date());
+
+            const participant = await readParticipant(challenge.id, contributor.id);
+            expect(participant.progress).toBe(4);
+            expect(participant.completed).toBe(false);
+
+            const awarded = await prisma.completedChallenge.count({
+                where: { challengeId: challenge.id }
+            });
+            expect(awarded).toBe(0);
+
+            const after = await prisma.contributor.findUnique({
+                where: { id: contributor.id }
+            });
+            expect(after.totalPoints).toBe(BigInt(0));
+        });
+
+        it('should ignore progress for activity before the challenge started', async () => {
+            const { contributor, challenge } = await seedWindow('early', {
+                endsIn: 7 * DAY
+            });
+
+            await updateChallengeProgress(
+                'early',
+                challenge.id,
+                1,
+                new Date(Date.now() - 30 * DAY)
+            );
+
+            const participant = await readParticipant(challenge.id, contributor.id);
+            expect(participant.progress).toBe(4);
+        });
+
+        it('should add progress for activity inside the window', async () => {
+            const { contributor, challenge } = await seedWindow('inwindow', {
+                endsIn: 2 * DAY
+            });
+
+            await updateChallengeProgress('inwindow', challenge.id, 1, new Date());
+
+            const participant = await readParticipant(challenge.id, contributor.id);
+            expect(participant.progress).toBe(5);
+            expect(participant.completed).toBe(true);
+        });
+
+        it('should credit a backfilled contribution that happened inside the window', async () => {
+            // run-backfill.js replays historical PRs long after the fact; the window
+            // check has to key on when the work happened, not when it was processed.
+            const { contributor, challenge } = await seedWindow('backfilled', {
+                endsIn: -2 * DAY
+            });
+
+            await updateChallengeProgress(
+                'backfilled',
+                challenge.id,
+                1,
+                new Date(Date.now() - 3 * DAY)
+            );
+
+            const participant = await readParticipant(challenge.id, contributor.id);
+            expect(participant.progress).toBe(5);
+            expect(participant.completed).toBe(true);
+        });
+
+        it('should default to now when no activity date is given', async () => {
+            const { contributor, challenge } = await seedWindow('nodate', {
+                endsIn: -7 * DAY
+            });
+
+            await updateChallengeProgress('nodate', challenge.id, 1);
+
+            const participant = await readParticipant(challenge.id, contributor.id);
+            expect(participant.progress).toBe(4);
+        });
+
+        it('should ignore an absolute streak update after the challenge ended', async () => {
+            const { contributor, challenge } = await seedWindow('latestreak', {
+                endsIn: -7 * DAY,
+                progress: 3,
+                target: 7
+            });
+
+            await setChallengeProgressAbsolute('latestreak', challenge.id, 9, new Date());
+
+            const participant = await readParticipant(challenge.id, contributor.id);
+            expect(participant.progress).toBe(3);
+            expect(participant.completed).toBe(false);
+        });
+    });
+
+    describe('findMissingChallengeAwards', () => {
+        const makeChallenge = async (contributorId, overrides = {}, participant = {}) => {
+            return prisma.challenge.create({
+                data: {
+                    title: 'Point Hunter',
+                    description: 'Test',
+                    type: 'points',
+                    target: 500,
+                    reward: 150,
+                    status: 'expired',
+                    startDate: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000),
+                    endDate: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
+                    difficulty: 'easy',
+                    category: 'individual',
+                    ...overrides,
+                    participants: {
+                        create: {
+                            contributorId,
+                            progress: 550,
+                            completed: true,
+                            joinedAt: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000),
+                            ...participant
+                        }
+                    }
+                }
+            });
+        };
+
+        it('should report a participation flagged completed with no award', async () => {
+            const contributor = await prisma.contributor.create({
+                data: createTestContributor({ username: 'flagged' })
+            });
+            const challenge = await makeChallenge(contributor.id);
+
+            const missing = await findMissingChallengeAwards();
+
+            expect(missing).toHaveLength(1);
+            expect(missing[0]).toMatchObject({
+                username: 'flagged',
+                challengeId: challenge.id,
+                title: 'Point Hunter',
+                reward: 150,
+                progress: 550,
+                target: 500,
+                reason: 'flagged-not-awarded'
+            });
+        });
+
+        it('should report a participation at or beyond target that was never flagged', async () => {
+            const contributor = await prisma.contributor.create({
+                data: createTestContributor({ username: 'unflagged' })
+            });
+            await makeChallenge(contributor.id, {}, { completed: false, progress: 675 });
+
+            const missing = await findMissingChallengeAwards();
+
+            expect(missing).toHaveLength(1);
+            expect(missing[0]).toMatchObject({
+                username: 'unflagged',
+                reason: 'target-met-not-flagged',
+                progress: 675
+            });
+        });
+
+        it('should ignore a participation that was already awarded', async () => {
+            const contributor = await prisma.contributor.create({
+                data: createTestContributor({ username: 'awarded' })
+            });
+            const challenge = await makeChallenge(contributor.id);
+            await prisma.completedChallenge.create({
+                data: {
+                    contributorId: contributor.id,
+                    challengeId: challenge.id,
+                    reward: 150
+                }
+            });
+
+            const missing = await findMissingChallengeAwards();
+
+            expect(missing).toHaveLength(0);
+        });
+
+        it('should ignore a participation that is genuinely short of target', async () => {
+            const contributor = await prisma.contributor.create({
+                data: createTestContributor({ username: 'shortfall' })
+            });
+            await makeChallenge(contributor.id, {}, { completed: false, progress: 415 });
+
+            const missing = await findMissingChallengeAwards();
+
+            expect(missing).toHaveLength(0);
+        });
+    });
+
+    describe('reconcileMissingChallengeAwards', () => {
+        const seedOrphan = async (username, participant = {}) => {
+            const contributor = await prisma.contributor.create({
+                data: createTestContributor({
+                    username,
+                    totalPoints: BigInt(1000),
+                    allTimePoints: BigInt(1000)
+                })
+            });
+
+            const challenge = await prisma.challenge.create({
+                data: {
+                    title: 'Sprint Master',
+                    description: 'Test',
+                    type: 'pr-merge',
+                    target: 5,
+                    reward: 250,
+                    status: 'expired',
+                    startDate: new Date(Date.now() - 9 * 24 * 60 * 60 * 1000),
+                    endDate: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
+                    difficulty: 'medium',
+                    category: 'individual',
+                    participants: {
+                        create: {
+                            contributorId: contributor.id,
+                            progress: 10,
+                            completed: true,
+                            joinedAt: new Date(Date.now() - 9 * 24 * 60 * 60 * 1000),
+                            ...participant
+                        }
+                    }
+                }
+            });
+
+            return { contributor, challenge };
+        };
+
+        it('should not write anything in dry-run mode', async () => {
+            const { contributor, challenge } = await seedOrphan('dryrun');
+
+            const result = await reconcileMissingChallengeAwards();
+
+            expect(result.applied).toBe(false);
+            expect(result.awards).toHaveLength(1);
+            expect(result.totalPoints).toBe(250);
+
+            const awarded = await prisma.completedChallenge.count({
+                where: { challengeId: challenge.id }
+            });
+            expect(awarded).toBe(0);
+
+            const after = await prisma.contributor.findUnique({
+                where: { id: contributor.id }
+            });
+            expect(after.totalPoints).toBe(BigInt(1000));
+        });
+
+        it('should award the missing points when applied', async () => {
+            const { contributor, challenge } = await seedOrphan('applied');
+
+            const result = await reconcileMissingChallengeAwards({ apply: true });
+
+            expect(result.applied).toBe(true);
+            expect(result.awards).toHaveLength(1);
+            expect(result.totalPoints).toBe(250);
+
+            const completed = await prisma.completedChallenge.findMany({
+                where: { challengeId: challenge.id }
+            });
+            expect(completed).toHaveLength(1);
+            expect(completed[0].reward).toBe(250);
+            // Backdated to the challenge window, not the day the backfill ran
+            expect(completed[0].completedAt.getTime()).toBe(challenge.endDate.getTime());
+
+            const after = await prisma.contributor.findUnique({
+                where: { id: contributor.id }
+            });
+            expect(after.totalPoints).toBe(BigInt(1250));
+            expect(after.allTimePoints).toBe(BigInt(1250));
+
+            const history = await prisma.pointHistory.findMany({
+                where: { contributorId: contributor.id }
+            });
+            expect(history).toHaveLength(1);
+            expect(history[0].points).toBe(BigInt(250));
+            expect(history[0].reason).toBe('Challenge Completed');
+            expect(history[0].timestamp.getTime()).toBe(challenge.endDate.getTime());
+        });
+
+        it('should withhold an unflagged target-met participation by default', async () => {
+            const { contributor, challenge } = await seedOrphan('unflagged', {
+                completed: false
+            });
+
+            const result = await reconcileMissingChallengeAwards({ apply: true });
+
+            // progress >= target can also be the residue of post-window accrual, which
+            // never earned the reward. Paying it out needs an explicit opt-in.
+            expect(result.paid).toHaveLength(0);
+            expect(result.skipped).toHaveLength(1);
+            expect(result.skipped[0].reason).toBe('target-met-not-flagged');
+
+            const awarded = await prisma.completedChallenge.count({
+                where: { challengeId: challenge.id }
+            });
+            expect(awarded).toBe(0);
+
+            const after = await prisma.contributor.findUnique({
+                where: { id: contributor.id }
+            });
+            expect(after.totalPoints).toBe(BigInt(1000));
+        });
+
+        it('should set the completed flag when the award was never detected', async () => {
+            const { contributor, challenge } = await seedOrphan('neverflagged', {
+                completed: false
+            });
+
+            await reconcileMissingChallengeAwards({ apply: true, includeUnflagged: true });
+
+            const participant = await prisma.challengeParticipant.findUnique({
+                where: {
+                    challengeId_contributorId: {
+                        challengeId: challenge.id,
+                        contributorId: contributor.id
+                    }
+                }
+            });
+            expect(participant.completed).toBe(true);
+        });
+
+        it('should be idempotent across repeated runs', async () => {
+            const { contributor } = await seedOrphan('idempotent');
+
+            await reconcileMissingChallengeAwards({ apply: true });
+            const second = await reconcileMissingChallengeAwards({ apply: true });
+
+            expect(second.awards).toHaveLength(0);
+            expect(second.totalPoints).toBe(0);
+
+            const after = await prisma.contributor.findUnique({
+                where: { id: contributor.id }
+            });
+            expect(after.totalPoints).toBe(BigInt(1250));
+
+            const history = await prisma.pointHistory.count({
+                where: { contributorId: contributor.id }
+            });
+            expect(history).toBe(1);
+        });
+
+        it('should be rejected at the database level on a duplicate award', async () => {
+            // The awarded-key set is built outside any transaction, so two overlapping
+            // runs - or a run overlapping the live completeChallenge() webhook path -
+            // can both see the participation as unpaid. Only a unique constraint can
+            // break the tie, so assert it exists rather than relying on interleaving.
+            const { contributor, challenge } = await seedOrphan('concurrent');
+
+            await reconcileMissingChallengeAwards({ apply: true });
+
+            await expect(
+                prisma.completedChallenge.create({
+                    data: {
+                        contributorId: contributor.id,
+                        challengeId: challenge.id,
+                        reward: 250
+                    }
+                })
+            ).rejects.toMatchObject({ code: 'P2002' });
+
+            const completed = await prisma.completedChallenge.count({
+                where: { challengeId: challenge.id }
+            });
+            expect(completed).toBe(1);
+
+            const after = await prisma.contributor.findUnique({
+                where: { id: contributor.id }
+            });
+            expect(after.totalPoints).toBe(BigInt(1250));
+        });
+
+        it('should report awards it could not attribute to the current quarter', async () => {
+            // seedOrphan's challenge ended 2 days ago, so it is inside the current
+            // quarter and quarterly stats can absorb it.
+            const { contributor } = await seedOrphan('thisquarter');
+
+            const result = await reconcileMissingChallengeAwards({ apply: true });
+
+            expect(result.quarterlyDeferred).toHaveLength(0);
+
+            const after = await prisma.contributor.findUnique({
+                where: { id: contributor.id }
+            });
+            expect(after.quarterlyStats.pointsThisQuarter).toBe(250);
+        });
+
+        it('should defer quarterly attribution for a challenge from a closed quarter', async () => {
+            const contributor = await prisma.contributor.create({
+                data: createTestContributor({
+                    username: 'oldquarter',
+                    totalPoints: BigInt(1000),
+                    allTimePoints: BigInt(1000)
+                })
+            });
+
+            const YEAR = 365 * 24 * 60 * 60 * 1000;
+            const challenge = await prisma.challenge.create({
+                data: {
+                    title: 'Point Hunter',
+                    description: 'Test',
+                    type: 'points',
+                    target: 500,
+                    reward: 150,
+                    status: 'expired',
+                    startDate: new Date(Date.now() - YEAR - 7 * 24 * 60 * 60 * 1000),
+                    endDate: new Date(Date.now() - YEAR),
+                    difficulty: 'easy',
+                    category: 'individual',
+                    participants: {
+                        create: {
+                            contributorId: contributor.id,
+                            progress: 550,
+                            completed: true,
+                            joinedAt: new Date(Date.now() - YEAR - 7 * 24 * 60 * 60 * 1000)
+                        }
+                    }
+                }
+            });
+
+            const result = await reconcileMissingChallengeAwards({ apply: true });
+
+            // The points are still recovered, but there is no past-quarter bucket to
+            // write to, so the caller has to be told rather than left guessing.
+            expect(result.paid).toHaveLength(1);
+            expect(result.quarterlyDeferred).toHaveLength(1);
+            expect(result.quarterlyDeferred[0].challengeId).toBe(challenge.id);
+
+            const after = await prisma.contributor.findUnique({
+                where: { id: contributor.id }
+            });
+            expect(after.totalPoints).toBe(BigInt(1150));
+            expect(after.quarterlyStats?.pointsThisQuarter ?? 0).toBe(0);
+        });
+
+        it('should scope the run to a single username when asked', async () => {
+            await seedOrphan('mine');
+            const { contributor: other } = await seedOrphan('theirs');
+
+            const result = await reconcileMissingChallengeAwards({
+                apply: true,
+                username: 'mine'
+            });
+
+            expect(result.awards).toHaveLength(1);
+            expect(result.awards[0].username).toBe('mine');
+
+            const untouched = await prisma.contributor.findUnique({
+                where: { id: other.id }
+            });
+            expect(untouched.totalPoints).toBe(BigInt(1000));
         });
     });
 });

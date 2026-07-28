@@ -286,13 +286,31 @@ export const joinChallenge = async (username, challengeId) => {
 };
 
 /**
+ * Decide whether a contribution counts toward a challenge.
+ *
+ * Every challenge type is scoped to the challenge period, so a contribution only
+ * counts if it happened inside the window. The check keys on when the work happened
+ * rather than on the challenge's `status`, so run-backfill.js can still credit a
+ * historical contribution that fell inside the window of a since-expired challenge.
+ *
+ * @param {Object} challenge - Challenge record
+ * @param {Date|String} [activityDate] - When the contribution happened; defaults to now
+ * @returns {Boolean} True when the contribution counts
+ */
+const isWithinChallengeWindow = (challenge, activityDate = null) => {
+    const when = activityDate ? new Date(activityDate) : new Date();
+    return when >= challenge.startDate && when <= challenge.endDate;
+};
+
+/**
  * Update challenge progress for a user
  * @param {String} username - GitHub username
  * @param {String} challengeId - Challenge ID
  * @param {Number} increment - Progress increment
+ * @param {Date|String} [activityDate] - When the contribution happened; defaults to now
  * @returns {Object} Updated progress
  */
-export const updateChallengeProgress = async (username, challengeId, increment = 1) => {
+export const updateChallengeProgress = async (username, challengeId, increment = 1, activityDate = null) => {
     try {
         const contributor = await prisma.contributor.findUnique({
             where: { username },
@@ -318,6 +336,21 @@ export const updateChallengeProgress = async (username, challengeId, increment =
 
         if (!challenge || !participant) {
             return null;
+        }
+
+        if (!isWithinChallengeWindow(challenge, activityDate)) {
+            logger.debug('Skipped challenge progress outside the challenge window', {
+                username,
+                challengeId,
+                activityDate,
+                endDate: challenge.endDate
+            });
+            return {
+                progress: participant.progress,
+                target: challenge.target,
+                completed: participant.completed,
+                skipped: 'outside-window'
+            };
         }
 
         const newProgress = participant.progress + increment;
@@ -385,8 +418,13 @@ export const updateChallengeProgress = async (username, challengeId, increment =
 /**
  * Set challenge progress to an absolute value (used for streak challenges
  * where progress = current streak, not an increment)
+ *
+ * @param {String} username - GitHub username
+ * @param {String} challengeId - Challenge ID
+ * @param {Number} absoluteValue - Progress value to set
+ * @param {Date|String} [activityDate] - When the contribution happened; defaults to now
  */
-export const setChallengeProgressAbsolute = async (username, challengeId, absoluteValue) => {
+export const setChallengeProgressAbsolute = async (username, challengeId, absoluteValue, activityDate = null) => {
     try {
         const contributor = await prisma.contributor.findUnique({
             where: { username },
@@ -409,6 +447,21 @@ export const setChallengeProgressAbsolute = async (username, challengeId, absolu
         });
 
         if (!challenge || !participant) return null;
+
+        if (!isWithinChallengeWindow(challenge, activityDate)) {
+            logger.debug('Skipped absolute challenge progress outside the challenge window', {
+                username,
+                challengeId,
+                activityDate,
+                endDate: challenge.endDate
+            });
+            return {
+                progress: participant.progress,
+                target: challenge.target,
+                completed: participant.completed,
+                skipped: 'outside-window'
+            };
+        }
 
         const newProgress = Math.max(0, absoluteValue);
 
@@ -493,40 +546,55 @@ export const completeChallenge = async (username, challengeId) => {
         // The persisted value is written with an atomic increment, not this number.
         const newTotalPoints = Number(contributor.totalPoints) + challenge.reward;
 
-        // Create completed challenge record and update points
-        await prisma.$transaction([
-            // Remove from active (ChallengeParticipant will be updated to completed=true by caller)
-            // Add to completed challenges
-            prisma.completedChallenge.create({
-                data: {
-                    contributorId: contributor.id,
-                    challengeId,
-                    reward: challenge.reward
-                }
-            }),
-            // Update contributor points (both quarterly and all-time). Use increment
-            // rather than an absolute read-then-write so a concurrent points award
-            // between the read above and this write is not lost.
-            prisma.contributor.update({
-                where: { username },
-                data: {
-                    totalPoints: {
-                        increment: BigInt(challenge.reward)
-                    },
-                    allTimePoints: {
-                        increment: BigInt(challenge.reward)
-                    },
-                    pointsHistory: {
-                        create: {
-                            points: challenge.reward,
-                            reason: 'Challenge Completed',
-                            prNumber: null,
-                            timestamp: new Date()
+        // Create completed challenge record and update points.
+        // The unique (contributorId, challengeId) constraint makes the award atomic:
+        // a second writer for the same participation loses the whole transaction rather
+        // than paying the reward again.
+        try {
+            await prisma.$transaction([
+                // Remove from active (ChallengeParticipant will be updated to completed=true by caller)
+                // Add to completed challenges
+                prisma.completedChallenge.create({
+                    data: {
+                        contributorId: contributor.id,
+                        challengeId,
+                        reward: challenge.reward
+                    }
+                }),
+                // Update contributor points (both quarterly and all-time). Use increment
+                // rather than an absolute read-then-write so a concurrent points award
+                // between the read above and this write is not lost.
+                prisma.contributor.update({
+                    where: { username },
+                    data: {
+                        totalPoints: {
+                            increment: BigInt(challenge.reward)
+                        },
+                        allTimePoints: {
+                            increment: BigInt(challenge.reward)
+                        },
+                        pointsHistory: {
+                            create: {
+                                points: challenge.reward,
+                                reason: 'Challenge Completed',
+                                prNumber: null,
+                                timestamp: new Date()
+                            }
                         }
                     }
-                }
-            })
-        ]);
+                })
+            ]);
+        } catch (awardError) {
+            if (awardError.code === 'P2002') {
+                logger.info('Challenge already awarded, skipping duplicate payout', {
+                    username,
+                    challengeId,
+                    title: challenge.title
+                });
+                return { challenge, reward: challenge.reward, alreadyAwarded: true };
+            }
+            throw awardError;
+        }
 
         // Update quarterly stats with challenge reward points
         await updateQuarterlyStats(username, {
@@ -602,6 +670,15 @@ export const getUserChallenges = async (username) => {
         const expiredIncomplete = [];
 
         for (const ac of contributor.activeChallenges) {
+            // Completing a challenge keeps the participant row (with completed=true) and
+            // adds a CompletedChallenge, so a finished participation is already reported
+            // in completedChallenges. Skip it here or it is double-listed - and, because
+            // progress keeps accruing after completion, listed as "Not Completed" with a
+            // final progress above target once the challenge expires.
+            if (ac.completed) {
+                continue;
+            }
+
             const entry = {
                 challengeId: ac.challengeId,
                 progress: ac.progress,
@@ -1249,4 +1326,246 @@ export const createOKRChallenge = async (okrData) => {
         });
         throw error;
     }
+};
+
+/**
+ * Find participations that earned a challenge reward but never received it.
+ *
+ * completeChallenge() writes the CompletedChallenge row and the points in one
+ * transaction, but the participant's `completed` flag is written by the caller in a
+ * separate statement beforehand. If the award transaction fails, the flag survives
+ * without the points, and the participation looks finished while paying nothing.
+ *
+ * Two shapes are reported:
+ * - `flagged-not-awarded`: completed=true with no CompletedChallenge row
+ * - `target-met-not-flagged`: progress >= target, never flagged, never awarded
+ *
+ * @param {Object} options - Options
+ * @param {String} [options.username] - Limit the scan to one contributor
+ * @returns {Array} One entry per participation owed a reward
+ */
+export const findMissingChallengeAwards = async ({ username = null } = {}) => {
+    try {
+        const participants = await prisma.challengeParticipant.findMany({
+            where: username ? { contributor: { username } } : {},
+            include: {
+                challenge: true,
+                contributor: {
+                    select: { id: true, username: true }
+                }
+            }
+        });
+
+        const awardedRows = await prisma.completedChallenge.findMany({
+            select: { contributorId: true, challengeId: true }
+        });
+        const awarded = new Set(
+            awardedRows.map(cc => `${cc.contributorId}:${cc.challengeId}`)
+        );
+
+        const missing = [];
+
+        for (const participant of participants) {
+            if (awarded.has(`${participant.contributorId}:${participant.challengeId}`)) {
+                continue;
+            }
+
+            const target = participant.challenge.target;
+            const targetMet = target > 0 && participant.progress >= target;
+
+            if (!participant.completed && !targetMet) {
+                continue;
+            }
+
+            missing.push({
+                username: participant.contributor.username,
+                contributorId: participant.contributorId,
+                challengeId: participant.challengeId,
+                title: participant.challenge.title,
+                reward: participant.challenge.reward,
+                progress: participant.progress,
+                target,
+                completed: participant.completed,
+                endDate: participant.challenge.endDate,
+                reason: participant.completed
+                    ? 'flagged-not-awarded'
+                    : 'target-met-not-flagged'
+            });
+        }
+
+        return missing;
+    } catch (error) {
+        logger.error('Error finding missing challenge awards', {
+            username,
+            error: error.message
+        });
+        throw error;
+    }
+};
+
+/**
+ * Pay out challenge rewards that were earned but never awarded.
+ *
+ * Mirrors completeChallenge(), with three differences suited to a backfill:
+ * - the participant's `completed` flag is repaired in the same transaction
+ * - the award is backdated to the challenge end date, so the CompletedChallenge row and
+ *   the point-history entry sit in the period the work happened in
+ * - no websocket event is emitted; these completions are not happening now
+ *
+ * Quarterly stats are only repaired when the challenge ended inside the CURRENT
+ * quarter. `updateQuarterlyStats` takes a date as a current-quarter gate, not as a
+ * routing key, and `Contributor.quarterlyStats` holds one live quarter with no
+ * per-past-quarter bucket to write to - past quarters are settled in QuarterlyWinner
+ * archives with their rewards already paid. Awards from a closed quarter are therefore
+ * reported in `quarterlyDeferred` instead of being silently dropped: `totalPoints`,
+ * `allTimePoints` and `pointHistory` are repaired, `pointsThisQuarter` is not.
+ *
+ * Safe to re-run, including alongside another run or the live award path: the unique
+ * (contributorId, challengeId) constraint on CompletedChallenge rejects a duplicate and
+ * the whole award transaction rolls back rather than paying twice.
+ *
+ * `target-met-not-flagged` participations are reported but NOT paid unless
+ * `includeUnflagged` is set. Progress used to accrue on challenges that had already
+ * ended, so a progress figure above target can be the residue of post-window activity
+ * that never earned the reward (a 5-PR challenge sitting at 34/5 months later). Only
+ * `flagged-not-awarded` is unambiguous: something decided the challenge was complete
+ * and the payout is what went missing.
+ *
+ * @param {Object} options - Options
+ * @param {Boolean} [options.apply=false] - Write the awards; otherwise report only
+ * @param {String} [options.username] - Limit the run to one contributor
+ * @param {Boolean} [options.includeUnflagged=false] - Also pay target-met-not-flagged
+ * @returns {Object} { applied, awards, paid, skipped, quarterlyDeferred, totalPoints, paidPoints }
+ */
+export const reconcileMissingChallengeAwards = async ({
+    apply = false,
+    username = null,
+    includeUnflagged = false
+} = {}) => {
+    const awards = await findMissingChallengeAwards({ username });
+    const totalPoints = awards.reduce((sum, award) => sum + award.reward, 0);
+
+    const payable = award =>
+        award.reason === 'flagged-not-awarded' || includeUnflagged;
+
+    const paid = [];
+    const quarterlyDeferred = [];
+    const skipped = awards.filter(award => !payable(award));
+
+    if (!apply) {
+        return {
+            applied: false,
+            awards,
+            paid,
+            skipped,
+            quarterlyDeferred,
+            totalPoints,
+            paidPoints: 0
+        };
+    }
+
+    const now = new Date();
+
+    for (const award of awards.filter(payable)) {
+        const awardedAt = award.endDate < now ? award.endDate : now;
+
+        const operations = [
+            prisma.completedChallenge.create({
+                data: {
+                    contributorId: award.contributorId,
+                    challengeId: award.challengeId,
+                    reward: award.reward,
+                    completedAt: awardedAt
+                }
+            }),
+            prisma.contributor.update({
+                where: { id: award.contributorId },
+                data: {
+                    totalPoints: {
+                        increment: BigInt(award.reward)
+                    },
+                    allTimePoints: {
+                        increment: BigInt(award.reward)
+                    },
+                    pointsHistory: {
+                        create: {
+                            points: award.reward,
+                            reason: 'Challenge Completed',
+                            prNumber: null,
+                            timestamp: awardedAt
+                        }
+                    }
+                }
+            })
+        ];
+
+        if (!award.completed) {
+            operations.push(
+                prisma.challengeParticipant.update({
+                    where: {
+                        challengeId_contributorId: {
+                            challengeId: award.challengeId,
+                            contributorId: award.contributorId
+                        }
+                    },
+                    data: { completed: true }
+                })
+            );
+        }
+
+        try {
+            await prisma.$transaction(operations);
+        } catch (awardError) {
+            if (awardError.code === 'P2002') {
+                // Another run, or the live award path, paid this one between the scan
+                // and this write. The transaction rolled back, so nothing was paid here.
+                logger.info('Challenge award already written by another writer, skipping', {
+                    username: award.username,
+                    challengeId: award.challengeId,
+                    title: award.title
+                });
+                skipped.push({ ...award, reason: 'already-awarded' });
+                continue;
+            }
+            throw awardError;
+        }
+
+        const quarterly = await updateQuarterlyStats(award.username, {
+            points: award.reward
+        }, awardedAt);
+
+        if (quarterly === null) {
+            quarterlyDeferred.push(award);
+            logger.warn('Backfilled award predates the current quarter; quarterly stats not repaired', {
+                username: award.username,
+                challengeId: award.challengeId,
+                title: award.title,
+                reward: award.reward,
+                awardedAt
+            });
+        }
+
+        paid.push(award);
+
+        logger.info('Backfilled missing challenge award', {
+            username: award.username,
+            challengeId: award.challengeId,
+            title: award.title,
+            reward: award.reward,
+            reason: award.reason,
+            awardedAt
+        });
+    }
+
+    const paidPoints = paid.reduce((sum, award) => sum + award.reward, 0);
+
+    return {
+        applied: true,
+        awards,
+        paid,
+        skipped,
+        quarterlyDeferred,
+        totalPoints,
+        paidPoints
+    };
 };

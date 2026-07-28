@@ -370,15 +370,15 @@ export const processSingleMergedPR = async (prData) => {
             if (!challenge) continue;
 
             if (challenge.type === 'pr-merge') {
-                await updateChallengeProgress(username, challenge.id, 1);
+                await updateChallengeProgress(username, challenge.id, 1, mergedAt);
             } else if (challenge.type === 'okr-label') {
                 if (checkLabelMatch(labels, challenge.labelFilters)) {
-                    await updateChallengeProgress(username, challenge.id, 1);
+                    await updateChallengeProgress(username, challenge.id, 1, mergedAt);
                 }
             } else if (challenge.type === 'points') {
-                await updateChallengeProgress(username, challenge.id, pointsData.points);
+                await updateChallengeProgress(username, challenge.id, pointsData.points, mergedAt);
             } else if (challenge.type === 'streak') {
-                await setChallengeProgressAbsolute(username, challenge.id, streakResult.currentStreak);
+                await setChallengeProgressAbsolute(username, challenge.id, streakResult.currentStreak, mergedAt);
             }
         }
     }
@@ -519,11 +519,11 @@ export const processSingleReview = async (reviewData) => {
             if (!challenge) continue;
 
             if (challenge.type === 'review') {
-                await updateChallengeProgress(username, challenge.id, 1);
+                await updateChallengeProgress(username, challenge.id, 1, submittedAt);
             } else if (challenge.type === 'points') {
-                await updateChallengeProgress(username, challenge.id, reviewPoints);
+                await updateChallengeProgress(username, challenge.id, reviewPoints, submittedAt);
             } else if (challenge.type === 'streak') {
-                await setChallengeProgressAbsolute(username, challenge.id, reviewStreakResult.currentStreak);
+                await setChallengeProgressAbsolute(username, challenge.id, reviewStreakResult.currentStreak, submittedAt);
             }
         }
     }
