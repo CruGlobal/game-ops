@@ -4,6 +4,16 @@ All notable changes to Game Ops are documented in this file.
 
 ---
 
+## [Unreleased] - 2026-07-28
+
+### Fixed
+- **Completed challenges no longer shown as "Not Completed"** - `getUserChallenges()` bucketed every participation by the challenge's `status` alone and never read the participant's `completed` flag. Completing a challenge keeps the participant row (with `completed=true`) and adds a `CompletedChallenge`, so each finished participation was listed twice once its window closed: once as "Completed +N pts earned", and again as "Not Completed" under Final Progress. Because progress keeps accruing after the target is met, those phantom rows showed a final progress above target (`550 / 500`), which read as a challenge lost rather than won. Completed participations are now excluded from both the expired-incomplete and active buckets, since they are already reported in `completedChallenges`.
+
+### Added
+- `app/scripts/reconcile-challenge-awards.js` - finds and pays out challenge rewards that were earned but never awarded. `completeChallenge()` writes the `CompletedChallenge` row and the points in one transaction, but the participant's `completed` flag is written separately beforehand, so a failed award transaction leaves a participation that looks finished and paid nothing. Reports two shapes: `flagged-not-awarded` (`completed=true`, no `CompletedChallenge`) and `target-met-not-flagged` (`progress >= target`, never flagged, never awarded). Reports only by default; `--apply` writes the awards, backdated to the challenge end date so point history and quarterly attribution land in the quarter the work happened in. Safe to re-run. Usage: `npm run reconcile:challenge:awards -- [--user <username>] [--apply]`.
+
+---
+
 ## [Unreleased] - 2026-06-15
 
 ### Fixed
