@@ -602,6 +602,15 @@ export const getUserChallenges = async (username) => {
         const expiredIncomplete = [];
 
         for (const ac of contributor.activeChallenges) {
+            // Completing a challenge keeps the participant row (with completed=true) and
+            // adds a CompletedChallenge, so a finished participation is already reported
+            // in completedChallenges. Skip it here or it is double-listed - and, because
+            // progress keeps accruing after completion, listed as "Not Completed" with a
+            // final progress above target once the challenge expires.
+            if (ac.completed) {
+                continue;
+            }
+
             const entry = {
                 challengeId: ac.challengeId,
                 progress: ac.progress,

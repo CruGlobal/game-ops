@@ -535,6 +535,97 @@ describe('ChallengeService', () => {
             expect(result.expiredIncomplete).toHaveLength(0);
             expect(result.totalCompleted).toBe(0);
         });
+
+        it('should not report a completed participation as expired incomplete', async () => {
+            const contributor = await prisma.contributor.create({
+                data: createTestContributor({ username: 'exceeder' })
+            });
+
+            // Mirrors production: completing a challenge sets completed=true on the
+            // participant row and adds a CompletedChallenge; the participant row is kept,
+            // and progress keeps accruing past the target until the window closes.
+            const challenge = await prisma.challenge.create({
+                data: {
+                    title: 'Point Hunter',
+                    description: 'Test',
+                    type: 'points',
+                    target: 500,
+                    reward: 150,
+                    status: 'expired',
+                    startDate: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000),
+                    endDate: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
+                    difficulty: 'easy',
+                    category: 'individual',
+                    participants: {
+                        create: {
+                            contributorId: contributor.id,
+                            progress: 550,
+                            completed: true,
+                            joinedAt: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000)
+                        }
+                    }
+                }
+            });
+
+            await prisma.completedChallenge.create({
+                data: {
+                    contributorId: contributor.id,
+                    challengeId: challenge.id,
+                    reward: 150
+                }
+            });
+
+            const result = await getUserChallenges('exceeder');
+
+            expect(result.expiredIncomplete).toHaveLength(0);
+            expect(result.completedChallenges).toHaveLength(1);
+            expect(result.totalCompleted).toBe(1);
+        });
+
+        it('should not report a completed participation as an active challenge', async () => {
+            const contributor = await prisma.contributor.create({
+                data: createTestContributor({ username: 'earlyFinisher' })
+            });
+
+            // Completed mid-window: the challenge is still active but the participant
+            // is done, so it belongs in completedChallenges only.
+            const challenge = await prisma.challenge.create({
+                data: {
+                    title: 'Sprint Master',
+                    description: 'Test',
+                    type: 'pr-merge',
+                    target: 5,
+                    reward: 250,
+                    status: 'active',
+                    startDate: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
+                    endDate: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000),
+                    difficulty: 'medium',
+                    category: 'individual',
+                    participants: {
+                        create: {
+                            contributorId: contributor.id,
+                            progress: 10,
+                            completed: true,
+                            joinedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000)
+                        }
+                    }
+                }
+            });
+
+            await prisma.completedChallenge.create({
+                data: {
+                    contributorId: contributor.id,
+                    challengeId: challenge.id,
+                    reward: 250
+                }
+            });
+
+            const result = await getUserChallenges('earlyFinisher');
+
+            expect(result.activeChallenges).toHaveLength(0);
+            expect(result.expiredIncomplete).toHaveLength(0);
+            expect(result.completedChallenges).toHaveLength(1);
+        });
     });
 
     describe('generateWeeklyChallenges', () => {
