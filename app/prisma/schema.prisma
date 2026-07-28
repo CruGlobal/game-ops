@@ -188,6 +188,7 @@ model CompletedChallenge {
   contributor   Contributor @relation(fields: [contributorId], references: [id], onDelete: Cascade)
   challenge     Challenge   @relation(fields: [challengeId], references: [id], onDelete: Cascade)
 
+  @@unique([contributorId, challengeId])
   @@index([contributorId, completedAt])
   @@map("completed_challenges")
 }

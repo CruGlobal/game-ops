@@ -469,6 +469,54 @@ describe('ChallengeService', () => {
 
             await expect(completeChallenge('user', 'fakeid')).rejects.toThrow();
         });
+
+        it('should not pay twice for the same participation', async () => {
+            const contributor = await prisma.contributor.create({
+                data: createTestContributor({
+                    username: 'doublepay',
+                    totalPoints: BigInt(0),
+                    allTimePoints: BigInt(0)
+                })
+            });
+
+            const challenge = await prisma.challenge.create({
+                data: {
+                    title: 'Sprint Master',
+                    description: 'Test',
+                    type: 'pr-merge',
+                    target: 5,
+                    reward: 250,
+                    status: 'active',
+                    startDate: new Date(),
+                    endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+                    difficulty: 'medium',
+                    category: 'individual',
+                    participants: {
+                        create: {
+                            contributorId: contributor.id,
+                            progress: 5,
+                            completed: true,
+                            joinedAt: new Date()
+                        }
+                    }
+                }
+            });
+
+            await completeChallenge('doublepay', challenge.id);
+            const second = await completeChallenge('doublepay', challenge.id);
+
+            expect(second.alreadyAwarded).toBe(true);
+
+            const completed = await prisma.completedChallenge.count({
+                where: { challengeId: challenge.id }
+            });
+            expect(completed).toBe(1);
+
+            const after = await prisma.contributor.findUnique({
+                where: { id: contributor.id }
+            });
+            expect(after.totalPoints).toBe(BigInt(250));
+        });
     });
 
     describe('getUserChallenges', () => {
@@ -1664,6 +1712,99 @@ describe('ChallengeService', () => {
                 where: { contributorId: contributor.id }
             });
             expect(history).toBe(1);
+        });
+
+        it('should be rejected at the database level on a duplicate award', async () => {
+            // The awarded-key set is built outside any transaction, so two overlapping
+            // runs - or a run overlapping the live completeChallenge() webhook path -
+            // can both see the participation as unpaid. Only a unique constraint can
+            // break the tie, so assert it exists rather than relying on interleaving.
+            const { contributor, challenge } = await seedOrphan('concurrent');
+
+            await reconcileMissingChallengeAwards({ apply: true });
+
+            await expect(
+                prisma.completedChallenge.create({
+                    data: {
+                        contributorId: contributor.id,
+                        challengeId: challenge.id,
+                        reward: 250
+                    }
+                })
+            ).rejects.toMatchObject({ code: 'P2002' });
+
+            const completed = await prisma.completedChallenge.count({
+                where: { challengeId: challenge.id }
+            });
+            expect(completed).toBe(1);
+
+            const after = await prisma.contributor.findUnique({
+                where: { id: contributor.id }
+            });
+            expect(after.totalPoints).toBe(BigInt(1250));
+        });
+
+        it('should report awards it could not attribute to the current quarter', async () => {
+            // seedOrphan's challenge ended 2 days ago, so it is inside the current
+            // quarter and quarterly stats can absorb it.
+            const { contributor } = await seedOrphan('thisquarter');
+
+            const result = await reconcileMissingChallengeAwards({ apply: true });
+
+            expect(result.quarterlyDeferred).toHaveLength(0);
+
+            const after = await prisma.contributor.findUnique({
+                where: { id: contributor.id }
+            });
+            expect(after.quarterlyStats.pointsThisQuarter).toBe(250);
+        });
+
+        it('should defer quarterly attribution for a challenge from a closed quarter', async () => {
+            const contributor = await prisma.contributor.create({
+                data: createTestContributor({
+                    username: 'oldquarter',
+                    totalPoints: BigInt(1000),
+                    allTimePoints: BigInt(1000)
+                })
+            });
+
+            const YEAR = 365 * 24 * 60 * 60 * 1000;
+            const challenge = await prisma.challenge.create({
+                data: {
+                    title: 'Point Hunter',
+                    description: 'Test',
+                    type: 'points',
+                    target: 500,
+                    reward: 150,
+                    status: 'expired',
+                    startDate: new Date(Date.now() - YEAR - 7 * 24 * 60 * 60 * 1000),
+                    endDate: new Date(Date.now() - YEAR),
+                    difficulty: 'easy',
+                    category: 'individual',
+                    participants: {
+                        create: {
+                            contributorId: contributor.id,
+                            progress: 550,
+                            completed: true,
+                            joinedAt: new Date(Date.now() - YEAR - 7 * 24 * 60 * 60 * 1000)
+                        }
+                    }
+                }
+            });
+
+            const result = await reconcileMissingChallengeAwards({ apply: true });
+
+            // The points are still recovered, but there is no past-quarter bucket to
+            // write to, so the caller has to be told rather than left guessing.
+            expect(result.paid).toHaveLength(1);
+            expect(result.quarterlyDeferred).toHaveLength(1);
+            expect(result.quarterlyDeferred[0].challengeId).toBe(challenge.id);
+
+            const after = await prisma.contributor.findUnique({
+                where: { id: contributor.id }
+            });
+            expect(after.totalPoints).toBe(BigInt(1150));
+            expect(after.quarterlyStats?.pointsThisQuarter ?? 0).toBe(0);
         });
 
         it('should scope the run to a single username when asked', async () => {

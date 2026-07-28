@@ -18,9 +18,18 @@
  * months later). Pass --include-unflagged to pay those too, and read the reported rows
  * first: if the progress figure looks inflated for the challenge duration, it is.
  *
- * Awards are backdated to the challenge end date so point history and quarterly
- * attribution land in the quarter the work happened in. Re-running is safe: an
- * existing CompletedChallenge row excludes the participation.
+ * Awards are backdated to the challenge end date, so the CompletedChallenge row and the
+ * point-history entry sit in the period the work happened in.
+ *
+ * Quarterly stats are only repaired for challenges that ended in the CURRENT quarter.
+ * `Contributor.quarterlyStats` holds one live quarter and past quarters are settled in
+ * QuarterlyWinner archives with their rewards already paid, so there is nowhere to write
+ * a closed quarter's points. Those awards are listed under "Quarterly stats NOT
+ * repaired" rather than silently dropped.
+ *
+ * Re-running is safe, including alongside another run or the live award path: the unique
+ * (contributorId, challengeId) constraint on CompletedChallenge rejects a duplicate and
+ * the award transaction rolls back rather than paying twice.
  *
  * Usage:
  *   # Report only (default, writes nothing)
@@ -74,7 +83,7 @@ async function reconcileChallengeAwards() {
     console.log(`🔍 Reconciling missing challenge awards (${mode})\n`);
 
     try {
-        const { awards, paid, skipped, totalPoints, paidPoints } = await reconcileMissingChallengeAwards({
+        const { awards, paid, skipped, quarterlyDeferred, totalPoints, paidPoints } = await reconcileMissingChallengeAwards({
             apply: argv.apply,
             username: argv.user || null,
             includeUnflagged: argv.includeUnflagged
@@ -109,18 +118,45 @@ async function reconcileChallengeAwards() {
         console.log(`  - Contributors affected: ${byUser.size}`);
         console.log(`  - Awards owed: ${awards.length} (${totalPoints} pts)`);
 
-        if (skipped.length > 0) {
-            console.log(`  - Withheld as target-met-not-flagged: ${skipped.length} `
-                + `(${skipped.reduce((sum, a) => sum + a.reward, 0)} pts)`);
+        const withheld = skipped.filter(a => a.reason === 'target-met-not-flagged');
+        const raced = skipped.filter(a => a.reason === 'already-awarded');
+
+        if (withheld.length > 0) {
+            console.log(`  - Withheld as target-met-not-flagged: ${withheld.length} `
+                + `(${withheld.reduce((sum, a) => sum + a.reward, 0)} pts)`);
             console.log('    Their progress may be inflated by activity after the challenge');
             console.log('    ended. Review the figures above, then pass --include-unflagged');
             console.log('    to pay them.');
         }
 
+        if (raced.length > 0) {
+            console.log(`  - Already paid by another writer: ${raced.length}`);
+        }
+
         if (argv.apply) {
             console.log(`  - Awards paid: ${paid.length} (${paidPoints} pts)`);
-            console.log('\n🎉 Backfill complete. Refresh standings with:');
-            console.log('     npm run recompute:quarter:history');
+
+            if (quarterlyDeferred.length > 0) {
+                console.log(`  - Quarterly stats NOT repaired: ${quarterlyDeferred.length} `
+                    + `(${quarterlyDeferred.reduce((sum, a) => sum + a.reward, 0)} pts)`);
+                console.log('    These challenges ended in a closed quarter. Total and all-time');
+                console.log('    points and point history were repaired, but pointsThisQuarter');
+                console.log('    was not: quarterlyStats holds only the live quarter, and past');
+                console.log('    quarters are already settled in the Hall of Fame with their');
+                console.log('    rewards paid. Reopening one is a decision, not a backfill.');
+                for (const award of quarterlyDeferred) {
+                    console.log(`      ${award.username}: ${award.title} `
+                        + `(ended ${award.endDate.toISOString().split('T')[0]}, +${award.reward} pts)`);
+                }
+            }
+
+            const currentQuarterPaid = paid.length - quarterlyDeferred.length;
+            if (currentQuarterPaid > 0) {
+                console.log('\n🎉 Backfill complete. Refresh the current quarter standings with:');
+                console.log('     npm run recompute:quarter:history');
+            } else {
+                console.log('\n🎉 Backfill complete.');
+            }
         } else {
             console.log('\nRe-run with --apply to award these points.');
         }
