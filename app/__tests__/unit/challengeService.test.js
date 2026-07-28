@@ -1604,12 +1604,36 @@ describe('ChallengeService', () => {
             expect(history[0].timestamp.getTime()).toBe(challenge.endDate.getTime());
         });
 
+        it('should withhold an unflagged target-met participation by default', async () => {
+            const { contributor, challenge } = await seedOrphan('unflagged', {
+                completed: false
+            });
+
+            const result = await reconcileMissingChallengeAwards({ apply: true });
+
+            // progress >= target can also be the residue of post-window accrual, which
+            // never earned the reward. Paying it out needs an explicit opt-in.
+            expect(result.paid).toHaveLength(0);
+            expect(result.skipped).toHaveLength(1);
+            expect(result.skipped[0].reason).toBe('target-met-not-flagged');
+
+            const awarded = await prisma.completedChallenge.count({
+                where: { challengeId: challenge.id }
+            });
+            expect(awarded).toBe(0);
+
+            const after = await prisma.contributor.findUnique({
+                where: { id: contributor.id }
+            });
+            expect(after.totalPoints).toBe(BigInt(1000));
+        });
+
         it('should set the completed flag when the award was never detected', async () => {
             const { contributor, challenge } = await seedOrphan('neverflagged', {
                 completed: false
             });
 
-            await reconcileMissingChallengeAwards({ apply: true });
+            await reconcileMissingChallengeAwards({ apply: true, includeUnflagged: true });
 
             const participant = await prisma.challengeParticipant.findUnique({
                 where: {

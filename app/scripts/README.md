@@ -26,8 +26,11 @@ This directory contains utility scripts for database management, validation, and
   - Finds participations flagged completed with no `CompletedChallenge` row, and
     participations at or beyond target that were never flagged
   - Reports only by default; `--apply` writes the awards (backdated to the challenge end date)
+  - `--apply` pays `flagged-not-awarded` only. `target-met-not-flagged` rows are withheld
+    because their progress can be inflated by activity after the challenge ended; review
+    the report, then pass `--include-unflagged` to pay them
   - Safe to re-run; scope to one contributor with `--user <username>`
-  - Usage: `npm run reconcile:challenge:awards -- [--user <username>] [--apply]`
+  - Usage: `npm run reconcile:challenge:awards -- [--user <username>] [--apply] [--include-unflagged]`
 
 **Example Usage:**
 ```bash

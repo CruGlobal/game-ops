@@ -1400,22 +1400,40 @@ export const findMissingChallengeAwards = async ({ username = null } = {}) => {
  *
  * Safe to re-run: an existing CompletedChallenge row excludes the participation.
  *
+ * `target-met-not-flagged` participations are reported but NOT paid unless
+ * `includeUnflagged` is set. Progress used to accrue on challenges that had already
+ * ended, so a progress figure above target can be the residue of post-window activity
+ * that never earned the reward (a 5-PR challenge sitting at 34/5 months later). Only
+ * `flagged-not-awarded` is unambiguous: something decided the challenge was complete
+ * and the payout is what went missing.
+ *
  * @param {Object} options - Options
  * @param {Boolean} [options.apply=false] - Write the awards; otherwise report only
  * @param {String} [options.username] - Limit the run to one contributor
- * @returns {Object} { applied, awards, totalPoints }
+ * @param {Boolean} [options.includeUnflagged=false] - Also pay target-met-not-flagged
+ * @returns {Object} { applied, awards, paid, skipped, totalPoints, paidPoints }
  */
-export const reconcileMissingChallengeAwards = async ({ apply = false, username = null } = {}) => {
+export const reconcileMissingChallengeAwards = async ({
+    apply = false,
+    username = null,
+    includeUnflagged = false
+} = {}) => {
     const awards = await findMissingChallengeAwards({ username });
     const totalPoints = awards.reduce((sum, award) => sum + award.reward, 0);
 
+    const payable = award =>
+        award.reason === 'flagged-not-awarded' || includeUnflagged;
+
+    const paid = [];
+    const skipped = awards.filter(award => !payable(award));
+
     if (!apply) {
-        return { applied: false, awards, totalPoints };
+        return { applied: false, awards, paid, skipped, totalPoints, paidPoints: 0 };
     }
 
     const now = new Date();
 
-    for (const award of awards) {
+    for (const award of awards.filter(payable)) {
         const awardedAt = award.endDate < now ? award.endDate : now;
 
         const operations = [
@@ -1468,6 +1486,8 @@ export const reconcileMissingChallengeAwards = async ({ apply = false, username 
             points: award.reward
         }, awardedAt);
 
+        paid.push(award);
+
         logger.info('Backfilled missing challenge award', {
             username: award.username,
             challengeId: award.challengeId,
@@ -1478,5 +1498,7 @@ export const reconcileMissingChallengeAwards = async ({ apply = false, username 
         });
     }
 
-    return { applied: true, awards, totalPoints };
+    const paidPoints = paid.reduce((sum, award) => sum + award.reward, 0);
+
+    return { applied: true, awards, paid, skipped, totalPoints, paidPoints };
 };

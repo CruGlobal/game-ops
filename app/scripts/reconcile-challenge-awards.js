@@ -12,6 +12,12 @@
  *   - flagged-not-awarded:    completed=true with no CompletedChallenge row
  *   - target-met-not-flagged: progress >= target, never flagged, never awarded
  *
+ * Only `flagged-not-awarded` is paid by default. Progress used to accrue on challenges
+ * that had already ended, so a progress figure above target can be the residue of
+ * post-window activity that never earned the reward (a 5-PR challenge sitting at 34/5
+ * months later). Pass --include-unflagged to pay those too, and read the reported rows
+ * first: if the progress figure looks inflated for the challenge duration, it is.
+ *
  * Awards are backdated to the challenge end date so point history and quarterly
  * attribution land in the quarter the work happened in. Re-running is safe: an
  * existing CompletedChallenge row excludes the participation.
@@ -23,8 +29,11 @@
  *   # Report for one contributor
  *   node scripts/reconcile-challenge-awards.js --user jasonbuckner
  *
- *   # Pay out the missing awards
+ *   # Pay out the unambiguous awards
  *   node scripts/reconcile-challenge-awards.js --apply
+ *
+ *   # Also pay participations that met target but were never flagged
+ *   node scripts/reconcile-challenge-awards.js --apply --include-unflagged
  *
  * After applying, refresh the standings:
  *   npm run recompute:quarter:history
@@ -51,6 +60,12 @@ const argv = yargs(hideBin(process.argv))
         demandOption: false,
         describe: 'Limit the run to one GitHub username. Defaults to all contributors.'
     })
+    .option('include-unflagged', {
+        type: 'boolean',
+        default: false,
+        describe: 'Also pay participations that met target but were never flagged complete. '
+            + 'Their progress may be inflated by post-window activity - review the report first.'
+    })
     .help()
     .argv;
 
@@ -59,9 +74,10 @@ async function reconcileChallengeAwards() {
     console.log(`🔍 Reconciling missing challenge awards (${mode})\n`);
 
     try {
-        const { awards, totalPoints } = await reconcileMissingChallengeAwards({
+        const { awards, paid, skipped, totalPoints, paidPoints } = await reconcileMissingChallengeAwards({
             apply: argv.apply,
-            username: argv.user || null
+            username: argv.user || null,
+            includeUnflagged: argv.includeUnflagged
         });
 
         if (awards.length === 0) {
@@ -91,10 +107,18 @@ async function reconcileChallengeAwards() {
 
         console.log('\nSummary:');
         console.log(`  - Contributors affected: ${byUser.size}`);
-        console.log(`  - Awards ${argv.apply ? 'paid' : 'owed'}: ${awards.length}`);
-        console.log(`  - Points ${argv.apply ? 'awarded' : 'outstanding'}: ${totalPoints}`);
+        console.log(`  - Awards owed: ${awards.length} (${totalPoints} pts)`);
+
+        if (skipped.length > 0) {
+            console.log(`  - Withheld as target-met-not-flagged: ${skipped.length} `
+                + `(${skipped.reduce((sum, a) => sum + a.reward, 0)} pts)`);
+            console.log('    Their progress may be inflated by activity after the challenge');
+            console.log('    ended. Review the figures above, then pass --include-unflagged');
+            console.log('    to pay them.');
+        }
 
         if (argv.apply) {
+            console.log(`  - Awards paid: ${paid.length} (${paidPoints} pts)`);
             console.log('\n🎉 Backfill complete. Refresh standings with:');
             console.log('     npm run recompute:quarter:history');
         } else {
