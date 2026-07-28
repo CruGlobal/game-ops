@@ -286,13 +286,31 @@ export const joinChallenge = async (username, challengeId) => {
 };
 
 /**
+ * Decide whether a contribution counts toward a challenge.
+ *
+ * Every challenge type is scoped to the challenge period, so a contribution only
+ * counts if it happened inside the window. The check keys on when the work happened
+ * rather than on the challenge's `status`, so run-backfill.js can still credit a
+ * historical contribution that fell inside the window of a since-expired challenge.
+ *
+ * @param {Object} challenge - Challenge record
+ * @param {Date|String} [activityDate] - When the contribution happened; defaults to now
+ * @returns {Boolean} True when the contribution counts
+ */
+const isWithinChallengeWindow = (challenge, activityDate = null) => {
+    const when = activityDate ? new Date(activityDate) : new Date();
+    return when >= challenge.startDate && when <= challenge.endDate;
+};
+
+/**
  * Update challenge progress for a user
  * @param {String} username - GitHub username
  * @param {String} challengeId - Challenge ID
  * @param {Number} increment - Progress increment
+ * @param {Date|String} [activityDate] - When the contribution happened; defaults to now
  * @returns {Object} Updated progress
  */
-export const updateChallengeProgress = async (username, challengeId, increment = 1) => {
+export const updateChallengeProgress = async (username, challengeId, increment = 1, activityDate = null) => {
     try {
         const contributor = await prisma.contributor.findUnique({
             where: { username },
@@ -318,6 +336,21 @@ export const updateChallengeProgress = async (username, challengeId, increment =
 
         if (!challenge || !participant) {
             return null;
+        }
+
+        if (!isWithinChallengeWindow(challenge, activityDate)) {
+            logger.debug('Skipped challenge progress outside the challenge window', {
+                username,
+                challengeId,
+                activityDate,
+                endDate: challenge.endDate
+            });
+            return {
+                progress: participant.progress,
+                target: challenge.target,
+                completed: participant.completed,
+                skipped: 'outside-window'
+            };
         }
 
         const newProgress = participant.progress + increment;
@@ -385,8 +418,13 @@ export const updateChallengeProgress = async (username, challengeId, increment =
 /**
  * Set challenge progress to an absolute value (used for streak challenges
  * where progress = current streak, not an increment)
+ *
+ * @param {String} username - GitHub username
+ * @param {String} challengeId - Challenge ID
+ * @param {Number} absoluteValue - Progress value to set
+ * @param {Date|String} [activityDate] - When the contribution happened; defaults to now
  */
-export const setChallengeProgressAbsolute = async (username, challengeId, absoluteValue) => {
+export const setChallengeProgressAbsolute = async (username, challengeId, absoluteValue, activityDate = null) => {
     try {
         const contributor = await prisma.contributor.findUnique({
             where: { username },
@@ -409,6 +447,21 @@ export const setChallengeProgressAbsolute = async (username, challengeId, absolu
         });
 
         if (!challenge || !participant) return null;
+
+        if (!isWithinChallengeWindow(challenge, activityDate)) {
+            logger.debug('Skipped absolute challenge progress outside the challenge window', {
+                username,
+                challengeId,
+                activityDate,
+                endDate: challenge.endDate
+            });
+            return {
+                progress: participant.progress,
+                target: challenge.target,
+                completed: participant.completed,
+                skipped: 'outside-window'
+            };
+        }
 
         const newProgress = Math.max(0, absoluteValue);
 

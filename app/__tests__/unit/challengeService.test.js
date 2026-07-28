@@ -6,6 +6,7 @@ import {
     getChallengeById,
     joinChallenge,
     updateChallengeProgress,
+    setChallengeProgressAbsolute,
     completeChallenge,
     getUserChallenges,
     generateWeeklyChallenges,
@@ -1265,6 +1266,158 @@ describe('ChallengeService', () => {
             });
             expect(participant.progress).toBe(7); // Exceeds target
             expect(participant.completed).toBe(true);
+        });
+    });
+
+    describe('challenge window enforcement', () => {
+        const DAY = 24 * 60 * 60 * 1000;
+
+        const seedWindow = async (username, { endsIn, progress = 4, target = 5 }) => {
+            const contributor = await prisma.contributor.create({
+                data: createTestContributor({
+                    username,
+                    totalPoints: BigInt(0),
+                    allTimePoints: BigInt(0)
+                })
+            });
+
+            const challenge = await prisma.challenge.create({
+                data: {
+                    title: 'Sprint Master',
+                    description: 'Test',
+                    type: 'pr-merge',
+                    target,
+                    reward: 250,
+                    status: 'active',
+                    startDate: new Date(Date.now() + endsIn - 7 * DAY),
+                    endDate: new Date(Date.now() + endsIn),
+                    difficulty: 'medium',
+                    category: 'individual',
+                    participants: {
+                        create: {
+                            contributorId: contributor.id,
+                            progress,
+                            completed: false,
+                            joinedAt: new Date(Date.now() + endsIn - 7 * DAY)
+                        }
+                    }
+                }
+            });
+
+            return { contributor, challenge };
+        };
+
+        const readParticipant = (challengeId, contributorId) =>
+            prisma.challengeParticipant.findUnique({
+                where: {
+                    challengeId_contributorId: { challengeId, contributorId }
+                }
+            });
+
+        it('should ignore progress for activity after the challenge ended', async () => {
+            const { contributor, challenge } = await seedWindow('lateprs', {
+                endsIn: -7 * DAY
+            });
+
+            await updateChallengeProgress('lateprs', challenge.id, 1, new Date());
+
+            const participant = await readParticipant(challenge.id, contributor.id);
+            expect(participant.progress).toBe(4);
+            expect(participant.completed).toBe(false);
+        });
+
+        it('should not award a target crossed after the challenge ended', async () => {
+            const { contributor, challenge } = await seedWindow('latecross', {
+                endsIn: -30 * DAY
+            });
+
+            await updateChallengeProgress('latecross', challenge.id, 30, new Date());
+
+            const participant = await readParticipant(challenge.id, contributor.id);
+            expect(participant.progress).toBe(4);
+            expect(participant.completed).toBe(false);
+
+            const awarded = await prisma.completedChallenge.count({
+                where: { challengeId: challenge.id }
+            });
+            expect(awarded).toBe(0);
+
+            const after = await prisma.contributor.findUnique({
+                where: { id: contributor.id }
+            });
+            expect(after.totalPoints).toBe(BigInt(0));
+        });
+
+        it('should ignore progress for activity before the challenge started', async () => {
+            const { contributor, challenge } = await seedWindow('early', {
+                endsIn: 7 * DAY
+            });
+
+            await updateChallengeProgress(
+                'early',
+                challenge.id,
+                1,
+                new Date(Date.now() - 30 * DAY)
+            );
+
+            const participant = await readParticipant(challenge.id, contributor.id);
+            expect(participant.progress).toBe(4);
+        });
+
+        it('should add progress for activity inside the window', async () => {
+            const { contributor, challenge } = await seedWindow('inwindow', {
+                endsIn: 2 * DAY
+            });
+
+            await updateChallengeProgress('inwindow', challenge.id, 1, new Date());
+
+            const participant = await readParticipant(challenge.id, contributor.id);
+            expect(participant.progress).toBe(5);
+            expect(participant.completed).toBe(true);
+        });
+
+        it('should credit a backfilled contribution that happened inside the window', async () => {
+            // run-backfill.js replays historical PRs long after the fact; the window
+            // check has to key on when the work happened, not when it was processed.
+            const { contributor, challenge } = await seedWindow('backfilled', {
+                endsIn: -2 * DAY
+            });
+
+            await updateChallengeProgress(
+                'backfilled',
+                challenge.id,
+                1,
+                new Date(Date.now() - 3 * DAY)
+            );
+
+            const participant = await readParticipant(challenge.id, contributor.id);
+            expect(participant.progress).toBe(5);
+            expect(participant.completed).toBe(true);
+        });
+
+        it('should default to now when no activity date is given', async () => {
+            const { contributor, challenge } = await seedWindow('nodate', {
+                endsIn: -7 * DAY
+            });
+
+            await updateChallengeProgress('nodate', challenge.id, 1);
+
+            const participant = await readParticipant(challenge.id, contributor.id);
+            expect(participant.progress).toBe(4);
+        });
+
+        it('should ignore an absolute streak update after the challenge ended', async () => {
+            const { contributor, challenge } = await seedWindow('latestreak', {
+                endsIn: -7 * DAY,
+                progress: 3,
+                target: 7
+            });
+
+            await setChallengeProgressAbsolute('latestreak', challenge.id, 9, new Date());
+
+            const participant = await readParticipant(challenge.id, contributor.id);
+            expect(participant.progress).toBe(3);
+            expect(participant.completed).toBe(false);
         });
     });
 
