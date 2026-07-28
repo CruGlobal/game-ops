@@ -1259,3 +1259,171 @@ export const createOKRChallenge = async (okrData) => {
         throw error;
     }
 };
+
+/**
+ * Find participations that earned a challenge reward but never received it.
+ *
+ * completeChallenge() writes the CompletedChallenge row and the points in one
+ * transaction, but the participant's `completed` flag is written by the caller in a
+ * separate statement beforehand. If the award transaction fails, the flag survives
+ * without the points, and the participation looks finished while paying nothing.
+ *
+ * Two shapes are reported:
+ * - `flagged-not-awarded`: completed=true with no CompletedChallenge row
+ * - `target-met-not-flagged`: progress >= target, never flagged, never awarded
+ *
+ * @param {Object} options - Options
+ * @param {String} [options.username] - Limit the scan to one contributor
+ * @returns {Array} One entry per participation owed a reward
+ */
+export const findMissingChallengeAwards = async ({ username = null } = {}) => {
+    try {
+        const participants = await prisma.challengeParticipant.findMany({
+            where: username ? { contributor: { username } } : {},
+            include: {
+                challenge: true,
+                contributor: {
+                    select: { id: true, username: true }
+                }
+            }
+        });
+
+        const awardedRows = await prisma.completedChallenge.findMany({
+            select: { contributorId: true, challengeId: true }
+        });
+        const awarded = new Set(
+            awardedRows.map(cc => `${cc.contributorId}:${cc.challengeId}`)
+        );
+
+        const missing = [];
+
+        for (const participant of participants) {
+            if (awarded.has(`${participant.contributorId}:${participant.challengeId}`)) {
+                continue;
+            }
+
+            const target = participant.challenge.target;
+            const targetMet = target > 0 && participant.progress >= target;
+
+            if (!participant.completed && !targetMet) {
+                continue;
+            }
+
+            missing.push({
+                username: participant.contributor.username,
+                contributorId: participant.contributorId,
+                challengeId: participant.challengeId,
+                title: participant.challenge.title,
+                reward: participant.challenge.reward,
+                progress: participant.progress,
+                target,
+                completed: participant.completed,
+                endDate: participant.challenge.endDate,
+                reason: participant.completed
+                    ? 'flagged-not-awarded'
+                    : 'target-met-not-flagged'
+            });
+        }
+
+        return missing;
+    } catch (error) {
+        logger.error('Error finding missing challenge awards', {
+            username,
+            error: error.message
+        });
+        throw error;
+    }
+};
+
+/**
+ * Pay out challenge rewards that were earned but never awarded.
+ *
+ * Mirrors completeChallenge(), with three differences suited to a backfill:
+ * - the participant's `completed` flag is repaired in the same transaction
+ * - the award is backdated to the challenge end date, so point history and quarterly
+ *   attribution land in the quarter the work happened in (updateQuarterlyStats skips
+ *   activity outside the current quarter)
+ * - no websocket event is emitted; these completions are not happening now
+ *
+ * Safe to re-run: an existing CompletedChallenge row excludes the participation.
+ *
+ * @param {Object} options - Options
+ * @param {Boolean} [options.apply=false] - Write the awards; otherwise report only
+ * @param {String} [options.username] - Limit the run to one contributor
+ * @returns {Object} { applied, awards, totalPoints }
+ */
+export const reconcileMissingChallengeAwards = async ({ apply = false, username = null } = {}) => {
+    const awards = await findMissingChallengeAwards({ username });
+    const totalPoints = awards.reduce((sum, award) => sum + award.reward, 0);
+
+    if (!apply) {
+        return { applied: false, awards, totalPoints };
+    }
+
+    const now = new Date();
+
+    for (const award of awards) {
+        const awardedAt = award.endDate < now ? award.endDate : now;
+
+        const operations = [
+            prisma.completedChallenge.create({
+                data: {
+                    contributorId: award.contributorId,
+                    challengeId: award.challengeId,
+                    reward: award.reward,
+                    completedAt: awardedAt
+                }
+            }),
+            prisma.contributor.update({
+                where: { id: award.contributorId },
+                data: {
+                    totalPoints: {
+                        increment: BigInt(award.reward)
+                    },
+                    allTimePoints: {
+                        increment: BigInt(award.reward)
+                    },
+                    pointsHistory: {
+                        create: {
+                            points: award.reward,
+                            reason: 'Challenge Completed',
+                            prNumber: null,
+                            timestamp: awardedAt
+                        }
+                    }
+                }
+            })
+        ];
+
+        if (!award.completed) {
+            operations.push(
+                prisma.challengeParticipant.update({
+                    where: {
+                        challengeId_contributorId: {
+                            challengeId: award.challengeId,
+                            contributorId: award.contributorId
+                        }
+                    },
+                    data: { completed: true }
+                })
+            );
+        }
+
+        await prisma.$transaction(operations);
+
+        await updateQuarterlyStats(award.username, {
+            points: award.reward
+        }, awardedAt);
+
+        logger.info('Backfilled missing challenge award', {
+            username: award.username,
+            challengeId: award.challengeId,
+            title: award.title,
+            reward: award.reward,
+            reason: award.reason,
+            awardedAt
+        });
+    }
+
+    return { applied: true, awards, totalPoints };
+};

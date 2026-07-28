@@ -22,6 +22,12 @@ This directory contains utility scripts for database management, validation, and
 - `recompute-quarter-fallback.js` - Recompute current quarter stats (fallback method)
 - `recompute-quarter-history.js` - Recompute quarter stats from history
 - `recompute-alltime-from-history.js` - Recompute all-time stats from contribution history
+- `reconcile-challenge-awards.js` - **Pay out challenge rewards that were earned but never awarded**
+  - Finds participations flagged completed with no `CompletedChallenge` row, and
+    participations at or beyond target that were never flagged
+  - Reports only by default; `--apply` writes the awards (backdated to the challenge end date)
+  - Safe to re-run; scope to one contributor with `--user <username>`
+  - Usage: `npm run reconcile:challenge:awards -- [--user <username>] [--apply]`
 
 **Example Usage:**
 ```bash
