@@ -99,6 +99,10 @@ function createChallengeCard(challenge) {
     const state = challengeCardState(challenge, participants, currentUsername);
     const hasJoined = state.hasJoined;
 
+    // updateChallengeProgress() needs the target on a live progress update and
+    // has nothing but the card to read it from.
+    card.dataset.target = state.target;
+
     // Calculate days remaining
     const endDate = new Date(challenge.endDate);
     const now = new Date();
@@ -381,15 +385,18 @@ function updateChallengeProgress(challengeId, username, progress) {
     const card = document.querySelector(`[data-challenge-id="${challengeId}"]`);
     if (!card) return;
 
+    // Read the target off the card rather than re-parsing the label it was
+    // rendered into: scraping the copy coupled this handler to the exact
+    // wording, and a reworded label would have stopped updates silently.
+    const target = Number(card.dataset.target);
+    if (!Number.isFinite(target)) return;
+
     // Write to the inner span, not the label: the label may also hold the
     // completed badge, and assigning textContent would delete it.
     const progressText = card.querySelector('.challenge-progress-label span');
-    if (!progressText) return;
-
-    const match = progressText.textContent.match(/\/ (\d+)/);
-    if (!match) return;
-    const target = Number(match[1]);
-    progressText.textContent = `Your Progress: ${progress} / ${target}`;
+    if (progressText) {
+        progressText.textContent = `Your Progress: ${progress} / ${target}`;
+    }
 
     const progressBar = card.querySelector('.challenge-progress-fill');
     if (progressBar) {
