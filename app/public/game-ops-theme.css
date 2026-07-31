@@ -764,7 +764,7 @@ main > section > h2::before {
 }
 .challenge-stat-value { font-weight: 700; font-size: 1.15rem; color: var(--ink); font-variant-numeric: tabular-nums; }
 .challenge-stat-label { font-size: 0.6rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--faint); }
-.challenge-progress, .my-challenge-progress-section, .past-challenge-progress-section { margin-top: 12px; }
+.challenge-progress, .past-challenge-progress-section { margin-top: 12px; }
 .challenge-progress-label, .my-challenge-progress-label {
     display: flex; justify-content: space-between;
     font-size: 0.78rem; color: var(--muted); margin-bottom: 6px;
@@ -775,7 +775,7 @@ main > section > h2::before {
 }
 .challenge-progress-fill { height: 100%; background: var(--accent); border-radius: var(--radius-pill); transition: width 0.3s ease; }
 .challenge-progress-fill-expired { background: var(--faint); }
-.my-challenge-reward, .past-challenge-reward { font-weight: 600; color: var(--c-amber); font-size: 0.82rem; }
+.past-challenge-reward { font-weight: 600; color: var(--c-amber); font-size: 0.82rem; }
 .past-challenge-badge { font-size: 0.68rem; font-weight: 500; padding: 3px 10px; border-radius: var(--radius-pill); }
 .past-challenge-badge-completed { background: var(--c-teal-soft); color: var(--c-teal); }
 .past-challenge-badge-incomplete { background: var(--surface-2); color: var(--muted); }

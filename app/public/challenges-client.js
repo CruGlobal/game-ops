@@ -232,9 +232,19 @@ async function loadMyChallenges(username) {
         }
         const data = await response.json();
 
-        // Active challenges are rendered by the Active Challenges section above,
-        // which under auto-enroll already lists every challenge this user is in.
-        // Only the past-challenge history is unique to this response.
+        // Only the past-challenge history is rendered from this response. Active
+        // challenges come from the Active Challenges section above, which auto-enroll
+        // (d3160c3) makes equivalent for every challenge that is both status 'active'
+        // and still inside its endDate.
+        //
+        // The two endpoints are not strictly equivalent: getActiveChallenges() filters
+        // on status AND endDate >= now, while getUserChallenges() buckets on status
+        // alone. A challenge past its endDate that checkExpiredChallenges has not yet
+        // flipped therefore sits in data.activeChallenges and shows in neither view.
+        // That job is a daily midnight cron (server.js) and generated challenges end
+        // at midnight, so the gap is normally seconds - but it widens if an endDate is
+        // edited off midnight or the cron is missed. The durable fix is an endDate
+        // check in getUserChallenges(), not a renderer here.
         renderPastChallenges(data.completedChallenges || [], data.expiredIncomplete || []);
     } catch (error) {
         console.error('Error loading user challenges:', error);
