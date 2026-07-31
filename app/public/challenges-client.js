@@ -2,6 +2,7 @@
  * Challenges Page Client-Side JavaScript
  * Handles challenge display, join functionality, and real-time updates
  */
+/* global challengeCardState */
 
 // Store current username (from authenticated session)
 let currentUsername = null;
@@ -95,9 +96,8 @@ function createChallengeCard(challenge) {
     // Ensure participants array exists
     const participants = challenge.participants || [];
 
-    // Check if user has joined this challenge
-    const hasJoined = participants.some(p => p.username === currentUsername || p.contributor?.username === currentUsername);
-    const userParticipant = participants.find(p => p.username === currentUsername || p.contributor?.username === currentUsername);
+    const state = challengeCardState(challenge, participants, currentUsername);
+    const hasJoined = state.hasJoined;
 
     // Calculate days remaining
     const endDate = new Date(challenge.endDate);
@@ -122,7 +122,7 @@ function createChallengeCard(challenge) {
                 <div class="challenge-stat-label">Points</div>
             </div>
             <div class="challenge-stat">
-                <div class="challenge-stat-value">${participants.length}</div>
+                <div class="challenge-stat-value">${state.engaged} / ${state.enrolled}</div>
                 <div class="challenge-stat-label">Participants</div>
             </div>
         </div>
@@ -130,11 +130,17 @@ function createChallengeCard(challenge) {
         ${hasJoined ? `
             <div class="challenge-progress">
                 <div class="challenge-progress-label">
-                    Your Progress: ${userParticipant.progress} / ${challenge.target}
+                    <span>Your Progress: ${state.progress} / ${state.target}</span>
+                    ${state.completed ? `
+                        <span class="past-challenge-badge past-challenge-badge-completed">✓ Completed</span>
+                    ` : ''}
                 </div>
                 <div class="challenge-progress-bar">
-                    <div class="challenge-progress-fill" style="width: ${(userParticipant.progress / challenge.target * 100)}%"></div>
+                    <div class="challenge-progress-fill" style="width: ${state.percent}%"></div>
                 </div>
+                ${state.completed ? `
+                    <div class="past-challenge-reward">+${challenge.reward} pts earned</div>
+                ` : ''}
             </div>
         ` : ''}
 
