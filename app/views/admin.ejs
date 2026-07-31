@@ -190,6 +190,18 @@
                             <label for="slack-webhook-url" style="font-size: 0.875rem; font-weight: 600;">Slack Webhook URL</label>
                             <input type="url" id="slack-webhook-url" class="form-control" placeholder="https://hooks.slack.com/services/T.../B.../..." style="margin-top: 0.25rem; max-width: 500px;">
                         </div>
+
+                        <div class="form-group" style="display: flex; align-items: flex-start; gap: 0.75rem; margin-top: 1rem;">
+                            <input type="checkbox" id="enable-bills-gifts" class="form-check-input" style="width: 20px; height: 20px; margin-top: 2px; cursor: pointer;">
+                            <label for="enable-bills-gifts" style="margin: 0; cursor: pointer; user-select: none;">
+                                <strong>Send Bill Bucks via Bills API</strong>
+                                <p style="margin: 0.25rem 0 0 0; color: var(--text-muted, #6c757d); font-size: 0.875rem;">
+                                    When a period closes, automatically deliver bill bucks to the top-3 podium winners through the Cru Bills API.
+                                    Requires the <code>BILLS_API_KEY</code> environment variable (a fund-tied key with <code>bills:read</code> + <code>bills:give</code>).
+                                    <span id="bills-key-status" style="font-weight: 600;"></span>
+                                </p>
+                            </label>
+                        </div>
                     </div>
 
                     <!-- Save Button -->
@@ -264,6 +276,44 @@
                 <div id="fetch-history" style="display: none; margin-top: 1.5rem;">
                     <h3>Recent Fetch History</h3>
                     <div id="fetch-history-list" class="fetch-history-list"></div>
+                </div>
+            </div>
+
+            <!-- Bill Gifts Section -->
+            <div class="card">
+                <h2>💵 Bill Gifts</h2>
+                <p class="settings-description">
+                    Recent bill bucks delivered to podium winners via the Bills API. Enable delivery in
+                    <strong>Quarter Configuration → Feature Settings</strong>. Rows waiting on an email can be
+                    completed here; failed rows can be retried.
+                </p>
+
+                <div style="margin-bottom: 1rem; color: var(--text-muted, #6c757d);">
+                    Delivery: <strong id="bill-gifts-enabled-status">Loading...</strong> ·
+                    API key: <strong id="bill-gifts-key-status">Loading...</strong>
+                    <button id="refresh-bill-gifts" class="btn btn-secondary" style="margin-left: 0.75rem;">
+                        <span>🔄 Refresh</span>
+                    </button>
+                </div>
+
+                <div style="overflow-x: auto;">
+                    <table class="data-table" id="bill-gifts-table" style="width: 100%; border-collapse: collapse;">
+                        <thead>
+                            <tr>
+                                <th style="text-align: left; padding: 0.5rem;">Period</th>
+                                <th style="text-align: left; padding: 0.5rem;">Winner</th>
+                                <th style="text-align: left; padding: 0.5rem;">Rank</th>
+                                <th style="text-align: left; padding: 0.5rem;">Amount</th>
+                                <th style="text-align: left; padding: 0.5rem;">Email</th>
+                                <th style="text-align: left; padding: 0.5rem;">Status</th>
+                                <th style="text-align: left; padding: 0.5rem;">Sent</th>
+                                <th style="text-align: left; padding: 0.5rem;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="bill-gifts-tbody">
+                            <tr><td colspan="8" style="padding: 0.75rem;"><span class="loading-spinner">Loading...</span></td></tr>
+                        </tbody>
+                    </table>
                 </div>
             </div>
 
@@ -627,6 +677,7 @@ function showToast(message, type = 'info') {
             await loadPRRangeInfo();
             await initCronControls();
             await initDevOpsTeamControls();
+            await initBillGifts();
         } else {
             if (authBanner) {
                 authBanner.className = 'auth-status auth-warn';
@@ -780,7 +831,7 @@ async function checkForDuplicates() {
                 if (data.details.length > 0) {
                     html += '<div class="duplicate-details"><h4>Details:</h4><ul>';
                     data.details.slice(0, 10).forEach(detail => {
-                        html += `<li><strong>${detail.type}:</strong> ${detail.issue}</li>`;
+                        html += `<li><strong>${escapeHtml(detail.type)}:</strong> ${escapeHtml(detail.issue)}</li>`;
                     });
                     if (data.details.length > 10) {
                         html += `<li><em>... and ${data.details.length - 10} more issues</em></li>`;
@@ -970,6 +1021,11 @@ async function loadQuarterConfig() {
                 slackUrlInput.value = config.slackWebhookUrl;
             }
 
+            const billsCheckbox = document.getElementById('enable-bills-gifts');
+            if (billsCheckbox) {
+                billsCheckbox.checked = config.enableBillsGifts || false;
+            }
+
             // Show custom config if needed
             if (config.systemType === 'custom') {
                 document.getElementById('custom-quarter-config').style.display = 'block';
@@ -996,6 +1052,7 @@ async function saveQuarterConfig() {
     const enableGitHubDiscussions = document.getElementById('enable-github-discussions')?.checked || false;
     const enableSlackNotifications = document.getElementById('enable-slack-notifications')?.checked || false;
     const slackWebhookUrl = document.getElementById('slack-webhook-url')?.value?.trim() || null;
+    const enableBillsGifts = document.getElementById('enable-bills-gifts')?.checked || false;
 
     button.disabled = true;
     button.innerHTML = '<span>⏳ Saving...</span>';
@@ -1004,7 +1061,7 @@ async function saveQuarterConfig() {
         const response = await fetch('/api/admin/quarter-config', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ systemType, q1StartMonth, enableGitHubDiscussions, enableSlackNotifications, slackWebhookUrl })
+            body: JSON.stringify({ systemType, q1StartMonth, enableGitHubDiscussions, enableSlackNotifications, slackWebhookUrl, enableBillsGifts })
         });
 
         const result = await response.json();
@@ -1838,6 +1895,177 @@ function toggleDevOpsMembersList() {
     } else {
         // Hide list
         list.style.display = 'none';
+    }
+}
+
+// ===== Bill Gifts Functions =====
+
+async function initBillGifts() {
+    try {
+        await loadBillGifts();
+
+        const refreshButton = document.getElementById('refresh-bill-gifts');
+        if (refreshButton) {
+            refreshButton.addEventListener('click', async () => {
+                await loadBillGifts();
+            });
+        }
+    } catch (err) {
+        console.error('Failed to initialize Bill Gifts card', err);
+    }
+}
+
+function billGiftStatusBadge(status) {
+    const map = {
+        sent: { text: 'Sent', color: '#10b981' },
+        failed: { text: 'Failed', color: '#ef4444' },
+        pending_email: { text: 'Pending Email', color: '#f59e0b' }
+    };
+    const badge = map[status] || { text: status, color: '#6b7280' };
+    return `<span style="display: inline-block; padding: 2px 8px; border-radius: 9999px; background: ${badge.color}; color: #fff; font-size: 0.75rem; font-weight: 600;">${escapeHtml(badge.text)}</span>`;
+}
+
+async function loadBillGifts() {
+    const tbody = document.getElementById('bill-gifts-tbody');
+    try {
+        const response = await fetch('/api/admin/bill-gifts');
+        if (response.status === 401) return;
+        const result = await response.json();
+
+        if (!result.success) {
+            tbody.innerHTML = '<tr><td colspan="8" style="padding: 0.75rem;">Failed to load bill gifts.</td></tr>';
+            return;
+        }
+
+        // Update status displays (toggle helper + card header)
+        const enabledText = result.enabled ? 'Enabled' : 'Disabled';
+        const keyText = result.keyConfigured ? 'Configured ✅' : 'Not configured ⚠️';
+        const enabledEl = document.getElementById('bill-gifts-enabled-status');
+        const keyEl = document.getElementById('bill-gifts-key-status');
+        if (enabledEl) enabledEl.textContent = enabledText;
+        if (keyEl) keyEl.textContent = keyText;
+        const toggleKeyStatus = document.getElementById('bills-key-status');
+        if (toggleKeyStatus) {
+            toggleKeyStatus.textContent = result.keyConfigured
+                ? 'BILLS_API_KEY is configured on the server.'
+                : 'BILLS_API_KEY is NOT configured — gifts cannot be sent until it is set.';
+            toggleKeyStatus.style.color = result.keyConfigured ? '#10b981' : '#ef4444';
+        }
+
+        const gifts = result.gifts || [];
+        if (gifts.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" style="padding: 0.75rem;"><em>No bill gifts yet.</em></td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = gifts.map(renderBillGiftRow).join('');
+
+        // Wire per-row actions
+        gifts.forEach(gift => {
+            const retryBtn = document.getElementById(`retry-bill-gift-${gift.id}`);
+            if (retryBtn) {
+                retryBtn.addEventListener('click', () => retryBillGift(gift.id));
+            }
+            const saveBtn = document.getElementById(`save-send-bill-gift-${gift.id}`);
+            if (saveBtn) {
+                saveBtn.addEventListener('click', () => saveAndSendBillGift(gift.id, gift.username));
+            }
+            const emailInput = document.getElementById(`bill-gift-email-${gift.id}`);
+            const hint = document.getElementById(`bill-gift-hint-${gift.id}`);
+            if (emailInput && hint) {
+                emailInput.addEventListener('input', () => {
+                    const val = emailInput.value.trim().toLowerCase();
+                    hint.style.display = (val && !val.endsWith('@cru.org')) ? 'block' : 'none';
+                });
+            }
+        });
+    } catch (error) {
+        console.error('Error loading bill gifts:', error);
+        tbody.innerHTML = '<tr><td colspan="8" style="padding: 0.75rem;">Error loading bill gifts.</td></tr>';
+    }
+}
+
+function renderBillGiftRow(gift) {
+    const sentDate = gift.sentAt ? new Date(gift.sentAt).toLocaleDateString() : '—';
+    const emailCell = gift.email ? escapeHtml(gift.email) : '<em>—</em>';
+    const errorCell = gift.error ? `<div style="color: #ef4444; font-size: 0.75rem; margin-top: 2px;">${escapeHtml(gift.error)}</div>` : '';
+
+    let actions = '';
+    if (gift.status === 'pending_email') {
+        actions = `
+            <div style="display: flex; flex-direction: column; gap: 4px;">
+                <input type="email" id="bill-gift-email-${escapeHtml(gift.id)}" class="form-control" placeholder="name@cru.org" style="max-width: 220px;" value="${escapeHtml(gift.email || '')}">
+                <div id="bill-gift-hint-${escapeHtml(gift.id)}" style="display: none; color: #f59e0b; font-size: 0.75rem;">Heads up: this is not a @cru.org address.</div>
+                <button id="save-send-bill-gift-${escapeHtml(gift.id)}" class="btn btn-primary" style="max-width: 160px;">Save &amp; Send</button>
+            </div>
+        `;
+    } else if (gift.status === 'failed') {
+        actions = `<button id="retry-bill-gift-${escapeHtml(gift.id)}" class="btn btn-warning">Retry</button>`;
+    } else {
+        actions = '—';
+    }
+
+    return `
+        <tr style="border-top: 1px solid var(--border-color, #dee2e6);">
+            <td style="padding: 0.5rem;">${escapeHtml(gift.quarter)}</td>
+            <td style="padding: 0.5rem;">@${escapeHtml(gift.username)}</td>
+            <td style="padding: 0.5rem;">#${escapeHtml(gift.rank)}</td>
+            <td style="padding: 0.5rem;">${escapeHtml(gift.amount)}</td>
+            <td style="padding: 0.5rem;">${emailCell}</td>
+            <td style="padding: 0.5rem;">${billGiftStatusBadge(gift.status)}${errorCell}</td>
+            <td style="padding: 0.5rem;">${escapeHtml(sentDate)}</td>
+            <td style="padding: 0.5rem;">${actions}</td>
+        </tr>
+    `;
+}
+
+async function retryBillGift(id) {
+    try {
+        const response = await fetch(`/api/admin/bill-gifts/${encodeURIComponent(id)}/retry`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        const result = await response.json();
+
+        if (result.success) {
+            if (typeof showToast === 'function') showToast(result.message || 'Bill gift sent', 'success');
+        } else {
+            if (typeof showToast === 'function') showToast(result.message || 'Retry failed', 'error');
+        }
+        await loadBillGifts();
+    } catch (error) {
+        console.error('Error retrying bill gift:', error);
+        if (typeof showToast === 'function') showToast('Retry failed', 'error');
+    }
+}
+
+async function saveAndSendBillGift(id, username) {
+    const emailInput = document.getElementById(`bill-gift-email-${id}`);
+    const email = emailInput ? emailInput.value.trim() : '';
+
+    if (!email) {
+        if (typeof showToast === 'function') showToast('Please enter an email address', 'error');
+        return;
+    }
+
+    try {
+        const emailResponse = await fetch(`/api/admin/contributors/${encodeURIComponent(username)}/bills-email`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email })
+        });
+        const emailResult = await emailResponse.json();
+
+        if (!emailResult.success) {
+            if (typeof showToast === 'function') showToast(emailResult.message || 'Failed to save email', 'error');
+            return;
+        }
+
+        // Email saved — now send the gift.
+        await retryBillGift(id);
+    } catch (error) {
+        console.error('Error saving/sending bill gift:', error);
+        if (typeof showToast === 'function') showToast('Failed to save & send', 'error');
     }
 }
 </script>

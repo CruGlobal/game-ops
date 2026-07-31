@@ -22,6 +22,18 @@ This directory contains utility scripts for database management, validation, and
 - `recompute-quarter-fallback.js` - Recompute current quarter stats (fallback method)
 - `recompute-quarter-history.js` - Recompute quarter stats from history
 - `recompute-alltime-from-history.js` - Recompute all-time stats from contribution history
+- `reconcile-challenge-awards.js` - **Pay out challenge rewards that were earned but never awarded**
+  - Finds participations flagged completed with no `CompletedChallenge` row, and
+    participations at or beyond target that were never flagged
+  - Reports only by default; `--apply` writes the awards (backdated to the challenge end date)
+  - `--apply` pays `flagged-not-awarded` only. `target-met-not-flagged` rows are withheld
+    because their progress can be inflated by activity after the challenge ended; review
+    the report, then pass `--include-unflagged` to pay them
+  - Quarterly stats are only repaired for challenges that ended in the current quarter;
+    closed-quarter awards are listed under "Quarterly stats NOT repaired"
+  - Safe to re-run, and safe alongside the live award path (unique constraint on
+    `CompletedChallenge`); scope to one contributor with `--user <username>`
+  - Usage: `npm run reconcile:challenge:awards -- [--user <username>] [--apply] [--include-unflagged]`
 
 **Example Usage:**
 ```bash

@@ -37,14 +37,6 @@
             </div>
         </section>
 
-        <!-- My Challenges Section -->
-        <section id="my-challenges" class="challenges-section" style="display: none;">
-            <h2>My Active Challenges</h2>
-            <div id="my-challenges-list">
-                <!-- Populated via JavaScript -->
-            </div>
-        </section>
-
         <!-- Past Challenges Section -->
         <section id="completed-challenges" class="challenges-section">
             <h2>Past Challenges</h2>
@@ -62,6 +54,7 @@
 <script src="/socket.io/socket.io.js"></script>
 <script src="/notification-settings.js"></script>
 <script nonce="<%= nonce %>" src="/socket-client.js"></script>
+<script nonce="<%= nonce %>" src="/challenge-card-state.js"></script>
 <script nonce="<%= nonce %>" src="/challenges-client.js"></script>
 <!-- Theme Toggle -->
 <script nonce="<%= nonce %>" src="/theme-toggle.js"></script>

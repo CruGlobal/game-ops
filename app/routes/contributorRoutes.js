@@ -61,7 +61,10 @@ import {
     bulkResetController,
     recalculateAllTimePointsController,
     getQuarterConfigController,
-    updateQuarterConfigController
+    updateQuarterConfigController,
+    getBillGiftsController,
+    retryBillGiftController,
+    setBillsEmailController
 } from '../controllers/adminController.js';
 import { authenticate } from '../middleware/authMiddleware.js';
 import { login } from '../controllers/authController.js';
@@ -132,6 +135,11 @@ router.get('/admin/devops-team/settings', ensureDevOpsTeamMember, getDevOpsTeamS
 router.post('/admin/devops-team/sync', ensureDevOpsTeamMember, syncDevOpsTeamController);
 router.post('/admin/devops-team/toggle-sync', ensureDevOpsTeamMember, toggleDevOpsTeamSyncController);
 router.post('/admin/devops-team/toggle-filter', ensureDevOpsTeamMember, toggleDevOpsLeaderboardFilterController);
+
+// Bills API gifts (admin only)
+router.get('/admin/bill-gifts', ensureDevOpsTeamMember, getBillGiftsController);
+router.post('/admin/bill-gifts/:id/retry', ensureDevOpsTeamMember, retryBillGiftController);
+router.post('/admin/contributors/:username/bills-email', ensureDevOpsTeamMember, setBillsEmailController);
 
 // User DevOps Status and Preferences (public - no auth required)
 router.get('/user/devops-status', checkUserDevOpsStatusController);

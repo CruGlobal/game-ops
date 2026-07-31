@@ -20,10 +20,11 @@
     "recompute:quarter:history": "node scripts/recompute-quarter-history.js",
     "recompute:alltime:history": "node scripts/recompute-alltime-from-history.js",
     "backdate:point-history": "node scripts/backdate-point-history.js",
-    "verify:quarter:user": "node scripts/verify-quarter-user.js"
+    "verify:quarter:user": "node scripts/verify-quarter-user.js",
+    "reconcile:challenge:awards": "node scripts/reconcile-challenge-awards.js"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "@octokit/rest": "^20.0.0",
     "@prisma/client": "^6.17.1",
     "aws-sdk": "^2.1048.0",
@@ -65,7 +66,11 @@
     ]
   },
   "overrides": {
-    "qs": "6.14.2"
+    "qs": "6.15.2",
+    "uuid": "11.1.1",
+    "js-yaml": "4.2.0",
+    "@babel/core": "7.29.6",
+    "effect": "3.20.0"
   },
   "author": "Luis Rodriguez",
   "license": "MIT"
