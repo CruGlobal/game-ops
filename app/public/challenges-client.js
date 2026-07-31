@@ -225,14 +225,9 @@ async function loadMyChallenges(username) {
         }
         const data = await response.json();
 
-        if (data.activeChallenges && data.activeChallenges.length > 0) {
-            document.getElementById('my-challenges').style.display = 'block';
-            renderMyChallenges(data.activeChallenges);
-        } else {
-            document.getElementById('my-challenges').style.display = 'none';
-        }
-
-        // Render past challenges (completed + expired incomplete)
+        // Active challenges are rendered by the Active Challenges section above,
+        // which under auto-enroll already lists every challenge this user is in.
+        // Only the past-challenge history is unique to this response.
         renderPastChallenges(data.completedChallenges || [], data.expiredIncomplete || []);
     } catch (error) {
         console.error('Error loading user challenges:', error);
@@ -240,56 +235,6 @@ async function loadMyChallenges(username) {
             showToast('Failed to load your challenges.', 'error');
         }
     }
-}
-
-/**
- * Render user's active challenges
- * @param {Array} challenges - Array of user's challenges
- */
-function renderMyChallenges(challenges) {
-    const container = document.getElementById('my-challenges-list');
-    container.innerHTML = '';
-
-    challenges.forEach(userChallenge => {
-        const item = document.createElement('div');
-        item.className = 'my-challenge-item';
-
-        const progress = userChallenge.progress || 0;
-        const target = userChallenge.target || 0;
-        const percentage = target > 0 ? Math.min(progress / target * 100, 100) : 0;
-        const remaining = Math.max(target - progress, 0);
-
-        // Calculate days remaining
-        const endDate = new Date(userChallenge.endDate);
-        const now = new Date();
-        const daysRemaining = Math.ceil((endDate - now) / (1000 * 60 * 60 * 24));
-
-        item.innerHTML = `
-            <div class="my-challenge-header">
-                <h4>${escapeHtml(userChallenge.title)}</h4>
-                <span class="challenge-difficulty challenge-difficulty-${userChallenge.difficulty}">${userChallenge.difficulty}</span>
-            </div>
-            <div class="my-challenge-meta">
-                <span class="my-challenge-type">${userChallenge.type}</span>
-                <span class="my-challenge-time">${daysRemaining > 0 ? `${daysRemaining} days left` : 'Ending soon'}</span>
-            </div>
-            <div class="my-challenge-progress-section">
-                <div class="my-challenge-progress-label">
-                    <span>Progress</span>
-                    <span class="my-challenge-progress-text">${progress} / ${target}</span>
-                </div>
-                <div class="challenge-progress-bar">
-                    <div class="challenge-progress-fill" style="width: ${percentage}%"></div>
-                </div>
-            </div>
-            <div class="my-challenge-footer">
-                <span>${remaining > 0 ? `${remaining} more to complete` : 'Almost there!'}</span>
-                <span class="my-challenge-reward">${userChallenge.reward} pts reward</span>
-            </div>
-        `;
-
-        container.appendChild(item);
-    });
 }
 
 /**
