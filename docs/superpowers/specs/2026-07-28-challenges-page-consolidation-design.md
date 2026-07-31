@@ -36,8 +36,8 @@ The page was never updated to match, so it still speaks the opt-in vocabulary:
 
 `public/challenges-client.js`
 
-- Remove the `renderMyChallenges(...)` call and the now-orphaned `renderMyChallenges()` function.
-- Keep `loadUserChallenges()` — it still feeds `renderPastChallenges()`.
+- Remove the `renderMyChallenges(...)` call and the now-orphaned `renderMyChallenges()` function (`:243-287`).
+- Keep `loadMyChallenges()` (`:214`) — it still feeds `renderPastChallenges()`. Its `#my-challenges` show/hide branch (`:222-227`) must go with the section: `document.getElementById('my-challenges')` returns `null` once the markup is deleted, and the resulting `TypeError` is caught by the surrounding `try`, which would silently skip `renderPastChallenges()` and fire the error toast instead.
 
 Unchanged: `GET /api/challenges/user/:username`. The profile page consumes it at `public/profile-client.js:369`, so the endpoint stays even though this page stops rendering a section from it.
 
@@ -65,6 +65,8 @@ Unchanged: `GET /api/challenges/user/:username`. The profile page consumes it at
 A viewer with no participation row keeps today's behavior unchanged: no progress block, and the `Join Challenge` button instead of `✓ Joined`. Auto-enroll makes this rare but not impossible — an anonymous visitor has no `currentUsername`, and a contributor created between challenge creation and their first tracked contribution is enrolled by `autoJoinContributorToActiveChallenges()` rather than at creation time.
 
 `engaged` counts participants with `progress > 0` — people actually moving on that challenge, which varies per challenge and rises through the week. `enrolled` is the participant count, which under auto-enroll is the roster.
+
+No new CSS. The badge reuses `.past-challenge-badge` + `.past-challenge-badge-completed` and the reward reuses `.past-challenge-reward`, both already themed with `--c-teal` / `--c-amber` in `game-ops-theme.css`. `.challenge-progress-label` is already `display: flex; justify-content: space-between`, so the label and badge sit at opposite ends without new layout rules.
 
 ### Data
 
