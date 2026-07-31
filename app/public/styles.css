@@ -748,13 +748,16 @@ h1 {
     }
 }
 
-/* Challenge Progress Bar */
+/* Challenge progress wrapper.
+   This was once the progress track itself, paired with .progress-bar below as the
+   fill. Both remaining callers - createChallengeCard() in challenges-client.js and
+   the profile card in profile-client.js - use it as a WRAPPER around a label plus a
+   separate bar, so the old track styling (height: 20px, background, border-radius,
+   overflow: hidden) clipped its own contents: the label alone is taller than 20px,
+   which cropped the first glyph against the rounded corner and hid the bar entirely.
+   The inner .challenge-progress-bar / .progress-bar-container clip their own fills,
+   so nothing here needs overflow. */
 .challenge-progress {
-    width: 100%;
-    height: 20px;
-    background: #e9ecef;
-    border-radius: 10px;
-    overflow: hidden;
     margin-top: 10px;
 }
 
