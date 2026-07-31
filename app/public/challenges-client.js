@@ -2,6 +2,7 @@
  * Challenges Page Client-Side JavaScript
  * Handles challenge display, join functionality, and real-time updates
  */
+/* global challengeCardState */
 
 // Store current username (from authenticated session)
 let currentUsername = null;
@@ -95,9 +96,12 @@ function createChallengeCard(challenge) {
     // Ensure participants array exists
     const participants = challenge.participants || [];
 
-    // Check if user has joined this challenge
-    const hasJoined = participants.some(p => p.username === currentUsername || p.contributor?.username === currentUsername);
-    const userParticipant = participants.find(p => p.username === currentUsername || p.contributor?.username === currentUsername);
+    const state = challengeCardState(challenge, participants, currentUsername);
+    const hasJoined = state.hasJoined;
+
+    // updateChallengeProgress() needs the target on a live progress update and
+    // has nothing but the card to read it from.
+    card.dataset.target = state.target;
 
     // Calculate days remaining
     const endDate = new Date(challenge.endDate);
@@ -122,7 +126,7 @@ function createChallengeCard(challenge) {
                 <div class="challenge-stat-label">Points</div>
             </div>
             <div class="challenge-stat">
-                <div class="challenge-stat-value">${participants.length}</div>
+                <div class="challenge-stat-value">${state.engaged} / ${state.enrolled}</div>
                 <div class="challenge-stat-label">Participants</div>
             </div>
         </div>
@@ -130,11 +134,17 @@ function createChallengeCard(challenge) {
         ${hasJoined ? `
             <div class="challenge-progress">
                 <div class="challenge-progress-label">
-                    Your Progress: ${userParticipant.progress} / ${challenge.target}
+                    <span>Your Progress: ${state.progress} / ${state.target}</span>
+                    ${state.completed ? `
+                        <span class="past-challenge-badge past-challenge-badge-completed">✓ Completed</span>
+                    ` : ''}
                 </div>
                 <div class="challenge-progress-bar">
-                    <div class="challenge-progress-fill" style="width: ${(userParticipant.progress / challenge.target * 100)}%"></div>
+                    <div class="challenge-progress-fill" style="width: ${state.percent}%"></div>
                 </div>
+                ${state.completed ? `
+                    <div class="past-challenge-reward">+${challenge.reward} pts earned</div>
+                ` : ''}
             </div>
         ` : ''}
 
@@ -208,7 +218,10 @@ async function joinChallenge(challengeId) {
 }
 
 /**
- * Load user's active challenges
+ * Load and render this user's past challenge history (completed and expired
+ * incomplete). Active challenges are already covered by the Active
+ * Challenges section, which under auto-enroll lists every challenge this
+ * user is in.
  * @param {string} username - GitHub username
  */
 async function loadMyChallenges(username) {
@@ -219,14 +232,19 @@ async function loadMyChallenges(username) {
         }
         const data = await response.json();
 
-        if (data.activeChallenges && data.activeChallenges.length > 0) {
-            document.getElementById('my-challenges').style.display = 'block';
-            renderMyChallenges(data.activeChallenges);
-        } else {
-            document.getElementById('my-challenges').style.display = 'none';
-        }
-
-        // Render past challenges (completed + expired incomplete)
+        // Only the past-challenge history is rendered from this response. Active
+        // challenges come from the Active Challenges section above, which auto-enroll
+        // (d3160c3) makes equivalent for every challenge that is both status 'active'
+        // and still inside its endDate.
+        //
+        // The two endpoints are not strictly equivalent: getActiveChallenges() filters
+        // on status AND endDate >= now, while getUserChallenges() buckets on status
+        // alone. A challenge past its endDate that checkExpiredChallenges has not yet
+        // flipped therefore sits in data.activeChallenges and shows in neither view.
+        // That job is a daily midnight cron (server.js) and generated challenges end
+        // at midnight, so the gap is normally seconds - but it widens if an endDate is
+        // edited off midnight or the cron is missed. The durable fix is an endDate
+        // check in getUserChallenges(), not a renderer here.
         renderPastChallenges(data.completedChallenges || [], data.expiredIncomplete || []);
     } catch (error) {
         console.error('Error loading user challenges:', error);
@@ -234,56 +252,6 @@ async function loadMyChallenges(username) {
             showToast('Failed to load your challenges.', 'error');
         }
     }
-}
-
-/**
- * Render user's active challenges
- * @param {Array} challenges - Array of user's challenges
- */
-function renderMyChallenges(challenges) {
-    const container = document.getElementById('my-challenges-list');
-    container.innerHTML = '';
-
-    challenges.forEach(userChallenge => {
-        const item = document.createElement('div');
-        item.className = 'my-challenge-item';
-
-        const progress = userChallenge.progress || 0;
-        const target = userChallenge.target || 0;
-        const percentage = target > 0 ? Math.min(progress / target * 100, 100) : 0;
-        const remaining = Math.max(target - progress, 0);
-
-        // Calculate days remaining
-        const endDate = new Date(userChallenge.endDate);
-        const now = new Date();
-        const daysRemaining = Math.ceil((endDate - now) / (1000 * 60 * 60 * 24));
-
-        item.innerHTML = `
-            <div class="my-challenge-header">
-                <h4>${escapeHtml(userChallenge.title)}</h4>
-                <span class="challenge-difficulty challenge-difficulty-${userChallenge.difficulty}">${userChallenge.difficulty}</span>
-            </div>
-            <div class="my-challenge-meta">
-                <span class="my-challenge-type">${userChallenge.type}</span>
-                <span class="my-challenge-time">${daysRemaining > 0 ? `${daysRemaining} days left` : 'Ending soon'}</span>
-            </div>
-            <div class="my-challenge-progress-section">
-                <div class="my-challenge-progress-label">
-                    <span>Progress</span>
-                    <span class="my-challenge-progress-text">${progress} / ${target}</span>
-                </div>
-                <div class="challenge-progress-bar">
-                    <div class="challenge-progress-fill" style="width: ${percentage}%"></div>
-                </div>
-            </div>
-            <div class="my-challenge-footer">
-                <span>${remaining > 0 ? `${remaining} more to complete` : 'Almost there!'}</span>
-                <span class="my-challenge-reward">${userChallenge.reward} pts reward</span>
-            </div>
-        `;
-
-        container.appendChild(item);
-    });
 }
 
 /**
@@ -427,17 +395,26 @@ function updateChallengeProgress(challengeId, username, progress) {
     const card = document.querySelector(`[data-challenge-id="${challengeId}"]`);
     if (!card) return;
 
-    const progressText = card.querySelector('.challenge-progress-label');
+    // Read the target off the card rather than re-parsing the label it was
+    // rendered into: scraping the copy coupled this handler to the exact
+    // wording, and a reworded label would have stopped updates silently.
+    const target = Number(card.dataset.target);
+    if (!Number.isFinite(target)) return;
+
+    // Write to the inner span, not the label: the label may also hold the
+    // completed badge, and assigning textContent would delete it.
+    const progressText = card.querySelector('.challenge-progress-label span');
     if (progressText) {
-        const target = progressText.textContent.match(/\/ (\d+)/)[1];
         progressText.textContent = `Your Progress: ${progress} / ${target}`;
     }
 
     const progressBar = card.querySelector('.challenge-progress-fill');
     if (progressBar) {
-        const target = progressText.textContent.match(/\/ (\d+)/)[1];
-        const percentage = (progress / target * 100);
-        progressBar.style.width = `${percentage}%`;
+        progressBar.style.width = `${challengeCardState(
+            { target },
+            [{ username, progress }],
+            username
+        ).percent}%`;
     }
 }
 
