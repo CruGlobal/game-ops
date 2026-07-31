@@ -214,7 +214,10 @@ async function joinChallenge(challengeId) {
 }
 
 /**
- * Load user's active challenges
+ * Load and render this user's past challenge history (completed and expired
+ * incomplete). Active challenges are already covered by the Active
+ * Challenges section, which under auto-enroll lists every challenge this
+ * user is in.
  * @param {string} username - GitHub username
  */
 async function loadMyChallenges(username) {
@@ -378,17 +381,23 @@ function updateChallengeProgress(challengeId, username, progress) {
     const card = document.querySelector(`[data-challenge-id="${challengeId}"]`);
     if (!card) return;
 
-    const progressText = card.querySelector('.challenge-progress-label');
-    if (progressText) {
-        const target = progressText.textContent.match(/\/ (\d+)/)[1];
-        progressText.textContent = `Your Progress: ${progress} / ${target}`;
-    }
+    // Write to the inner span, not the label: the label may also hold the
+    // completed badge, and assigning textContent would delete it.
+    const progressText = card.querySelector('.challenge-progress-label span');
+    if (!progressText) return;
+
+    const match = progressText.textContent.match(/\/ (\d+)/);
+    if (!match) return;
+    const target = Number(match[1]);
+    progressText.textContent = `Your Progress: ${progress} / ${target}`;
 
     const progressBar = card.querySelector('.challenge-progress-fill');
     if (progressBar) {
-        const target = progressText.textContent.match(/\/ (\d+)/)[1];
-        const percentage = (progress / target * 100);
-        progressBar.style.width = `${percentage}%`;
+        progressBar.style.width = `${challengeCardState(
+            { target },
+            [{ username, progress }],
+            username
+        ).percent}%`;
     }
 }
 

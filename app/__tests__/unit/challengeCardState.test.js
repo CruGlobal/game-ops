@@ -106,4 +106,17 @@ describe('challengeCardState', () => {
         expect(state.enrolled).toBe(0);
         expect(state.hasJoined).toBe(false);
     });
+
+    it('should clamp percent at 100 for the websocket single-participant shape', () => {
+        // updateChallengeProgress() in challenges-client.js calls the helper
+        // with a single-entry roster built from the socket payload, not the
+        // full participants array. Pin that contract here.
+        const state = challengeCardState(
+            { target: 5 },
+            [{ username: 'jason', progress: 8 }],
+            'jason'
+        );
+
+        expect(state.percent).toBe(100);
+    });
 });
