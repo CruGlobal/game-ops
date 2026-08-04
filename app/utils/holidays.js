@@ -76,3 +76,30 @@ export function isNonWorkingDay(date) {
     const dow = date.getDay();
     return dow === 0 || dow === 6 || isUSFederalHoliday(date);
 }
+
+/**
+ * Count the working days a challenge window spans: start inclusive, end
+ * exclusive, compared by calendar day so the time of day never matters.
+ *
+ * This is the ceiling on how far a streak can advance inside the window, since
+ * streaks only move on working days. Note the different boundaries from
+ * streakService's internal gap counter, which measures the days *between* two
+ * contributions and so excludes its start.
+ *
+ * @param {Date} startDate - inclusive
+ * @param {Date} endDate - exclusive
+ * @returns {Number} 0 if the window is empty or inverted
+ */
+export function countWorkingDays(startDate, endDate) {
+    const current = new Date(startDate);
+    current.setHours(0, 0, 0, 0);
+    const end = new Date(endDate);
+    end.setHours(0, 0, 0, 0);
+
+    let workingDays = 0;
+    while (current < end) {
+        if (!isNonWorkingDay(current)) workingDays++;
+        current.setDate(current.getDate() + 1);
+    }
+    return workingDays;
+}

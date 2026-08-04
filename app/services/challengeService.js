@@ -3,6 +3,7 @@ import { emitChallengeProgress, emitChallengeCompleted } from '../utils/socketEm
 import { updateQuarterlyStats } from './quarterlyService.js';
 import { postNewChallengesSlack } from './slackService.js';
 import { postNewChallengesDiscussion } from './discussionService.js';
+import { countWorkingDays } from '../utils/holidays.js';
 import logger from '../utils/logger.js';
 
 /**
@@ -1055,6 +1056,13 @@ export const generateWeeklyChallenges = async () => {
         const endOfWeek = new Date(startOfWeek);
         endOfWeek.setDate(endOfWeek.getDate() + 7);
 
+        // Streaks only advance on working days, so the window's workday count is
+        // the most anyone starting from zero can reach. A fixed 7 made the streak
+        // challenge unwinnable except for contributors who carried a long streak
+        // in from previous weeks, and its "7-day" copy read as a call to work the
+        // weekend — which the streak engine does not even credit.
+        const streakTarget = countWorkingDays(startOfWeek, endOfWeek);
+
         const challengeTemplates = [
             {
                 title: 'Sprint Master',
@@ -1074,9 +1082,9 @@ export const generateWeeklyChallenges = async () => {
             },
             {
                 title: 'Streak Builder',
-                description: 'Maintain a 7-day contribution streak',
+                description: `Contribute on all ${streakTarget} workdays this week. Weekends and holidays never break your streak`,
                 type: 'streak',
-                target: 7,
+                target: streakTarget,
                 reward: 300,
                 difficulty: 'hard'
             },
