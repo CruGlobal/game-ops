@@ -490,9 +490,10 @@ Challenges are week-long competitions with specific goals and rewards.
 - **Reward:** 150-250 points
 
 **3. Streak Builder (Streak Challenge)**
-- **Goal:** Maintain a 7-day streak
-- **Target:** 7 consecutive days
+- **Goal:** Contribute on every workday of the challenge week
+- **Target:** The number of workdays in the week: 5 normally, 4 when a federal holiday falls inside it
 - **Reward:** 300 points
+- Weekends and holidays never break your streak, and they never count toward this target either. This is separate from the **Week Warrior** badge, which still needs 7 consecutive contribution days and can span multiple weeks.
 
 **4. Point Hunter (Points Challenge)**
 - **Goal:** Earn X points during the week
