@@ -10,6 +10,12 @@ datasource db {
 model Contributor {
   id                      String                 @id @default(cuid())
   username                String                 @unique
+  // Lowercased copy of `username`, carrying the case-insensitive uniqueness
+  // GitHub logins actually have. Production applies schema changes with
+  // `prisma db push`, which only ever reads this file — a functional index on
+  // lower(username) cannot be expressed here, so it could never be created.
+  // A plain column with @unique can. Written by ensureContributor.
+  usernameLower           String?                @unique @map("username_lower")
   prCount                 BigInt                 @default(0) @map("pr_count")
   reviewCount             BigInt                 @default(0) @map("review_count")
   avatarUrl               String?                @map("avatar_url")
