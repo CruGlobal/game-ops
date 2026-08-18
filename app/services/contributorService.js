@@ -138,6 +138,7 @@ export const ensureContributor = async (username, userData) => {
     const created = await prisma.contributor.create({
         data: {
             username,
+            usernameLower: username.toLowerCase(),
             avatarUrl: profile.avatar_url,
             prCount: 0,
             reviewCount: 0

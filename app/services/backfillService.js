@@ -151,6 +151,7 @@ async function processPR(pr) {
             contributor = await prisma.contributor.create({
                 data: {
                     username,
+                    usernameLower: username.toLowerCase(),
                     avatarUrl: pr.user.avatar_url,
                     prCount: 0,
                     reviewCount: 0
@@ -288,6 +289,7 @@ async function processPR(pr) {
                         const newReviewer = await prisma.contributor.create({
                             data: {
                                 username: reviewerUsername,
+                                usernameLower: reviewerUsername.toLowerCase(),
                                 avatarUrl: review.user.avatar_url,
                                 prCount: 0,
                                 reviewCount: 0
