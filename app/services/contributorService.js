@@ -8,7 +8,7 @@ import { POINT_REASONS } from '../config/points-config.js';
 import { checkAndAwardAchievements } from './achievementService.js';
 import { updateChallengeProgress, autoJoinContributorToActiveChallenges } from './challengeService.js';
 import { checkAndResetIfNewQuarter, updateQuarterlyStats } from './quarterlyService.js';
-import { isProxyBot, resolveProxyAuthor } from './attributionService.js';
+import { isProxyBot, resolveProxyAuthor, resolveContributorUsername } from './attributionService.js';
 
 // Initialize Octokit with GitHub token and custom fetch
 const octokit = new Octokit({
@@ -294,6 +294,12 @@ export const processSingleMergedPR = async (prData) => {
         username = realAuthor;
     }
 
+    // GitHub logins are case-insensitive; contributors.username is not. Settle on
+    // the spelling this database already uses before any lookup or mutation, so a
+    // login recovered from a lowercased no-reply email cannot fork the contributor
+    // into a second row.
+    username = await resolveContributorUsername(username);
+
     // Check if already processed
     let contributor = await prisma.contributor.findUnique({
         where: { username },
@@ -407,7 +413,8 @@ export const processSingleMergedPR = async (prData) => {
  * @returns {Object} { processed: boolean, reason: string }
  */
 export const processSingleReview = async (reviewData) => {
-    const { reviewId, username, submittedAt, prNumber, state, prAuthor } = reviewData;
+    const { reviewId, submittedAt, prNumber, state, prAuthor } = reviewData;
+    let username = reviewData.username;
     const reviewDate = new Date(submittedAt);
     // REST returns uppercase state, webhooks lowercase — normalize before checks.
     const normalizedState = (state || '').toUpperCase();
@@ -425,6 +432,10 @@ export const processSingleReview = async (reviewData) => {
     if (!REVIEW_CREDIT_STATES.has(normalizedState)) {
         return { processed: false, reason: 'non_crediting_state' };
     }
+
+    // Settle on the spelling this database already uses before any lookup or
+    // mutation — see resolveContributorUsername.
+    username = await resolveContributorUsername(username);
 
     // One review credit per (reviewer, PR). If this contributor already has a
     // counted review on this PR, skip — regardless of the GitHub review id. This
@@ -453,7 +464,7 @@ export const processSingleReview = async (reviewData) => {
     if (effectiveAuthor && isProxyBot(effectiveAuthor)) {
         effectiveAuthor = (await resolveProxyAuthor(prNumber)) || effectiveAuthor;
     }
-    if (effectiveAuthor && effectiveAuthor === username) {
+    if (effectiveAuthor && effectiveAuthor.toLowerCase() === username.toLowerCase()) {
         return { processed: false, reason: 'self_review' };
     }
 
