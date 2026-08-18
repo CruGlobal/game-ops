@@ -60,6 +60,31 @@ describe('attributionService', () => {
             expect(extractRealAuthorFromCommits(commits)).toBe('twinge');
         });
 
+        it('prefers the GitHub-resolved casing over the lowercased no-reply local part', () => {
+            // GitHub lowercases the no-reply local part, so parsing the login out of
+            // it yields `cru-luis-rodriguez` for an account actually spelled
+            // `cru-Luis-Rodriguez` — which used to fork the contributor into a
+            // second row. When GitHub resolved the same email on a commit, that
+            // login carries the real casing and must win.
+            const commits = [
+                {
+                    author: { login: 'cru-Luis-Rodriguez' },
+                    commit: {
+                        author: { email: '6875635+cru-luis-rodriguez@users.noreply.github.com' },
+                        message: 'follow-up commit by the human'
+                    }
+                },
+                {
+                    author: { login: 'terrabloks[bot]' },
+                    commit: {
+                        author: { email: '274883630+terrabloks[bot]@users.noreply.github.com' },
+                        message: 'scaffold app\n\nCo-authored-by: Luis Rodriguez <6875635+cru-luis-rodriguez@users.noreply.github.com>'
+                    }
+                }
+            ];
+            expect(extractRealAuthorFromCommits(commits)).toBe('cru-Luis-Rodriguez');
+        });
+
         it('ignores non-GitHub co-authors it cannot resolve (e.g. Claude)', () => {
             const commits = [{
                 commit: { author: { email: 'x@users.noreply.github.com' }, message: 'fix\n\nCo-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>' }

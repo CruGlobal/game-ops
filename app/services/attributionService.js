@@ -1,6 +1,7 @@
 import { Octokit } from '@octokit/rest';
 import fetch from 'node-fetch';
 import logger from '../utils/logger.js';
+import { prisma } from '../lib/prisma.js';
 
 const octokit = new Octokit({
     auth: process.env.GITHUB_TOKEN,
@@ -57,9 +58,12 @@ export const extractRealAuthorFromCommits = (commits = []) => {
         let match;
         while ((match = coAuthorRe.exec(message)) !== null) {
             const email = match[1].trim().toLowerCase();
+            // Prefer the login GitHub itself resolved for this email: it carries the
+            // account's real casing. GitHub lowercases the no-reply local part, so
+            // parsing it out is only a fallback.
+            if (emailToLogin.has(email)) return emailToLogin.get(email);
             const noreply = email.match(NOREPLY_RE);
             if (noreply) return noreply[1];
-            if (emailToLogin.has(email)) return emailToLogin.get(email);
         }
     }
 
@@ -95,4 +99,49 @@ export const resolveProxyAuthor = async (prNumber) => {
         logger.warn('Attribution: no co-author trailer found for proxy-bot PR', { prNumber });
     }
     return login;
+};
+
+/**
+ * Map a GitHub login onto the spelling this database already stores for that person.
+ *
+ * GitHub treats logins case-insensitively, but `contributors.username` is a plain
+ * unique text column, so `cru-luis-rodriguez` and `cru-Luis-Rodriguez` are two
+ * separate rows. Logins recovered from a no-reply email arrive lowercased (GitHub
+ * lowercases the local part), which forked those contributors into a second row
+ * that restarted its badges from zero and — because the DevOps team sync only ever
+ * matches the canonical login — surfaced on the public leaderboard despite
+ * `excludeDevOpsFromLeaderboards`.
+ *
+ * The match is deliberately case-insensitive-oldest-first rather than exact-first:
+ * where a fork already exists, exact-first would keep routing to the newer stray
+ * row. Oldest wins sends every spelling back to the row holding the history, so an
+ * already-split contributor stops drifting further apart before anyone merges the
+ * rows. Only case variants collide here; a genuine rename is a different string and
+ * is left alone.
+ *
+ * @param {string} login - a GitHub login in any casing
+ * @returns {Promise<string>} the username to key contributor records on
+ */
+export const resolveContributorUsername = async (login) => {
+    if (!login) return login;
+
+    const existing = await prisma.contributor.findFirst({
+        where: { username: { equals: login, mode: 'insensitive' } },
+        orderBy: { createdAt: 'asc' },
+        select: { username: true }
+    });
+    if (existing) return existing.username;
+
+    // First time we've seen this person: ask GitHub for the canonical casing so the
+    // row about to be created is right from the start.
+    try {
+        const { data } = await octokit.rest.users.getByUsername({ username: login });
+        return data?.login || login;
+    } catch (err) {
+        logger.warn('Attribution: could not resolve canonical casing for login', {
+            login,
+            error: err.message
+        });
+        return login;
+    }
 };
