@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
 import {
     createChallenge,
     getActiveChallenges,
@@ -19,6 +19,7 @@ import {
     findMissingChallengeAwards,
     reconcileMissingChallengeAwards
 } from '../../services/challengeService.js';
+import { countWorkingDays } from '../../utils/holidays.js';
 import { prisma, createTestContributor } from '../setup.js';
 
 // Note: Socket emitter and logger are not mocked in this test file
@@ -714,6 +715,50 @@ describe('ChallengeService', () => {
 
             // Should have at least 2 different types (due to randomness, might be 3)
             expect(uniqueTypes.length).toBeGreaterThanOrEqual(2);
+        });
+
+        describe('streak challenge target', () => {
+            // Math.random() === 0 makes the Fisher-Yates shuffle deterministic and
+            // always leaves the streak template in the selected three.
+            beforeEach(() => {
+                jest.spyOn(Math, 'random').mockReturnValue(0);
+            });
+
+            afterEach(() => {
+                jest.restoreAllMocks();
+            });
+
+            const streakOf = challenges => challenges.find(c => c.type === 'streak');
+
+            it('targets only the workdays its own window contains', async () => {
+                const challenges = await generateWeeklyChallenges();
+                const streak = streakOf(challenges);
+
+                expect(streak).toBeDefined();
+                // Streaks only advance on working days, so a target above the
+                // window's workday count is unreachable for anyone starting fresh.
+                expect(streak.target).toBe(countWorkingDays(streak.startDate, streak.endDate));
+            });
+
+            it('never sets a target a fresh contributor cannot reach in one week', async () => {
+                const challenges = await generateWeeklyChallenges();
+                const streak = streakOf(challenges);
+
+                // A 7-day window holds at most 5 weekdays, fewer on holiday weeks.
+                expect(streak.target).toBeLessThanOrEqual(5);
+                expect(streak.target).toBeGreaterThanOrEqual(4);
+            });
+
+            it('describes the target in workdays, not calendar days', async () => {
+                const challenges = await generateWeeklyChallenges();
+                const streak = streakOf(challenges);
+
+                expect(streak.description).toContain(String(streak.target));
+                expect(streak.description).toMatch(/workday/i);
+                // The old copy read as a 7-day calendar streak, which invited
+                // weekend work the streak engine never credits.
+                expect(streak.description).not.toMatch(/7-day/i);
+            });
         });
     });
 

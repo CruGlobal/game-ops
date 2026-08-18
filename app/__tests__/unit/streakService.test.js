@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, afterAll, jest } from '@jest/globals';
-import { isUSFederalHoliday, isNonWorkingDay } from '../../utils/holidays.js';
+import { isUSFederalHoliday, isNonWorkingDay, countWorkingDays } from '../../utils/holidays.js';
 import {
     updateStreak,
     checkStreakBadges,
@@ -520,5 +520,40 @@ describe('US federal holidays (streak exclusions)', () => {
         expect(isNonWorkingDay(d(2026, 1, 4))).toBe(true);   // Sunday
         expect(isNonWorkingDay(d(2026, 12, 25))).toBe(true); // Christmas
         expect(isNonWorkingDay(d(2026, 1, 6))).toBe(false);  // ordinary Tuesday
+    });
+});
+
+describe('countWorkingDays (challenge window sizing)', () => {
+    const d = (y, m, day) => new Date(y, m - 1, day);
+
+    it('counts the weekdays in a Monday-to-Monday week', () => {
+        // Mon Aug 3 2026 through Mon Aug 10 2026 (end exclusive): Mon-Fri.
+        expect(countWorkingDays(d(2026, 8, 3), d(2026, 8, 10))).toBe(5);
+    });
+
+    it('excludes a federal holiday inside the window', () => {
+        // Labor Day is Mon Sep 7 2026, so that week only offers Tue-Fri.
+        expect(countWorkingDays(d(2026, 9, 7), d(2026, 9, 14))).toBe(4);
+    });
+
+    it('excludes weekends regardless of where the window starts', () => {
+        // Sat Aug 8 2026 through Sat Aug 15 2026: Mon-Fri.
+        expect(countWorkingDays(d(2026, 8, 8), d(2026, 8, 15))).toBe(5);
+    });
+
+    it('treats the end of the window as exclusive', () => {
+        // Mon only, since Tue is the exclusive end.
+        expect(countWorkingDays(d(2026, 8, 3), d(2026, 8, 4))).toBe(1);
+    });
+
+    it('returns 0 for an empty or inverted window', () => {
+        expect(countWorkingDays(d(2026, 8, 3), d(2026, 8, 3))).toBe(0);
+        expect(countWorkingDays(d(2026, 8, 10), d(2026, 8, 3))).toBe(0);
+    });
+
+    it('ignores the time of day on the boundaries', () => {
+        const start = new Date(2026, 7, 3, 23, 59, 59);
+        const end = new Date(2026, 7, 10, 0, 0, 1);
+        expect(countWorkingDays(start, end)).toBe(5);
     });
 });
