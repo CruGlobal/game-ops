@@ -119,6 +119,36 @@ export const initializeDatabase = async ({ confirm = false } = {}) => {
     }
 };
 
+/**
+ * Find the contributor row, creating it if this is the first time we've seen them.
+ *
+ * Split out of updateContributor so a caller can guarantee the row exists — and so
+ * hold a foreign key against it — without yet moving any counter. That ordering is
+ * what lets processSingleMergedPR / processSingleReview claim their processed-row
+ * before incrementing.
+ *
+ * @param {string} username - already normalised by resolveContributorUsername
+ * @param {object} [userData] - GitHub user payload, if the caller already fetched it
+ */
+export const ensureContributor = async (username, userData) => {
+    const existing = await prisma.contributor.findUnique({ where: { username } });
+    if (existing) return existing;
+
+    const profile = userData || (await octokit.rest.users.getByUsername({ username })).data;
+    const created = await prisma.contributor.create({
+        data: {
+            username,
+            avatarUrl: profile.avatar_url,
+            prCount: 0,
+            reviewCount: 0
+        }
+    });
+    // First-time contributor: enroll in every currently-active challenge
+    // so they aren't excluded from anything running.
+    await autoJoinContributorToActiveChallenges(created.id);
+    return created;
+};
+
 // Update contributor's PR or review count with date
 export const updateContributor = async (username, type, date, merged = false) => {
     if (!['prCount', 'reviewCount'].includes(type)) {
@@ -128,23 +158,7 @@ export const updateContributor = async (username, type, date, merged = false) =>
         username: username
     });
 
-    let contributor = await prisma.contributor.findUnique({
-        where: { username: username }
-    });
-    
-    if (!contributor) {
-        contributor = await prisma.contributor.create({
-            data: {
-                username,
-                avatarUrl: userData.avatar_url,
-                prCount: 0,
-                reviewCount: 0
-            }
-        });
-        // First-time contributor: enroll in every currently-active challenge
-        // so they aren't excluded from anything running.
-        await autoJoinContributorToActiveChallenges(contributor.id);
-    }
+    const contributor = await ensureContributor(username, userData);
 
     // Extract date for aggregation (date only, no time)
     const dateOnly = new Date(date.getFullYear(), date.getMonth(), date.getDate());
@@ -316,25 +330,16 @@ export const processSingleMergedPR = async (prData) => {
         return { processed: false, reason: 'duplicate' };
     }
 
-    // Update contributor PR count
-    await updateContributor(username, 'prCount', date, true);
+    // Claim the PR before touching any counter. The check above is a read, so two
+    // workers can both pass it; the unique constraint on (contributor, pr, action) is
+    // what actually decides who processes this PR. Incrementing first — as this used
+    // to — meant the loser of that race bumped prCount and then bailed out on P2002,
+    // leaving a counter with no processed-row behind it.
+    contributor = await ensureContributor(username);
 
-    // Re-fetch contributor (updateContributor may have created it)
-    contributor = await prisma.contributor.findUnique({
-        where: { username },
-        include: {
-            activeChallenges: true,
-            achievements: { select: { achievementId: true } }
-        }
-    });
-
-    if (!contributor) {
-        return { processed: false, reason: 'contributor_not_found' };
-    }
-
-    // Record as processed (unique constraint prevents duplicates)
+    let claim;
     try {
-        await prisma.processedPR.create({
+        claim = await prisma.processedPR.create({
             data: {
                 contributorId: contributor.id,
                 prNumber: BigInt(number),
@@ -348,6 +353,28 @@ export const processSingleMergedPR = async (prData) => {
             return { processed: false, reason: 'duplicate_concurrent' };
         }
         throw createError;
+    }
+
+    // Counter second. If it fails, release the claim so the next run redoes the whole
+    // PR rather than skipping it forever as an already-processed no-op.
+    try {
+        await updateContributor(username, 'prCount', date, true);
+    } catch (updateError) {
+        await prisma.processedPR.delete({ where: { id: claim.id } }).catch(() => {});
+        throw updateError;
+    }
+
+    // Re-fetch with the relations needed for points/challenges/achievements
+    contributor = await prisma.contributor.findUnique({
+        where: { username },
+        include: {
+            activeChallenges: true,
+            achievements: { select: { achievementId: true } }
+        }
+    });
+
+    if (!contributor) {
+        return { processed: false, reason: 'contributor_not_found' };
     }
 
     // Update streak
@@ -468,8 +495,35 @@ export const processSingleReview = async (reviewData) => {
         return { processed: false, reason: 'self_review' };
     }
 
-    // Update contributor review count (creates the contributor if first-seen)
-    await updateContributor(username, 'reviewCount', reviewDate);
+    // Claim the review before touching any counter, for the same reason as the PR
+    // path: the guard above is a read, and updateContributor unconditionally
+    // increments. Claiming first means a replay that loses the race cannot leave a
+    // reviewCount with no processed-row behind it.
+    const claimant = await ensureContributor(username);
+
+    let claim;
+    try {
+        claim = await prisma.processedReview.create({
+            data: {
+                contributorId: claimant.id,
+                prNumber: BigInt(prNumber),
+                reviewId: BigInt(reviewId),
+                processedDate: reviewDate
+            }
+        });
+    } catch (createError) {
+        if (createError.code === 'P2002') {
+            return { processed: false, reason: 'duplicate_concurrent' };
+        }
+        throw createError;
+    }
+
+    try {
+        await updateContributor(username, 'reviewCount', reviewDate);
+    } catch (updateError) {
+        await prisma.processedReview.delete({ where: { id: claim.id } }).catch(() => {});
+        throw updateError;
+    }
 
     // Re-fetch with the relations needed for points/challenges/achievements
     const reviewer = await prisma.contributor.findUnique({
@@ -486,23 +540,6 @@ export const processSingleReview = async (reviewData) => {
 
     if (!reviewer) {
         return { processed: false, reason: 'reviewer_not_found' };
-    }
-
-    // Record as processed
-    try {
-        await prisma.processedReview.create({
-            data: {
-                contributorId: reviewer.id,
-                prNumber: BigInt(prNumber),
-                reviewId: BigInt(reviewId),
-                processedDate: reviewDate
-            }
-        });
-    } catch (createError) {
-        if (createError.code === 'P2002') {
-            return { processed: false, reason: 'duplicate_concurrent' };
-        }
-        throw createError;
     }
 
     // Award review points
