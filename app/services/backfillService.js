@@ -546,6 +546,12 @@ export async function startBackfill(startDate, endDate, checkRateLimits = true, 
                 totalPRsProcessed += result.prAdded || 0;
                 totalReviewsProcessed += result.reviewsAdded || 0;
 
+                // emitBackfillProgress reads these; nothing ever incremented them, so the
+                // "new PRs / new reviews" figures in the progress UI sat at 0 for the
+                // whole run no matter how much was imported.
+                backfillState.newPRsAdded = totalPRsProcessed;
+                backfillState.newReviewsAdded = totalReviewsProcessed;
+
                 backfillState.progress.processedPRs++;
                 backfillState.progress.processedReviews = totalReviewsProcessed;
                 emitBackfillProgress();
@@ -566,9 +572,12 @@ export async function startBackfill(startDate, endDate, checkRateLimits = true, 
 
     // Complete PR/review import
         backfillState.progress.endTime = Date.now();
-    backfillState.progress.status = backfillState.shouldStop ? 'Stopped' : 'Recomputing leaderboards...';
-        backfillState.isRunning = false;
+        backfillState.progress.status = backfillState.shouldStop ? 'Stopped' : 'Recomputing leaderboards...';
 
+        // isRunning stays true through finalization. Clearing it here let the Start
+        // guard pass while the multi-minute recompute (quarterly stats, then a full
+        // Hall of Fame rebuild that wipes and regenerates every row) was still running,
+        // so a second backfill could interleave with the first one's rebuild.
         emitBackfillProgress();
 
         const duration = Math.floor((backfillState.progress.endTime - backfillState.progress.startTime) / 1000);
@@ -619,6 +628,11 @@ export async function startBackfill(startDate, endDate, checkRateLimits = true, 
             `Duration: ${duration}s` + hofSummary;
 
         logger.info(detailedMessage);
+
+        // Finalization is done, so the run is genuinely over and a new one may start.
+        backfillState.isRunning = false;
+        backfillState.progress.status = backfillState.shouldStop ? 'Stopped' : 'Complete';
+        emitBackfillProgress();
 
         return {
             success: true,

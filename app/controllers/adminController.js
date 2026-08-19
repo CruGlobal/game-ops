@@ -934,11 +934,24 @@ export async function backfillBadgesController(req, res) {
                 badges.push({ badge: '1000 Reviews badge', date: contributor.createdAt.toISOString() });
             }
 
-            // Only update if badges array is different
-            if (badges.length > 0) {
+            // Merge, do not replace. This rebuilds only the twelve milestone badges from
+            // their flags; awardBadgeManualController pushes custom badges (an "MVP",
+            // say) into the same array, and replacing wholesale silently deleted them.
+            // Existing entries also keep their real award date rather than being
+            // rewritten to createdAt.
+            const milestoneNames = new Set(badges.map(b => b.badge));
+            const existing = Array.isArray(contributor.badges) ? contributor.badges : [];
+            const preserved = existing.filter(b => !milestoneNames.has(b?.badge));
+            const alreadyHeld = new Map(existing.filter(b => b?.badge).map(b => [b.badge, b]));
+            const merged = [
+                ...badges.map(b => alreadyHeld.get(b.badge) || b),
+                ...preserved
+            ];
+
+            if (merged.length > 0) {
                 await prisma.contributor.update({
                     where: { username: contributor.username },
-                    data: { badges }
+                    data: { badges: merged }
                 });
                 updatedCount++;
             }
