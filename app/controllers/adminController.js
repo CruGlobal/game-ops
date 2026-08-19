@@ -469,6 +469,24 @@ export async function startBackfillController(req, res) {
             });
         }
 
+        // Only presence was checked, so startBackfill('garbage','garbage') was accepted:
+        // every merged_at comparison against an Invalid Date is false, so it paged the
+        // entire closed-PR history — twice — and then reported "Found 0 PRs".
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+            return res.status(400).json({
+                success: false,
+                message: 'Start date and end date must be valid dates'
+            });
+        }
+        if (start > end) {
+            return res.status(400).json({
+                success: false,
+                message: 'Start date must be on or before end date'
+            });
+        }
+
         // Respond immediately — backfill runs in the background
         // (AWS ALB times out at 60s, backfill can take hours)
         startBackfill(startDate, endDate, checkRateLimits !== false, verboseLogging === true)

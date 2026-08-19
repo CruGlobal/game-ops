@@ -4,22 +4,38 @@ document.addEventListener('DOMContentLoaded', function() {
 
 async function fetchTopScores() {
     const range = document.getElementById('range').value;
+    // `monthlyRange` was bare here. Browsers expose an element's id as a global, so it
+    // resolved to the <select> element itself and the request went out as
+    // range=[object HTMLSelectElement].
+    const monthlyRange = document.getElementById('monthlyRange').value;
     const page = 1; // Default page value
     const limit = 10; // Default limit value
 
-    // Fetch top contributors
-    const contributorsResponse = await fetch(`/api/top-contributors-date-range?range=${range}&page=${page}&limit=${limit}`);
-    const contributorsData = await contributorsResponse.json();
+    // Each of these was called without checking response.ok, so an error body was
+    // parsed as data and the failure surfaced as an empty or broken chart.
+    const readJson = async (url) => {
+        const response = await fetch(url);
+        if (!response.ok) {
+            throw new Error(`Request failed: ${url} returned ${response.status}`);
+        }
+        return response.json();
+    };
 
-    // Fetch top reviewers
-    const reviewersResponse = await fetch(`/api/top-reviewers-date-range?range=${range}&page=${page}&limit=${limit}`);
-    const reviewersData = await reviewersResponse.json();
+    try {
+        const [contributorsData, reviewersData, monthlyAggregatedData] = await Promise.all([
+            readJson(`/api/top-contributors-date-range?range=${range}&page=${page}&limit=${limit}`),
+            readJson(`/api/top-reviewers-date-range?range=${range}&page=${page}&limit=${limit}`),
+            readJson(`/api/monthly-aggregated-data?range=${monthlyRange}`)
+        ]);
 
-    // Fetch monthly aggregated data with the selected range
-    const monthlyAggregatedResponse = await fetch(`/api/monthly-aggregated-data?range=${monthlyRange}`);
-    const monthlyAggregatedData = await monthlyAggregatedResponse.json();
-
-    displayResults(contributorsData, reviewersData, monthlyAggregatedData);
+        displayResults(contributorsData, reviewersData, monthlyAggregatedData);
+    } catch (error) {
+        const resultsDiv = document.getElementById('top-scores-results');
+        if (resultsDiv) {
+            resultsDiv.textContent = 'Could not load chart data. Please try again.';
+        }
+        console.error('Failed to load chart data', error);
+    }
 }
 
 function displayResults(contributorsData, reviewersData, monthlyAggregatedData) {
@@ -230,12 +246,26 @@ function createDataTable(contributorsData, reviewersData) {
     document.getElementById('top-scores-results').appendChild(table);
 }
 
+// Chart.js refuses to attach twice to the same canvas ("Canvas is already in use"), so
+// the previous instance has to be destroyed before re-rendering.
+let monthlyAggregatedChartInstance = null;
+
 function createMonthlyAggregatedChart(data) {
     const ctx = document.getElementById('monthlyAggregatedChart');
     if (ctx) {
+        // The containing card ships with display:none and nothing ever unhid it, so even
+        // a correctly rendered chart was invisible.
+        const card = document.getElementById('chart-card');
+        if (card) card.style.display = '';
+
+        if (monthlyAggregatedChartInstance) {
+            monthlyAggregatedChartInstance.destroy();
+            monthlyAggregatedChartInstance = null;
+        }
+
         const context = ctx.getContext('2d');
         if (context) {
-            new Chart(context, {
+            monthlyAggregatedChartInstance = new Chart(context, {
                 type: 'bar',
                 data: {
                     labels: data.labels,

@@ -2,7 +2,7 @@ import express from 'express';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
-import { validateDateRange, validatePagination, validateRequest } from '../utils/validation.js';
+import { validatePagination, validateRangeDays, validateRequest } from '../utils/validation.js';
 import {
     topContributors,
     topReviewers,
@@ -166,10 +166,13 @@ router.get('/auth/status', (req, res) => {
 });
 
 // Route to get the top contributors within a date range with pagination
-router.get('/top-contributors-date-range', topContributorsDateRange);
+// Validators were imported here and applied to nothing: ?range=abc reached
+// `new Date(NaN)` and came back as a Prisma 500, and ?page=0 produced slice(-10, 0)
+// — an empty page with a 200.
+router.get('/top-contributors-date-range', validateRangeDays, validatePagination, validateRequest, topContributorsDateRange);
 
 // Route to get the top reviewers within a date range with pagination
-router.get('/top-reviewers-date-range', topReviewersDateRange);
+router.get('/top-reviewers-date-range', validateRangeDays, validatePagination, validateRequest, topReviewersDateRange);
 
 // Route to get the activity data
 router.get('/activity', fetchActivityController);
