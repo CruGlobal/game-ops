@@ -29,6 +29,9 @@ const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 // are substantive; COMMENTED / DISMISSED / PENDING do not count. Compared against
 // an UPPER-cased state — the REST API returns uppercase but webhook payloads use
 // lowercase ("approved"), so callers' values must be normalized before checking.
+// Upper bound on catch-up pagination (100 PRs per page).
+const MAX_CATCHUP_PAGES = 30;
+
 const REVIEW_CREDIT_STATES = new Set(['APPROVED', 'CHANGES_REQUESTED']);
 
 // When the one-credit-per-(reviewer, PR) rule started being enforced. Multi-credit
@@ -371,26 +374,45 @@ export const processSingleMergedPR = async (prData) => {
         throw updateError;
     }
 
-    // Re-fetch with the relations needed for points/challenges/achievements
-    contributor = await prisma.contributor.findUnique({
-        where: { username },
-        include: {
-            activeChallenges: true,
-            achievements: { select: { achievementId: true } }
+    // The counter is committed from here on, so compensation has to undo it as well as
+    // the claim. A failure between the counter and the points award used to leave
+    // prCount incremented with no pointHistory row — and because the claim survived,
+    // every retry (webhook redelivery and the catch-up cron alike) returned "already
+    // processed", so the PR stayed miscounted permanently with no way to repair it.
+    //
+    // The window closes once the points are recorded. A failure after that leaves the
+    // quarterly cache stale, which is self-correcting: those figures are derived from
+    // point_history and are rebuilt by the quarterly recompute.
+    let streakResult;
+    let pointsData;
+    try {
+        // Re-fetch with the relations needed for points/challenges/achievements
+        contributor = await prisma.contributor.findUnique({
+            where: { username },
+            include: {
+                activeChallenges: true,
+                achievements: { select: { achievementId: true } }
+            }
+        });
+
+        if (!contributor) {
+            throw new Error(`Contributor ${username} disappeared between claim and award`);
         }
-    });
 
-    if (!contributor) {
-        return { processed: false, reason: 'contributor_not_found' };
+        // Update streak
+        streakResult = await updateStreak(contributor, mergedAt);
+        await checkStreakBadges(contributor);
+
+        // Award points based on PR labels
+        pointsData = calculatePoints({ labels }, contributor);
+        await awardPoints(contributor, pointsData.points, POINT_REASONS.PR_MERGED, number, mergedAt);
+    } catch (awardError) {
+        await prisma.processedPR.delete({ where: { id: claim.id } }).catch(() => {});
+        await prisma.contributor
+            .update({ where: { username }, data: { prCount: { decrement: 1 } } })
+            .catch(() => {});
+        throw awardError;
     }
-
-    // Update streak
-    const streakResult = await updateStreak(contributor, mergedAt);
-    await checkStreakBadges(contributor);
-
-    // Award points based on PR labels
-    const pointsData = calculatePoints({ labels }, contributor);
-    await awardPoints(contributor, pointsData.points, POINT_REASONS.PR_MERGED, number, mergedAt);
 
     // Update quarterly stats
     await updateQuarterlyStats(username, {
@@ -557,25 +579,39 @@ export const processSingleReview = async (reviewData) => {
         throw updateError;
     }
 
-    // Re-fetch with the relations needed for points/challenges/achievements
-    const reviewer = await prisma.contributor.findUnique({
-        where: { username },
-        include: {
-            pointsHistory: {
-                orderBy: { timestamp: 'desc' },
-                take: 1
-            },
-            activeChallenges: true,
-            achievements: { select: { achievementId: true } }
+    // Same compensation window as the PR path: the counter is committed, so a failure
+    // before the points land has to undo both the counter and the claim. Otherwise the
+    // reviewer keeps a reviewCount with no pointHistory behind it, and the surviving
+    // claim makes every retry a no-op.
+    let reviewer;
+    let award;
+    try {
+        // Re-fetch with the relations needed for points/challenges/achievements
+        reviewer = await prisma.contributor.findUnique({
+            where: { username },
+            include: {
+                pointsHistory: {
+                    orderBy: { timestamp: 'desc' },
+                    take: 1
+                },
+                activeChallenges: true,
+                achievements: { select: { achievementId: true } }
+            }
+        });
+
+        if (!reviewer) {
+            throw new Error(`Reviewer ${username} disappeared between claim and award`);
         }
-    });
 
-    if (!reviewer) {
-        return { processed: false, reason: 'reviewer_not_found' };
+        // Award review points
+        award = await awardReviewPoints(reviewer, submittedAt, prNumber);
+    } catch (awardError) {
+        await prisma.processedReview.delete({ where: { id: claim.id } }).catch(() => {});
+        await prisma.contributor
+            .update({ where: { username }, data: { reviewCount: { decrement: 1 } } })
+            .catch(() => {});
+        throw awardError;
     }
-
-    // Award review points
-    const award = await awardReviewPoints(reviewer, submittedAt, prNumber);
 
     // Update quarterly stats
     await updateQuarterlyStats(username, {
@@ -629,15 +665,44 @@ export const fetchPullRequests = async () => {
         const processStartTime = Date.now();
 
         const lastFetchDate = await getLastFetchDate();
-        const { data: pullRequests } = await octokit.rest.pulls.list({
+
+        // pulls.list has no `since` parameter. GitHub ignores unknown query params, so
+        // passing one did nothing: this returned the 100 most-recently-updated PRs
+        // whatever the watermark said, and never paginated. If webhooks were down over
+        // a weekend and more than 100 PRs moved, everything past the first 100 was
+        // simply never caught up — and a failed webhook delivery blocks its own
+        // redelivery, so this was the only recovery path.
+        //
+        // Walk pages newest-first and stop at the watermark instead.
+        const pullRequests = [];
+        let pagesFetched = 0;
+        let reachedWatermark = false;
+
+        for await (const page of octokit.paginate.iterator(octokit.rest.pulls.list, {
             owner: repoOwner,
             repo: repoName,
             state: 'all',
             per_page: 100,
             sort: 'updated',
-            direction: 'desc',
-            since: lastFetchDate.toISOString(),
-        });
+            direction: 'desc'
+        })) {
+            pagesFetched++;
+            for (const pr of page.data) {
+                if (new Date(pr.updated_at) < lastFetchDate) {
+                    reachedWatermark = true;
+                    break;
+                }
+                pullRequests.push(pr);
+            }
+            if (reachedWatermark) break;
+            if (pagesFetched >= MAX_CATCHUP_PAGES) {
+                // Bounded so a very old watermark cannot walk the entire repository in
+                // one run. Say so rather than truncating quietly: the next run resumes
+                // from the same watermark, because it is only advanced on success.
+                console.warn(`Catch-up fetch stopped at the ${MAX_CATCHUP_PAGES}-page cap with more PRs still newer than the ${lastFetchDate.toISOString()} watermark; re-run to continue.`);
+                break;
+            }
+        }
 
         for (const pr of pullRequests) {
             if (pr.merged_at || (pr.state === 'closed' && pr.merge_commit_sha)) {
@@ -737,8 +802,15 @@ export const fetchPullRequests = async () => {
         }
 
         await updateLastFetchDate(new Date()); // Update the last fetch date
+
+        return { prsAdded, reviewsAdded, prsScanned: pullRequests.length, pagesFetched };
     } catch (err) {
-        console.error('Error fetching pull requests', err); // Log any errors
+        // Swallowing this reported success on total failure: fetchPRsCron returns
+        // `result || 'Completed'`, and the MCP trigger_pr_fetch tool said the same. The
+        // watermark is only advanced on success above, so a rethrow leaves the next run
+        // to retry the same window.
+        console.error('Error fetching pull requests', err);
+        throw err;
     }
 };
 
