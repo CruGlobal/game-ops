@@ -1428,6 +1428,51 @@ export async function checkForDuplicates() {
  * Fix duplicates by correcting counts and removing duplicate entries
  * Returns statistics about what was fixed
  */
+/**
+ * Work out a contributor's repair without touching the database.
+ *
+ * Pure so the ordering is testable. The counter has to match the number of rows that
+ * will *survive*, not the number present before the duplicate deletes land —
+ * computing it first writes a counter that is stale the moment the deletes run,
+ * leaving a fresh mismatch behind in the very function meant to remove them.
+ *
+ * The duplicate branches are unreachable while the unique constraints on
+ * (contributor_id, pr_number, action) and (contributor_id, pr_number, review_id)
+ * hold; they predate those constraints and stay as a backstop — which is exactly why
+ * the ordering has to be right without anyone being able to observe it.
+ */
+export const planCounterRepair = (contributor) => {
+    const seenPRs = new Set();
+    const prsToDelete = [];
+    for (const pr of contributor.processedPRs || []) {
+        const key = `${pr.prNumber}_${pr.action}`;
+        if (seenPRs.has(key)) prsToDelete.push(pr.id);
+        else seenPRs.add(key);
+    }
+
+    const seenReviews = new Set();
+    const reviewsToDelete = [];
+    for (const review of contributor.processedReviews || []) {
+        const key = `${review.prNumber}_${review.reviewId}`;
+        if (seenReviews.has(key)) reviewsToDelete.push(review.id);
+        else seenReviews.add(key);
+    }
+
+    const prCount = Number(contributor.prCount);
+    const reviewCount = Number(contributor.reviewCount);
+    const updateData = {};
+    if (prCount !== seenPRs.size) updateData.prCount = seenPRs.size;
+    if (reviewCount !== seenReviews.size) updateData.reviewCount = seenReviews.size;
+
+    return {
+        prsToDelete,
+        reviewsToDelete,
+        updateData,
+        prCountAdjustment: Math.abs(prCount - seenPRs.size),
+        reviewCountAdjustment: Math.abs(reviewCount - seenReviews.size)
+    };
+};
+
 export async function fixDuplicates() {
     try {
         const contributors = await prisma.contributor.findMany({
@@ -1446,89 +1491,29 @@ export async function fixDuplicates() {
         };
 
         for (const contributor of contributors) {
-            let updateData = {};
-            let needsUpdate = false;
-            const processedPRCount = contributor.processedPRs?.length || 0;
-            const processedReviewCount = contributor.processedReviews?.length || 0;
+            const plan = planCounterRepair(contributor);
+            const hasDeletes = plan.prsToDelete.length > 0 || plan.reviewsToDelete.length > 0;
+            const hasCounterFix = Object.keys(plan.updateData).length > 0;
+            if (!hasDeletes && !hasCounterFix) continue;
 
-            // FIX 1: Correct PR count mismatch
-            if (Number(contributor.prCount) !== processedPRCount) {
-                const diff = Math.abs(Number(contributor.prCount) - processedPRCount);
-                updateData.prCount = processedPRCount;
-                stats.prCountAdjustments += diff;
-                needsUpdate = true;
+            if (plan.prsToDelete.length > 0) {
+                await prisma.processedPR.deleteMany({ where: { id: { in: plan.prsToDelete } } });
+                stats.duplicatePRsRemoved += plan.prsToDelete.length;
+            }
+            if (plan.reviewsToDelete.length > 0) {
+                await prisma.processedReview.deleteMany({ where: { id: { in: plan.reviewsToDelete } } });
+                stats.duplicateReviewsRemoved += plan.reviewsToDelete.length;
+            }
+            if (hasCounterFix) {
+                await prisma.contributor.update({
+                    where: { username: contributor.username },
+                    data: plan.updateData
+                });
+                stats.prCountAdjustments += plan.prCountAdjustment;
+                stats.reviewCountAdjustments += plan.reviewCountAdjustment;
             }
 
-            // FIX 2: Correct review count mismatch
-            if (Number(contributor.reviewCount) !== processedReviewCount) {
-                const diff = Math.abs(Number(contributor.reviewCount) - processedReviewCount);
-                updateData.reviewCount = processedReviewCount;
-                stats.reviewCountAdjustments += diff;
-                needsUpdate = true;
-            }
-
-            // FIX 3: Remove duplicate PRs from processedPRs array
-            const prsToDelete = [];
-            if (contributor.processedPRs && contributor.processedPRs.length > 0) {
-                const seen = new Set();
-
-                for (const pr of contributor.processedPRs) {
-                    const key = `${pr.prNumber}_${pr.action}`;
-                    if (!seen.has(key)) {
-                        seen.add(key);
-                    } else {
-                        prsToDelete.push(pr.id);
-                        stats.duplicatePRsRemoved++;
-                        needsUpdate = true;
-                    }
-                }
-            }
-
-            // FIX 4: Remove duplicate reviews from processedReviews array
-            const reviewsToDelete = [];
-            if (contributor.processedReviews && contributor.processedReviews.length > 0) {
-                const seen = new Set();
-
-                for (const review of contributor.processedReviews) {
-                    const key = `${review.prNumber}_${review.reviewId}`;
-                    if (!seen.has(key)) {
-                        seen.add(key);
-                    } else {
-                        reviewsToDelete.push(review.id);
-                        stats.duplicateReviewsRemoved++;
-                        needsUpdate = true;
-                    }
-                }
-            }
-
-            // Apply updates
-            if (needsUpdate) {
-                // Delete duplicate PRs and reviews
-                if (prsToDelete.length > 0) {
-                    await prisma.processedPR.deleteMany({
-                        where: {
-                            id: { in: prsToDelete }
-                        }
-                    });
-                }
-                if (reviewsToDelete.length > 0) {
-                    await prisma.processedReview.deleteMany({
-                        where: {
-                            id: { in: reviewsToDelete }
-                        }
-                    });
-                }
-                
-                // Update contributor counts if needed
-                if (Object.keys(updateData).length > 0) {
-                    await prisma.contributor.update({
-                        where: { username: contributor.username },
-                        data: updateData
-                    });
-                }
-                
-                stats.contributorsFixed++;
-            }
+            stats.contributorsFixed++;
         }
 
         console.log('Duplicate fix complete:', stats);
