@@ -30,6 +30,8 @@ import { setSocketIO } from './utils/socketEmitter.js';
 import testRoutes from './routes/testRoutes.js';
 import { ensureAppSettingsTable, getCronEnabled } from './lib/appSettings.js';
 import { mountMcp } from './mcp/index.js';
+import { drain, pendingCount } from './lib/inFlightWork.js';
+import { prisma } from './lib/prisma.js';
 
 
 dotenv.config();
@@ -446,15 +448,33 @@ cron.schedule('0 2 * * *', async () => {
 });
 
 // Graceful shutdown handling
-process.on('SIGTERM', () => {
-    logger.info('SIGTERM received, shutting down gracefully');
-    process.exit(0);
-});
+// "Gracefully" was only a log line: process.exit(0) killed the process immediately,
+// including any webhook whose points and claim writes were still in flight. GitHub has
+// already received a 200 for those deliveries and will not send them again, so the work
+// was simply lost. Stop taking new connections, let the outstanding work settle, close
+// the database cleanly, then exit.
+let shuttingDown = false;
+const shutdown = async (signal) => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    logger.info(`${signal} received, shutting down gracefully`, { pending: pendingCount() });
 
-process.on('SIGINT', () => {
-    logger.info('SIGINT received, shutting down gracefully');
+    httpServer.close(() => logger.info('Stopped accepting new connections'));
+
+    const { drained, remaining } = await drain(8000);
+    if (!drained) logger.warn('Exiting with work unfinished', { remaining });
+
+    try {
+        await prisma.$disconnect();
+    } catch (err) {
+        logger.error('Error disconnecting Prisma during shutdown', { error: err.message });
+    }
+
     process.exit(0);
-});
+};
+
+process.on('SIGTERM', () => { shutdown('SIGTERM'); });
+process.on('SIGINT', () => { shutdown('SIGINT'); });
 
 httpServer.listen(port, () => {
     logger.info('Game Ops app started', {

@@ -9,7 +9,7 @@ import { checkAndAwardAchievements } from './achievementService.js';
 import { updateStreak, checkStreakBadges } from './streakService.js';
 import { awardBadges } from './contributorService.js';
 import { autoJoinContributorToActiveChallenges } from './challengeService.js';
-import { isProxyBot, resolveProxyAuthor } from './attributionService.js';
+import { isProxyBot, resolveProxyAuthor, resolveContributorUsername } from './attributionService.js';
 
 const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
 const repoOwner = process.env.REPO_OWNER || 'CruGlobal';
@@ -132,7 +132,22 @@ function emitBackfillProgress() {
  */
 async function processPR(pr) {
     try {
-        const username = pr.user.login;
+        // Attribute exactly as the live pipeline does. Backfilling a range containing
+        // TerraBloks PRs previously created a contributor row for the bot itself and
+        // paid it points, streaks and achievements that processSingleMergedPR would
+        // never have awarded — so the same PR produced different results depending on
+        // whether it arrived by webhook or by backfill.
+        let username = pr.user.login;
+        if (isProxyBot(username)) {
+            const realAuthor = await resolveProxyAuthor(pr.number);
+            if (!realAuthor) {
+                return { prAdded: 0, reviewsAdded: 0, skipped: true };
+            }
+            username = realAuthor;
+        }
+        // And settle on the casing already stored, rather than creating a second row
+        // for a login recovered from a lowercased no-reply trailer.
+        username = await resolveContributorUsername(username);
         let prAdded = 0;
         let reviewsAdded = 0;
 
@@ -251,7 +266,7 @@ async function processPR(pr) {
 
             for (const review of reviews) {
                 if (['APPROVED', 'CHANGES_REQUESTED'].includes((review.state || '').toUpperCase())) {
-                    const reviewerUsername = review.user.login;
+                    let reviewerUsername = review.user.login;
 
                     // Skip proxy-bot auto-approvals (e.g. TerraBloks as cru-devops)
                     // and self-reviews (proxy-bot PR authors resolved to the initiator).
@@ -260,7 +275,14 @@ async function processPR(pr) {
                     if (isProxyBot(effectiveAuthor)) {
                         effectiveAuthor = (await resolveProxyAuthor(pr.number)) || effectiveAuthor;
                     }
-                    if (effectiveAuthor === reviewerUsername) continue;
+                    // Case-insensitive, matching processSingleReview. A strict compare
+                    // let a self-review through whenever the two spellings differed.
+                    if (effectiveAuthor && effectiveAuthor.toLowerCase() === reviewerUsername.toLowerCase()) continue;
+
+                    // Exact-case lookups below would fork a contributor whose stored
+                    // spelling differs from what GitHub returns here, which is the same
+                    // defect resolveContributorUsername exists to prevent on the live path.
+                    reviewerUsername = await resolveContributorUsername(reviewerUsername);
 
                     const reviewer = await prisma.contributor.findUnique({
                         where: { username: reviewerUsername }

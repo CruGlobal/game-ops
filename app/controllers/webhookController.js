@@ -1,5 +1,6 @@
 import { processWebhookEvent } from '../services/webhookService.js';
 import logger from '../utils/logger.js';
+import { track } from '../lib/inFlightWork.js';
 
 /**
  * Handle incoming GitHub webhook events.
@@ -17,9 +18,10 @@ export const handleGitHubWebhook = async (req, res) => {
     // Respond quickly to GitHub (must respond within 10 seconds)
     res.status(200).json({ received: true, deliveryId });
 
-    // Process asynchronously after responding
+    // Registered as in-flight work so a SIGTERM drains it instead of killing it. GitHub
+    // has already had its 200 and will not redeliver.
     try {
-        const result = await processWebhookEvent(deliveryId, eventType, payload);
+        const result = await track(processWebhookEvent(deliveryId, eventType, payload));
         logger.info('Webhook processed', { deliveryId, eventType, result });
     } catch (error) {
         logger.error('Webhook processing failed', {
