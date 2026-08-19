@@ -37,7 +37,11 @@ export const CRON_TASK_DEFAULTS = {
   challengeGen:     { enabled: false, label: 'Challenge Generation', schedule: 'Weekly (Monday)' },
   challengeExpiry:  { enabled: false, label: 'Challenge Expiry',     schedule: 'Daily midnight' },
   quarterCheck:     { enabled: false, label: 'Quarter Boundary Check', schedule: 'Daily midnight' },
-  devOpsSync:       { enabled: false, label: 'DevOps Team Sync',     schedule: 'Daily 2 AM UTC' }
+  devOpsSync:       { enabled: false, label: 'DevOps Team Sync',     schedule: 'Daily 2 AM UTC' },
+  // server.js gates a real verifyStreaks job on this key. Missing here it resolved to
+  // undefined -> disabled forever, and setCronTaskSetting threw 'Unknown task' so the
+  // admin toggle could not turn it on either.
+  streakCheck:      { enabled: false, label: 'Streak Verification', schedule: 'Daily midnight' }
 };
 
 export async function ensureAppSettingsTable() {

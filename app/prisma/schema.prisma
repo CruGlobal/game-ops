@@ -113,6 +113,10 @@ model Achievement {
   earnedAt      DateTime    @default(now()) @map("earned_at")
   contributor   Contributor @relation(fields: [contributorId], references: [id], onDelete: Cascade)
 
+  // An achievement is earned once. awardAchievement checks an earned-set first, but
+  // that is a read: two concurrent events can both see it unearned and both pay the
+  // bonus. This makes the database the arbiter.
+  @@unique([contributorId, achievementId])
   @@index([contributorId, earnedAt])
   @@map("achievements")
 }
@@ -244,6 +248,10 @@ model QuarterSettings {
   devOpsTeamSlug                String    @default("devops-engineering-team") @map("devops_team_slug")
   devOpsTeamLastSync            DateTime? @map("devops_team_last_sync")
   devOpsTeamSyncEnabled         Boolean   @default(true) @map("devops_team_sync_enabled")
+  // The quarter the system currently considers open. The boundary used to be inferred
+  // from an arbitrary contributor's quarterlyStats JSON, which the per-event path
+  // mutates — so one self-rolled contributor could hide the boundary from everyone.
+  activeQuarter                 String?   @map("active_quarter")
 
   @@map("quarter_settings")
 }

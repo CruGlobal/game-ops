@@ -100,10 +100,31 @@ export const topReviewers = async (req, res) => {
 };
 
 // Controller to fetch activity data
+// Each PR in the requested window costs two sequential GitHub calls, against the same
+// token the webhooks, cron and backfill share. Unbounded, a single request could walk
+// hundreds of thousands of PRs, exhaust the hourly limit for everything else, and hang
+// for hours. Missing params also became parseInt(undefined) => NaN, which returned an
+// empty result instead of an error.
+const ACTIVITY_MAX_WINDOW = 200;
+
 export const fetchActivityController = async (req, res) => {
-    const { prFrom, prTo } = req.query;
+    const prFrom = Number.parseInt(req.query.prFrom, 10);
+    const prTo = Number.parseInt(req.query.prTo, 10);
+
+    if (!Number.isInteger(prFrom) || !Number.isInteger(prTo) || prFrom < 1 || prTo < 1) {
+        return res.status(400).json({ error: 'prFrom and prTo are required positive integers' });
+    }
+    if (prTo < prFrom) {
+        return res.status(400).json({ error: 'prTo must be greater than or equal to prFrom' });
+    }
+    if (prTo - prFrom + 1 > ACTIVITY_MAX_WINDOW) {
+        return res.status(400).json({
+            error: `Requested range is too large; request at most ${ACTIVITY_MAX_WINDOW} pull requests at a time`
+        });
+    }
+
     try {
-        const data = await fetchActivityData(parseInt(prFrom), parseInt(prTo));
+        const data = await fetchActivityData(prFrom, prTo);
         res.json(data);
     } catch (err) {
         res.status(500).json({ error: 'Failed to fetch activity data' });

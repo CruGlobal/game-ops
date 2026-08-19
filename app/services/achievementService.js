@@ -45,20 +45,20 @@ export const checkAndAwardAchievements = async (contributor) => {
  */
 export const awardAchievement = async (contributor, achievement) => {
     try {
-        // Add achievement to database
-        await prisma.achievement.create({
-            data: {
-                contributorId: contributor.id,
-                achievementId: achievement.id,
-                name: achievement.name,
-                description: achievement.description,
-                category: achievement.category,
-                earnedAt: new Date()
-            }
-        });
-
-        // Award bonus points (both quarterly and all-time)
+        // The achievement row and its bonus points go in ONE transaction. Split, a
+        // crash between them leaves an achievement with no points paid — and the
+        // earned-set then treats it as awarded, so it is never paid.
         await prisma.$transaction([
+            prisma.achievement.create({
+                data: {
+                    contributorId: contributor.id,
+                    achievementId: achievement.id,
+                    name: achievement.name,
+                    description: achievement.description,
+                    category: achievement.category,
+                    earnedAt: new Date()
+                }
+            }),
             prisma.contributor.update({
                 where: { id: contributor.id },
                 data: {
@@ -99,6 +99,16 @@ export const awardAchievement = async (contributor, achievement) => {
 
         return achievement;
     } catch (error) {
+        // Lost the race to a concurrent event that awarded the same achievement.
+        // Not an error, and it must not pay a second bonus.
+        if (error.code === 'P2002') {
+            logger.info('Achievement already awarded by a concurrent event', {
+                username: contributor.username,
+                achievement: achievement.name
+            });
+            return null;
+        }
+
         logger.error('Error awarding achievement', {
             username: contributor.username,
             achievement: achievement.name,

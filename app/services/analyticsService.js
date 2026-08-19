@@ -16,8 +16,10 @@ export const getContributorTrends = async (username, days = 30) => {
             where: { username },
             select: {
                 username: true,
-                contributions: true,
-                reviews: true,
+                // Same window as pointsHistory below; these were unscoped and pulled
+                // the contributor's entire history for a `days`-bounded chart.
+                contributions: { where: { date: { gte: cutoffDate } } },
+                reviews: { where: { date: { gte: cutoffDate } } },
                 pointsHistory: {
                     where: {
                         timestamp: {
@@ -82,10 +84,14 @@ export const getTeamAnalytics = async (days = 30) => {
         const cutoffDate = new Date();
         cutoffDate.setDate(cutoffDate.getDate() - days);
 
+        // Scope the daily aggregates the same way pointsHistory already was. Selecting
+        // the relations wholesale pulled every row a contributor had ever accumulated
+        // and then discarded most of them in JS — tens of thousands of rows per request
+        // on an endpoint that renders a 30-day window.
         const contributors = await prisma.contributor.findMany({
             select: {
-                contributions: true,
-                reviews: true,
+                contributions: { where: { date: { gte: cutoffDate } } },
+                reviews: { where: { date: { gte: cutoffDate } } },
                 pointsHistory: {
                     where: {
                         timestamp: {
@@ -174,8 +180,8 @@ export const getActivityHeatmap = async (days = 90) => {
 
         const contributors = await prisma.contributor.findMany({
             select: {
-                contributions: true,
-                reviews: true
+                contributions: { where: { date: { gte: cutoffDate } } },
+                reviews: { where: { date: { gte: cutoffDate } } }
             }
         });
 
@@ -353,8 +359,8 @@ export const getGrowthTrends = async () => {
 
         const contributors = await prisma.contributor.findMany({
             select: {
-                contributions: true,
-                reviews: true
+                contributions: { where: { date: { gte: lastMonthStart } } },
+                reviews: { where: { date: { gte: lastMonthStart } } }
             }
         });
 

@@ -13,6 +13,25 @@ import {
 } from '../../services/quarterlyService.js';
 import { prisma, createTestContributor } from '../setup.js';
 
+// Quarter standings are derived from point_history, not from contributor.quarterlyStats
+// (the cache the per-event path zeroes on rollover). Seed the durable rows that back
+// the numbers a test asserts.
+async function seedQuarterHistory(username, { prs = 0, reviews = 0, points = 0, at }) {
+    const contributor = await prisma.contributor.findUnique({ where: { username } });
+    const rows = [];
+    for (let i = 0; i < prs; i++) {
+        rows.push({ contributorId: contributor.id, points: BigInt(10), reason: 'PR Merged', timestamp: at });
+    }
+    for (let i = 0; i < reviews; i++) {
+        rows.push({ contributorId: contributor.id, points: BigInt(5), reason: 'Review Completed', timestamp: at });
+    }
+    const remainder = points - (prs * 10 + reviews * 5);
+    if (remainder !== 0) {
+        rows.push({ contributorId: contributor.id, points: BigInt(remainder), reason: 'Challenge Completed', timestamp: at });
+    }
+    if (rows.length) await prisma.pointHistory.createMany({ data: rows });
+}
+
 describe('QuarterlyService', () => {
     beforeEach(async () => {
         // Clean up in correct order (no foreign key constraints here)
@@ -410,6 +429,11 @@ describe('QuarterlyService', () => {
                 ]
             });
 
+            const q1 = new Date('2025-02-15T12:00:00Z');
+            await seedQuarterHistory('champion', { prs: 20, reviews: 15, points: 275, at: q1 });
+            await seedQuarterHistory('second', { prs: 15, reviews: 10, points: 200, at: q1 });
+            await seedQuarterHistory('third', { prs: 10, reviews: 8, points: 140, at: q1 });
+
             await archiveQuarterWinners('2025-Q1');
 
             const winner = await prisma.quarterlyWinner.findUnique({
@@ -442,6 +466,10 @@ describe('QuarterlyService', () => {
                 })
             });
 
+            await seedQuarterHistory('tert-champ', {
+                prs: 12, reviews: 9, points: 210, at: new Date('2026-07-15T12:00:00Z')
+            });
+
             await archiveQuarterWinners('2026-T3');
 
             const winner = await prisma.quarterlyWinner.findUnique({
@@ -452,6 +480,62 @@ describe('QuarterlyService', () => {
             expect(winner.winner.username).toBe('tert-champ');
             expect(winner.year).toBe(2026);
             expect(winner.quarterNumber).toBe(3); // parsed from the "T3" label, not NaN
+        });
+    });
+
+    describe('archive is immune to a contributor self-rolling (C-01)', () => {
+        it('still archives a contributor whose stats were already rolled to the next quarter', async () => {
+            await prisma.quarterSettings.create({
+                data: { id: 'quarter-config', systemType: 'calendar', q1StartMonth: 1 }
+            });
+
+            // The outgoing quarter's champion merges a PR minutes into the new quarter.
+            // updateQuarterlyStats re-initialises their JSON to the NEW quarter with
+            // zeroed counters, so the closing quarter's numbers are gone from the cache
+            // before anything archived them. Reading that cache dropped the real winner
+            // from their own quarter's archive; reading point_history does not.
+            await prisma.contributor.create({
+                data: createTestContributor({
+                    username: 'self-rolled',
+                    avatarUrl: 'https://github.com/self-rolled.png',
+                    quarterlyStats: {
+                        currentQuarter: '2025-Q2',
+                        prsThisQuarter: 1,
+                        reviewsThisQuarter: 0,
+                        pointsThisQuarter: 40
+                    }
+                })
+            });
+            await prisma.contributor.create({
+                data: createTestContributor({
+                    username: 'runner-up',
+                    avatarUrl: 'https://github.com/runner-up.png',
+                    quarterlyStats: {
+                        currentQuarter: '2025-Q1',
+                        prsThisQuarter: 5,
+                        reviewsThisQuarter: 2,
+                        pointsThisQuarter: 60
+                    }
+                })
+            });
+
+            const inQ1 = new Date('2025-02-15T12:00:00Z');
+            await seedQuarterHistory('self-rolled', { prs: 20, reviews: 10, points: 250, at: inQ1 });
+            await seedQuarterHistory('runner-up', { prs: 5, reviews: 2, points: 60, at: inQ1 });
+            // their first PR of the new quarter, which is what zeroed the cache
+            await seedQuarterHistory('self-rolled', {
+                prs: 1, reviews: 0, points: 40, at: new Date('2025-04-01T00:05:00Z')
+            });
+
+            await archiveQuarterWinners('2025-Q1');
+
+            const winner = await prisma.quarterlyWinner.findUnique({
+                where: { quarter_category: { quarter: '2025-Q1', category: 'general' } }
+            });
+
+            expect(winner).toBeDefined();
+            expect(winner.winner.username).toBe('self-rolled');
+            expect(winner.winner.pointsThisQuarter).toBe(250); // Q1 only, not the 40 from Q2
         });
     });
 

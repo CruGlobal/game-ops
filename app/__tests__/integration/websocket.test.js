@@ -5,6 +5,16 @@ import { io as ioClient } from 'socket.io-client';
 // Removed Mongoose model imports (migrated to Prisma elsewhere)
 import { createTestContributor } from '../setup.js';
 
+// Wait for a condition instead of guessing at a delay.
+async function waitForCondition(predicate, description, { timeout = 5000, interval = 10 } = {}) {
+    const deadline = Date.now() + timeout;
+    while (Date.now() < deadline) {
+        if (predicate()) return;
+        await new Promise(resolve => setTimeout(resolve, interval));
+    }
+    throw new Error(`Timed out after ${timeout}ms waiting for ${description}`);
+}
+
 describe('WebSocket Integration Tests', () => {
     let httpServer;
     let ioServer;
@@ -418,22 +428,23 @@ describe('WebSocket Integration Tests', () => {
             clientSocket.on('connect', done);
         });
 
-        it('should join and leave rooms', (done) => {
+        it('should join and leave rooms', async () => {
+            // Polled rather than slept on. A fixed 50ms wait is enough on an idle
+            // machine and not enough under full-suite load, and because the assertion
+            // ran inside setTimeout a failure could not reject the test — it hung to
+            // the 30s timeout instead of failing fast. This waits for the actual
+            // condition and gives up with a useful message.
             clientSocket.emit('join-room', 'test-room');
+            await waitForCondition(
+                () => Array.from(serverSocket.rooms).includes('test-room'),
+                'socket to join test-room'
+            );
 
-            setTimeout(() => {
-                // Verify socket joined room
-                const socketRooms = Array.from(serverSocket.rooms);
-                expect(socketRooms.includes('test-room')).toBe(true);
-
-                clientSocket.emit('leave-room', 'test-room');
-
-                setTimeout(() => {
-                    const updatedRooms = Array.from(serverSocket.rooms);
-                    expect(updatedRooms.includes('test-room')).toBe(false);
-                    done();
-                }, 50);
-            }, 50);
+            clientSocket.emit('leave-room', 'test-room');
+            await waitForCondition(
+                () => !Array.from(serverSocket.rooms).includes('test-room'),
+                'socket to leave test-room'
+            );
         });
     });
 
