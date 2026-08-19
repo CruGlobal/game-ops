@@ -221,6 +221,40 @@ export async function updateQuarterConfig(systemType, q1StartMonth, modifiedBy, 
  * Archive quarter winners before reset
  * @param {String} quarterString - Optional quarter to archive (defaults to current)
  */
+/**
+ * Per-contributor totals for a quarter, derived from point_history.
+ *
+ * point_history is append-only and timestamped, so a quarter's numbers can always be
+ * recomputed from it. contributor.quarterlyStats is only a live cache: the per-event
+ * path re-initialises it to zeros the moment a contributor's first PR of the NEW
+ * quarter lands, which destroyed the closing quarter's figures before anything had
+ * archived them. Anything that decides standings therefore reads history, not the cache.
+ *
+ * @param {string} quarter - quarter label
+ * @returns {Promise<Map<string, {prsThisQuarter:number, reviewsThisQuarter:number, pointsThisQuarter:number}>>}
+ */
+export async function quarterTotalsFromHistory(quarter) {
+    const { start, end } = await getQuarterDateRange(quarter);
+    const window = { timestamp: { gte: start, lte: end } };
+
+    const [points, prs, reviews] = await Promise.all([
+        prisma.pointHistory.groupBy({ by: ['contributorId'], where: window, _sum: { points: true } }),
+        prisma.pointHistory.groupBy({ by: ['contributorId'], where: { ...window, reason: POINT_REASONS.PR_MERGED }, _count: { _all: true } }),
+        prisma.pointHistory.groupBy({ by: ['contributorId'], where: { ...window, reason: POINT_REASONS.REVIEW_COMPLETED }, _count: { _all: true } })
+    ]);
+
+    const totals = new Map();
+    const ensure = (id) => {
+        const key = String(id);
+        if (!totals.has(key)) totals.set(key, { prsThisQuarter: 0, reviewsThisQuarter: 0, pointsThisQuarter: 0 });
+        return totals.get(key);
+    };
+    for (const row of points) ensure(row.contributorId).pointsThisQuarter = Number(row._sum.points || 0n);
+    for (const row of prs) ensure(row.contributorId).prsThisQuarter = Number(row._count._all || 0);
+    for (const row of reviews) ensure(row.contributorId).reviewsThisQuarter = Number(row._count._all || 0);
+    return totals;
+}
+
 export async function archiveQuarterWinners(quarterString = null) {
     try {
         const quarter = quarterString || await getCurrentQuarter();
@@ -233,7 +267,7 @@ export async function archiveQuarterWinners(quarterString = null) {
 
         // Fetch ALL contributors (we'll split into DevOps vs non-DevOps in memory)
         // Exclude bot accounts (e.g., github-actions[bot])
-        const allContributors = await prisma.contributor.findMany({
+        const contributorRows = await prisma.contributor.findMany({
             where: {
                 username: {
                     not: {
@@ -242,12 +276,26 @@ export async function archiveQuarterWinners(quarterString = null) {
                 }
             },
             select: {
+                id: true,
                 username: true,
                 avatarUrl: true,
-                quarterlyStats: true,
                 isDevOps: true
             }
         });
+
+        // Standings are rebuilt from point_history rather than read off
+        // contributor.quarterlyStats. Previously a contributor whose first PR of the new
+        // quarter merged before this ran had already had their stats zeroed, so they
+        // failed the `currentQuarter !== quarter` filter below and vanished from the
+        // archive of the quarter they had just won.
+        const quarterTotals = await quarterTotalsFromHistory(quarter);
+        const allContributors = contributorRows.map(c => ({
+            ...c,
+            quarterlyStats: {
+                currentQuarter: quarter,
+                ...(quarterTotals.get(String(c.id)) || { prsThisQuarter: 0, reviewsThisQuarter: 0, pointsThisQuarter: 0 })
+            }
+        }));
 
         // Helper: filter, rank, and build winner data for a set of contributors
         const buildWinnerRecord = (contributors, category, threshold) => {
@@ -368,26 +416,38 @@ export async function resetQuarterlyStats(newQuarter = null) {
         // no lost update of points that just started accumulating this quarter.
         // (Previously this read stale ids then updated by id, leaving a TOCTOU gap.)
         // allTimePoints is never reset.
-        const result = await prisma.contributor.updateMany({
-            where: {
-                OR: [
-                    { quarterlyStats: { equals: null } },
-                    { quarterlyStats: { path: ['currentQuarter'], not: quarter } }
-                ]
-            },
-            data: {
-                totalPoints: 0,
-                quarterlyStats: {
-                    currentQuarter: quarter,
-                    quarterStartDate: quarterDates.start,
-                    quarterEndDate: quarterDates.end,
-                    prsThisQuarter: 0,
-                    reviewsThisQuarter: 0,
-                    pointsThisQuarter: 0,
-                    lastUpdated: new Date()
+        // Every contributor is rewritten, and the figures come from point_history for
+        // the new window rather than being blanket-zeroed.
+        //
+        // The previous WHERE skipped anyone already carrying the new quarter label. A
+        // contributor who merged a PR just after the boundary had self-rolled their own
+        // JSON, so they were excluded and their totalPoints kept the OLD quarter's
+        // balance forever — 3040 while pointsThisQuarter said 40. Zeroing them
+        // unconditionally instead would have discarded the 40 they had legitimately
+        // earned, so neither a skip nor a blanket zero is right: derive the truth.
+        const newQuarterTotals = await quarterTotalsFromHistory(quarter);
+        const contributors = await prisma.contributor.findMany({ select: { id: true } });
+
+        let resetCount = 0;
+        for (const c of contributors) {
+            const earned = newQuarterTotals.get(String(c.id)) ||
+                { prsThisQuarter: 0, reviewsThisQuarter: 0, pointsThisQuarter: 0 };
+            await prisma.contributor.update({
+                where: { id: c.id },
+                data: {
+                    totalPoints: BigInt(earned.pointsThisQuarter),
+                    quarterlyStats: {
+                        currentQuarter: quarter,
+                        quarterStartDate: quarterDates.start,
+                        quarterEndDate: quarterDates.end,
+                        ...earned,
+                        lastUpdated: new Date()
+                    }
                 }
-            }
-        });
+            });
+            resetCount++;
+        }
+        const result = { count: resetCount };
 
         console.log(`Reset quarterly stats and totalPoints for ${result.count} contributors (allTimePoints preserved)`);
 
@@ -1268,26 +1328,56 @@ export async function awardQuarterlyBills(quarterString) {
  * Check if we're in a new quarter and trigger reset if needed
  * @returns {Object} { quarterChanged, oldQuarter, newQuarter }
  */
+/**
+ * Record which quarter the system currently considers open.
+ *
+ * This is the boundary marker. It must only be advanced once the closing quarter has
+ * been archived and awarded, because advancing it is what stops checkAndResetIfNewQuarter
+ * from running the rollover again.
+ */
+export async function setActiveQuarter(quarter) {
+    await prisma.quarterSettings.upsert({
+        where: { id: 'quarter-config' },
+        create: { id: 'quarter-config', activeQuarter: quarter },
+        update: { activeQuarter: quarter }
+    });
+}
+
 export async function checkAndResetIfNewQuarter() {
     try {
         const currentQuarter = await getCurrentQuarter();
 
-        // Get a sample contributor to check their current quarter
-        const sampleContributor = await prisma.contributor.findFirst({
-            where: {
-                quarterlyStats: {
-                    not: null
-                }
-            },
-            select: {
-                quarterlyStats: true
-            }
+        // The quarter the system last opened is persisted, not inferred from a sampled
+        // contributor. findFirst has no ORDER BY, so it returned an arbitrary row: if
+        // that one contributor had already self-rolled their own JSON onto the new
+        // quarter, this read equalled currentQuarter and the whole rollover — archive,
+        // bills, announcements, reset — silently never ran for anybody.
+        const settings = await prisma.quarterSettings.findUnique({
+            where: { id: 'quarter-config' },
+            select: { activeQuarter: true }
         });
+        let activeQuarter = settings?.activeQuarter || null;
 
-        if (!sampleContributor || !sampleContributor.quarterlyStats?.currentQuarter) {
+        // First run after activeQuarter was introduced: adopt whatever quarter the
+        // contributor cache is already on and record it, rather than treating a NULL
+        // marker as "never initialised" and recomputing everyone's stats on the next
+        // boot. Only a genuinely empty system falls through to initialisation.
+        if (!activeQuarter) {
+            const seeded = await prisma.contributor.findFirst({
+                where: { quarterlyStats: { not: null } },
+                select: { quarterlyStats: true }
+            });
+            if (seeded?.quarterlyStats?.currentQuarter) {
+                activeQuarter = seeded.quarterlyStats.currentQuarter;
+                await setActiveQuarter(activeQuarter);
+            }
+        }
+
+        if (!activeQuarter) {
             // No contributors have quarterly stats yet, initialize for current quarter
             console.log(`Initializing quarterly system for ${currentQuarter}`);
             await resetQuarterlyStats(currentQuarter);
+            await setActiveQuarter(currentQuarter);
             return {
                 quarterChanged: true,
                 oldQuarter: null,
@@ -1295,7 +1385,7 @@ export async function checkAndResetIfNewQuarter() {
             };
         }
 
-        const contributorQuarter = sampleContributor.quarterlyStats.currentQuarter;
+        const contributorQuarter = activeQuarter;
 
         if (contributorQuarter !== currentQuarter) {
             console.log(`New quarter detected: ${contributorQuarter} → ${currentQuarter}`);
@@ -1309,6 +1399,7 @@ export async function checkAndResetIfNewQuarter() {
             if (existingArchive) {
                 console.log(`Quarter ${contributorQuarter} already archived, skipping notifications — resetting stats only`);
                 await resetQuarterlyStats(currentQuarter);
+                await setActiveQuarter(currentQuarter);
                 return {
                     quarterChanged: true,
                     oldQuarter: contributorQuarter,
@@ -1327,6 +1418,7 @@ export async function checkAndResetIfNewQuarter() {
             await postQuarterlyWinnersDiscussion(contributorQuarter, billResults, quarterlyWinner);
             await postQuarterlyWinnersSlack(contributorQuarter, billResults, quarterlyWinner);
             await resetQuarterlyStats(currentQuarter);
+            await setActiveQuarter(currentQuarter);
             return {
                 quarterChanged: true,
                 oldQuarter: contributorQuarter,

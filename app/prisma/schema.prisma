@@ -248,6 +248,10 @@ model QuarterSettings {
   devOpsTeamSlug                String    @default("devops-engineering-team") @map("devops_team_slug")
   devOpsTeamLastSync            DateTime? @map("devops_team_last_sync")
   devOpsTeamSyncEnabled         Boolean   @default(true) @map("devops_team_sync_enabled")
+  // The quarter the system currently considers open. The boundary used to be inferred
+  // from an arbitrary contributor's quarterlyStats JSON, which the per-event path
+  // mutates — so one self-rolled contributor could hide the boundary from everyone.
+  activeQuarter                 String?   @map("active_quarter")
 
   @@map("quarter_settings")
 }

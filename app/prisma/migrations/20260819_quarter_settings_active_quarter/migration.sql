@@ -1,0 +1,15 @@
+-- Persist which quarter the system considers open.
+--
+-- checkAndResetIfNewQuarter used to detect the boundary by reading ONE arbitrary
+-- contributor's quarterlyStats JSON (findFirst with no ORDER BY). The per-event path
+-- mutates that JSON, so a single contributor whose PR merged just after the boundary
+-- had already rolled themselves onto the new quarter — making the sampled value equal
+-- the current quarter, and silently suppressing the entire rollover (archive, bills,
+-- announcements, reset) for everybody.
+--
+-- Production applies schema changes with `prisma db push`, which reads only
+-- schema.prisma; this file keeps the docker-compose migrate-deploy path in step.
+-- Nullable with no backfill on purpose: the service adopts the quarter the contributor
+-- cache is already on the first time it sees NULL, so introducing this column does not
+-- trigger a rollover or a stats recompute.
+ALTER TABLE "quarter_settings" ADD COLUMN IF NOT EXISTS "active_quarter" TEXT;
