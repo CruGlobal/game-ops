@@ -83,7 +83,18 @@ afterEach(async () => {
       await prisma.contribution.deleteMany({});
       await prisma.quarterlyWinner.deleteMany({});
       await prisma.quarterSettings.deleteMany({});
+      // These were missing, so rows leaked between test files and made outcomes
+      // order-dependent: a webhookEvent left behind collides on its unique
+      // delivery_id, a stale fetchDate skews catch-up assertions, and leftover
+      // app_settings silently flips cron gating for a later test.
+      await prisma.quarterlyAward.deleteMany({});
+      await prisma.billGift.deleteMany({});
+      await prisma.webhookEvent.deleteMany({});
+      await prisma.fetchDate.deleteMany({});
+      await prisma.pRMetadata.deleteMany({});
+      await prisma.user.deleteMany({});
       await prisma.contributor.deleteMany({});
+      await prisma.$executeRawUnsafe('TRUNCATE TABLE app_settings').catch(() => {});
     } catch (error) {
       console.error('Error cleaning up test data:', error);
     }

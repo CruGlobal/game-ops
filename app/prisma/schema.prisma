@@ -113,6 +113,10 @@ model Achievement {
   earnedAt      DateTime    @default(now()) @map("earned_at")
   contributor   Contributor @relation(fields: [contributorId], references: [id], onDelete: Cascade)
 
+  // An achievement is earned once. awardAchievement checks an earned-set first, but
+  // that is a read: two concurrent events can both see it unearned and both pay the
+  // bonus. This makes the database the arbiter.
+  @@unique([contributorId, achievementId])
   @@index([contributorId, earnedAt])
   @@map("achievements")
 }

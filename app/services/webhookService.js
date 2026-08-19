@@ -11,21 +11,23 @@ const isAlreadyProcessed = async (deliveryId) => {
     const existing = await prisma.webhookEvent.findUnique({
         where: { deliveryId }
     });
-    return !!existing;
+    // A 'failed' row means the work did NOT happen. Treating it as already-processed
+    // made GitHub's redelivery of that same delivery a no-op, so the points were
+    // never awarded by any webhook — only the catch-up cron could recover it, and
+    // that is off by default.
+    return !!existing && existing.status !== 'failed';
 };
 
 /**
  * Record a webhook event for audit trail and idempotency.
  */
 const recordWebhookEvent = async (deliveryId, eventType, action, payload, status = 'processed') => {
-    await prisma.webhookEvent.create({
-        data: {
-            deliveryId,
-            eventType,
-            action,
-            payload,
-            status
-        }
+    // Upsert, not create: a redelivery of a previously-failed delivery is now allowed
+    // through, and deliveryId is unique — a plain create would collide.
+    await prisma.webhookEvent.upsert({
+        where: { deliveryId },
+        create: { deliveryId, eventType, action, payload, status },
+        update: { eventType, action, payload, status }
     });
 };
 
