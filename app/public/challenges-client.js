@@ -111,7 +111,7 @@ function createChallengeCard(challenge) {
     card.innerHTML = `
         <div class="challenge-header">
             <h3 class="challenge-title">${escapeHtml(challenge.title)}</h3>
-            <span class="challenge-difficulty challenge-difficulty-${challenge.difficulty}">${challenge.difficulty}</span>
+            <span class="challenge-difficulty challenge-difficulty-${escapeHtml(challenge.difficulty)}">${escapeHtml(challenge.difficulty)}</span>
         </div>
 
         <p class="challenge-description">${escapeHtml(challenge.description)}</p>
@@ -321,7 +321,7 @@ function renderPastChallenges(completed, expiredIncomplete) {
                 </div>
                 <div class="past-challenge-details">
                     <span>Ended ${endedDate}</span>
-                    <span class="past-challenge-difficulty">${challenge.difficulty}</span>
+                    <span class="past-challenge-difficulty">${escapeHtml(challenge.difficulty)}</span>
                 </div>
             `;
         }

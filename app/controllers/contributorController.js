@@ -1,39 +1,9 @@
-import { fetchActivityData, fetchPullRequests, awardBadges, getTopContributors, getTopReviewers, getTopContributorsDateRange, getTopReviewersDateRange, initializeDatabase, getContributorByUsername } from '../services/contributorService.js';
+import { fetchActivityData, fetchPullRequests, awardBadges, getTopContributors, getTopReviewers, getTopContributorsDateRange, getTopReviewersDateRange, getContributorByUsername } from '../services/contributorService.js';
 import { prisma } from '../lib/prisma.js';
 import { getStreakStats, getStreakLeaderboard } from '../services/streakService.js';
 import { getPointsLeaderboard, getPointsHistory, getPointsSummary } from '../services/pointsService.js';
 import { getAchievementProgress, getAllAchievements, getEarnedAchievements } from '../services/achievementService.js';
 import { getAllTimeLeaderboard, getQuarterlyLeaderboard, getHallOfFame } from '../services/quarterlyService.js';
-
-// Controller to initialize the database
-export const initializeDatabaseController = async (req, res) => {
-    try {
-        // In test environment, short-circuit to avoid external GitHub calls
-        if (process.env.NODE_ENV === 'test') {
-            return res.status(200).send('Database initialized successfully.');
-        }
-        // Destructive: deletes all contributors and re-imports from GitHub.
-        // Require explicit ?confirm=true so it cannot be triggered accidentally.
-        const confirmed = req.query.confirm === 'true' || req.body?.confirm === true;
-        if (!confirmed) {
-            return res.status(400).send('Refusing to initialize: this deletes all contributors and re-imports from GitHub. Re-run with ?confirm=true to proceed.');
-        }
-        await initializeDatabase({ confirm: true }); // Call the initializeDatabase function
-        res.status(200).send('Database initialized successfully.');
-    } catch (err) {
-        res.status(500).send('Error initializing database.'); // Handle errors
-    }
-};
-
-// Controller to fetch pull requests and update contributors' PR counts
-export const fetchPRs = async (req, res) => {
-    try {
-        await fetchPullRequests(); // Fetch pull requests and update data
-        res.status(200).send('Pull requests fetched and data updated.');
-    } catch (err) {
-        res.status(500).send('Error fetching pull requests.'); // Handle errors
-    }
-};
 
 // Function to fetch pull requests for the cron job
 export const fetchPRsCron = async () => {
@@ -56,18 +26,6 @@ export const awardContributorBadgesCron = async (pullRequestNumber) => {
     } catch (err) {
         console.error({ message: 'Error awarding badges.' }); // Handle errors
         throw err;
-    }
-};
-
-// Controller to award badges to contributors based on their contributions
-export const awardContributorBadges = async (req, res) => {
-    const pullRequestNumber = req.query.pull_request_number; // Get pull request number from query
-    const test = req.query.test === 'true'; // Check if test mode is enabled
-    try {
-        const results = await awardBadges(pullRequestNumber, test); // Award badges
-        res.status(200).json({ message: 'Badges awarded successfully.', results });
-    } catch (err) {
-        res.status(500).json({ message: 'Error awarding badges.' }); // Handle errors
     }
 };
 
@@ -139,16 +97,6 @@ export const topReviewers = async (req, res) => {
     } catch (err) {
         res.status(500).json({ error: 'Internal Server Error' }); // Handle errors
     }
-};
-
-// Controller to award bills and vonettes to contributors based on their contributions
-export const awardBillsAndVonettesController = async (req, res) => {
-    // Bills/Vonettes are now awarded quarterly at quarter boundaries.
-    // This endpoint is deprecated.
-    res.status(200).json({
-        message: 'Bills and Vonettes are now awarded quarterly. Use the quarterly reset system instead.',
-        results: []
-    });
 };
 
 // Controller to fetch activity data

@@ -429,14 +429,14 @@ function createChallengeCard(challenge, isCompleted) {
     const target = challenge.target || 100;
     const reward = challenge.reward || 0;
 
-    const difficultyClass = `difficulty-${challenge.difficulty || 'medium'}`;
+    const difficultyClass = `difficulty-${escapeHtml(challenge.difficulty || 'medium')}`;
     const percentComplete = Math.min((progress / target) * 100, 100).toFixed(1);
 
     card.innerHTML = `
         <div class="challenge-header">
             <div>
                 <h3 class="challenge-title">${escapeHtml(challenge.title || 'Unknown Challenge')}</h3>
-                <span class="challenge-badge ${difficultyClass}">${challenge.difficulty || 'medium'}</span>
+                <span class="challenge-badge ${difficultyClass}">${escapeHtml(challenge.difficulty || 'medium')}</span>
                 ${isCompleted ? '<span class="challenge-badge status-completed">Completed</span>' : ''}
             </div>
         </div>
