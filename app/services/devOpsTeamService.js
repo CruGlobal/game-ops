@@ -63,30 +63,6 @@ export async function fetchDevOpsTeamFromGitHub() {
   }
 }
 
-/**
- * Check if a specific user is in the DevOps team on GitHub
- * @param {string} username - GitHub username
- * @returns {Promise<boolean>} True if user is a team member
- */
-export async function isUserInDevOpsTeam(username) {
-  try {
-    const { data: membership } = await octokit.rest.teams.getMembershipForUserInOrg({
-      org: GITHUB_ORG,
-      team_slug: DEVOPS_TEAM_SLUG,
-      username: username
-    });
-
-    return membership.state === 'active';
-
-  } catch (error) {
-    if (error.status === 404) {
-      // User is not in the team
-      return false;
-    }
-    logger.error(`Error checking DevOps membership for ${username}:`, error);
-    throw error;
-  }
-}
 
 /**
  * Sync DevOps team members from GitHub to database
@@ -314,7 +290,6 @@ export async function getContributorCounts() {
 
 export default {
   fetchDevOpsTeamFromGitHub,
-  isUserInDevOpsTeam,
   syncDevOpsTeamFromGitHub,
   getDevOpsTeamSettings,
   toggleDevOpsLeaderboardFilter,

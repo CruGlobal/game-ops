@@ -3,7 +3,6 @@ import { prisma } from '../lib/prisma.js';
 import { getStreakStats, getStreakLeaderboard } from '../services/streakService.js';
 import { getPointsLeaderboard, getPointsHistory, getPointsSummary } from '../services/pointsService.js';
 import { getAchievementProgress, getAllAchievements, getEarnedAchievements } from '../services/achievementService.js';
-import { getAllTimeLeaderboard, getQuarterlyLeaderboard, getHallOfFame } from '../services/quarterlyService.js';
 
 // Function to fetch pull requests for the cron job
 export const fetchPRsCron = async () => {
@@ -289,59 +288,11 @@ export const getContributorController = async (req, res) => {
     }
 };
 
-// Get all-time leaderboard
-export const getAllTimeLeaderboardController = async (req, res) => {
-    try {
-        const limit = parseInt(req.query.limit) || 50;
-
-        // Get user's DevOps status and preference
-        const userIsDevOps = req.user?.isDevOps || false;
-        const userShowDevOps = req.session?.showDevOpsMembers ?? true; // Default: show DevOps
-
-        const leaderboard = await getAllTimeLeaderboard(limit, {
-            userIsDevOps,
-            userShowDevOps
-        });
-        res.json({ success: true, data: leaderboard });
-    } catch (err) {
-        res.status(500).json({ success: false, message: 'Error fetching all-time leaderboard', error: err.message });
-    }
-};
-
-// Get quarterly leaderboard
-export const getQuarterlyLeaderboardController = async (req, res) => {
-    try {
-        const { quarter } = req.params;
-        const limit = parseInt(req.query.limit) || 50;
-
-        // Get user's DevOps status and preference
-        const userIsDevOps = req.user?.isDevOps || false;
-        const userShowDevOps = req.session?.showDevOpsMembers ?? true;
-
-        const leaderboard = await getQuarterlyLeaderboard(quarter, limit, {
-            userIsDevOps,
-            userShowDevOps
-        });
-        res.json({ success: true, data: leaderboard });
-    } catch (err) {
-        res.status(500).json({ success: false, message: 'Error fetching quarterly leaderboard', error: err.message });
-    }
-};
-
-// Get Hall of Fame
-export const getHallOfFameController = async (req, res) => {
-    try {
-        const limit = parseInt(req.query.limit) || 20;
-        // DevOps members see DevOps winners unless they toggled to view non-DevOps
-        const userIsDevOps = req.user?.isDevOps || false;
-        const userShowDevOps = req.session?.showDevOpsMembers ?? true;
-        const category = (userIsDevOps && userShowDevOps) ? 'devops' : 'general';
-        const hallOfFame = await getHallOfFame(limit, category);
-        res.json({ success: true, data: hallOfFame });
-    } catch (err) {
-        res.status(500).json({ success: false, message: 'Error fetching Hall of Fame', error: err.message });
-    }
-};
+// The all-time / quarterly / Hall-of-Fame controllers that used to live here were
+// duplicates: routes/contributorRoutes.js imports those names from adminController.js
+// (one import block, closing with `from '../controllers/adminController.js'`), so these
+// copies were unreachable — and they behaved differently, omitting rank and the
+// pointsThisQuarter flattening the live versions do.
 
 // Get quarter configuration
 

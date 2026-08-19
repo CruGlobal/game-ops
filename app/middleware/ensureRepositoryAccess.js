@@ -80,11 +80,3 @@ export const ensureRepositoryAccess = async (req, res, next) => {
     }
 };
 
-/**
- * Middleware to allow both authenticated and unauthenticated access
- * Populates req.user if authenticated, but doesn't block if not
- */
-export const optionalAuthentication = (req, res, next) => {
-    // Just pass through - passport will populate req.user if session exists
-    next();
-};

@@ -58,10 +58,3 @@ export const validatePagination = [
         .withMessage('Limit must be between 1 and 100')
 ];
 
-export const validateUsername = [
-    body('username')
-        .isLength({ min: 1, max: 39 })
-        .withMessage('Username must be between 1 and 39 characters')
-        .matches(/^[a-z\d](?:[a-z\d]|-(?=[a-z\d])){0,38}$/i)
-        .withMessage('Username must be a valid GitHub username')
-];

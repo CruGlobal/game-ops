@@ -423,8 +423,15 @@ function updateChallengeProgress(challengeId, username, progress) {
  * @param {string} text - Text to escape
  * @returns {string} Escaped text
  */
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
+function escapeHtml(value) {
+    // Must escape quotes too: the textContent/innerHTML trick this replaced leaves " and
+    // ' untouched, so an interpolated value could still break out of a double-quoted
+    // attribute even though it was "escaped". Matches public/escape-html.js.
+    if (value === null || value === undefined) return '';
+    return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
 }
