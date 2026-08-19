@@ -31,6 +31,12 @@ const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 // lowercase ("approved"), so callers' values must be normalized before checking.
 const REVIEW_CREDIT_STATES = new Set(['APPROVED', 'CHANGES_REQUESTED']);
 
+// When the one-credit-per-(reviewer, PR) rule started being enforced. Multi-credit
+// pairs recorded before this are historical and expected: every review earned a credit
+// then, and ~1,113 pairs carry ~2,410 such credits. Only pairs recorded after it
+// indicate the guard has been bypassed.
+const REVIEW_ONE_CREDIT_RULE_DATE = new Date('2026-06-15T00:00:00Z');
+
 // Function to initialize the database.
 // DESTRUCTIVE: deletes every contributor, then re-imports the full history from
 // GitHub. Requires explicit confirmation so an accidental or prefetched call
@@ -502,21 +508,46 @@ export const processSingleReview = async (reviewData) => {
     // reviewCount with no processed-row behind it.
     const claimant = await ensureContributor(username);
 
-    let claim;
+    // The one-credit-per-PR guard above is a bare read, and the unique constraint
+    // cannot arbitrate it: it includes reviewId, so two DIFFERENT reviews by the same
+    // person on one PR (a CHANGES_REQUESTED then an APPROVED, say) do not collide.
+    // Both callers pass the read and both insert.
+    //
+    // Tightening the constraint to (contributorId, prNumber) is not available: 1,113
+    // historical pairs legitimately hold multiple credits, earned before the
+    // one-credit rule existed, and production reconciles with `prisma db push
+    // --accept-data-loss` — the index would fail to build or destroy rows. So the
+    // check and the claim are made atomic with an advisory lock scoped to this
+    // (contributor, PR) instead. It costs nothing when uncontended and is released
+    // when the transaction ends, however it ends.
+    let claim = null;
     try {
-        claim = await prisma.processedReview.create({
-            data: {
-                contributorId: claimant.id,
-                prNumber: BigInt(prNumber),
-                reviewId: BigInt(reviewId),
-                processedDate: reviewDate
-            }
+        await prisma.$transaction(async (tx) => {
+            await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`review:${claimant.id}:${prNumber}`}, 0))`;
+
+            const alreadyCredited = await tx.processedReview.findFirst({
+                where: { contributorId: claimant.id, prNumber: BigInt(prNumber) }
+            });
+            if (alreadyCredited) return;
+
+            claim = await tx.processedReview.create({
+                data: {
+                    contributorId: claimant.id,
+                    prNumber: BigInt(prNumber),
+                    reviewId: BigInt(reviewId),
+                    processedDate: reviewDate
+                }
+            });
         });
     } catch (createError) {
         if (createError.code === 'P2002') {
             return { processed: false, reason: 'duplicate_concurrent' };
         }
         throw createError;
+    }
+
+    if (!claim) {
+        return { processed: false, reason: 'already_reviewed_pr' };
     }
 
     try {
@@ -1412,6 +1443,34 @@ export async function checkForDuplicates() {
         });
 
         // Calculate summary
+        // One credit per (reviewer, PR) is enforced in code, not by a constraint — the
+        // unique includes reviewId and cannot be tightened while 1,113 historical pairs
+        // legitimately hold multiple credits. Report violations so any NEW drift is
+        // visible instead of accumulating silently the way the legacy rows did.
+        // Pairs whose credits all predate the rule are expected; a recent one is not.
+        const multiCredit = await prisma.processedReview.groupBy({
+            by: ['contributorId', 'prNumber'],
+            _count: { _all: true },
+            _max: { processedDate: true },
+            having: { id: { _count: { gt: 1 } } }
+        });
+        const nameById = new Map(contributors.map(c => [c.id, c.username]));
+        duplicates.summary.multiCreditReviewPairs = multiCredit.length;
+        duplicates.summary.multiCreditReviewPairsSinceRule = multiCredit.filter(
+            g => g._max.processedDate && g._max.processedDate > REVIEW_ONE_CREDIT_RULE_DATE
+        ).length;
+        for (const g of multiCredit) {
+            if (!g._max.processedDate || g._max.processedDate <= REVIEW_ONE_CREDIT_RULE_DATE) continue;
+            duplicates.hasDuplicates = true;
+            duplicates.details.push({
+                type: 'MultiCreditReview',
+                contributor: nameById.get(g.contributorId) || g.contributorId,
+                prNumber: Number(g.prNumber),
+                credits: g._count._all,
+                issue: `contributor holds ${g._count._all} review credits on PR ${g.prNumber}, recorded after the one-credit-per-PR rule took effect`
+            });
+        }
+
         duplicates.summary.duplicatePRs = duplicates.details.filter(d => d.type === 'PR').length;
         duplicates.summary.duplicateReviews = duplicates.details.filter(d => d.type === 'Review').length;
         duplicates.summary.mismatches = duplicates.details.filter(d => d.type === 'Mismatch').length;
