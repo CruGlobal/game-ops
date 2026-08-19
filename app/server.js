@@ -473,6 +473,25 @@ const shutdown = async (signal) => {
     process.exit(0);
 };
 
+// On Node >= 15 an unhandled rejection terminates the process by default. Webhook
+// handling continues after the 200 has been sent, so an unhandled rejection anywhere
+// would take the in-flight work with it — the same loss the graceful shutdown above
+// exists to prevent, but without even a drain. Log it loudly and keep serving; a
+// stack trace in Datadog is far more useful than a silent restart loop.
+process.on('unhandledRejection', (reason) => {
+    logger.error('Unhandled promise rejection', {
+        reason: reason instanceof Error ? reason.message : String(reason),
+        stack: reason instanceof Error ? reason.stack : undefined
+    });
+});
+
+process.on('uncaughtException', (error) => {
+    // Genuinely unsafe to continue after this one — the process state is unknown — so
+    // drain what we can and exit rather than lingering in a broken state.
+    logger.error('Uncaught exception, shutting down', { error: error.message, stack: error.stack });
+    shutdown('uncaughtException');
+});
+
 process.on('SIGTERM', () => { shutdown('SIGTERM'); });
 process.on('SIGINT', () => { shutdown('SIGINT'); });
 

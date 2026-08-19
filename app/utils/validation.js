@@ -33,6 +33,20 @@ export const validateDateRange = [
         })
 ];
 
+// `range` is a day count, not a date, so validateDateRange never covered it. Left
+// unvalidated it reached `new Date(NaN)` and surfaced as a Prisma 500 rather than a 400.
+export const validateRangeDays = [
+    // Deliberately optional. A missing `range` already returns a 400 from the
+    // controller with its own body shape, and callers depend on that; taking it over
+    // here would change the response for a case that already worked. This only rejects
+    // a range that is present but not a usable number of days — previously that reached
+    // `new Date(NaN)` and surfaced as a Prisma 500.
+    query('range')
+        .optional()
+        .isInt({ min: 1, max: 3650 })
+        .withMessage('Range must be a whole number of days between 1 and 3650')
+];
+
 export const validatePagination = [
     query('page')
         .optional()

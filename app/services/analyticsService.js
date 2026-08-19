@@ -7,6 +7,11 @@ import logger from '../utils/logger.js';
  * @param {Number} days - Number of days to look back (default: 30)
  * @returns {Object} Time-series data for contributions
  */
+// RFC 4180: a double quote inside a quoted CSV field is escaped by doubling it.
+// Without this a title like Ship "v2" closed its field early and shifted every
+// remaining column on that row.
+export const csvField = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`;
+
 export const getContributorTrends = async (username, days = 30) => {
     try {
         const cutoffDate = new Date();
@@ -472,7 +477,7 @@ export const exportToCSV = async (type, options = {}) => {
             // CSV Rows
             contributors.forEach(c => {
                 const badgeCount = c.badges ? c.badges.length : 0;
-                csvData += `"${c.username}",${Number(c.prCount)},${Number(c.reviewCount)},${Number(c.allTimePoints)},${Number(c.currentStreak)},${Number(c.longestStreak)},${Number(c.totalBillsAwarded)},${badgeCount}\n`;
+                csvData += `${csvField(c.username)},${Number(c.prCount)},${Number(c.reviewCount)},${Number(c.allTimePoints)},${Number(c.currentStreak)},${Number(c.longestStreak)},${Number(c.totalBillsAwarded)},${badgeCount}\n`;
             });
 
         } else if (type === 'challenges') {
@@ -489,7 +494,7 @@ export const exportToCSV = async (type, options = {}) => {
 
             challenges.forEach(c => {
                 const completions = c.participants.filter(p => p.completed).length;
-                csvData += `"${c.title}","${c.type}",${c.target},${c.reward},"${c.status}",${c.participants.length},${completions},"${c.startDate.toISOString()}","${c.endDate.toISOString()}"\n`;
+                csvData += `${csvField(c.title)},${csvField(c.type)},${c.target},${c.reward},${csvField(c.status)},${c.participants.length},${completions},${csvField(c.startDate.toISOString())},${csvField(c.endDate.toISOString())}\n`;
             });
 
         } else if (type === 'activity') {
@@ -499,7 +504,7 @@ export const exportToCSV = async (type, options = {}) => {
             csvData = 'Date,Contributions,Reviews,Points\n';
 
             teamData.timeSeries.forEach(day => {
-                csvData += `"${day.date}",${day.contributions},${day.reviews},${day.points}\n`;
+                csvData += `${csvField(day.date)},${day.contributions},${day.reviews},${day.points}\n`;
             });
         }
 

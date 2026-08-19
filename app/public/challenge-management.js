@@ -664,17 +664,25 @@ document.addEventListener('DOMContentLoaded', async () => {
                     challengeCreateStatus.innerHTML = '';
                 }, 3000);
             } else {
-                challengeCreateStatus.innerHTML = `<p class="error">❌ Error: ${result.error}</p>`;
+                showNotification(`❌ Error: ${result.error}`, 'error');
             }
         } catch (error) {
             console.error('Error creating challenge:', error);
-            challengeCreateStatus.innerHTML = `<p class="error">❌ Error: ${error.message}</p>`;
+            showNotification(`❌ Error: ${error.message}`, 'error');
         }
     });
 
     // Show notification
     const showNotification = (message, type = 'info') => {
-        challengeCreateStatus.innerHTML = `<p class="${type}">${message}</p>`;
+        // textContent, not innerHTML: every caller interpolates a server error string
+        // into this, and those strings can echo values the caller submitted. The CSP
+        // blocks script execution, but markup injection (an <img> beacon, say) is not
+        // covered.
+        challengeCreateStatus.innerHTML = '';
+        const line = document.createElement('p');
+        line.className = type;
+        line.textContent = message;
+        challengeCreateStatus.appendChild(line);
         setTimeout(() => {
             challengeCreateStatus.innerHTML = '';
         }, 5000);

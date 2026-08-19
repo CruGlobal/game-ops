@@ -1,10 +1,18 @@
 import express from 'express';
-import { PrismaClient } from '@prisma/client';
 import { Octokit } from '@octokit/rest';
 import logger from '../utils/logger.js';
+// The shared client, not a second `new PrismaClient()`. Instantiating another one here
+// opened a second connection pool against the same database purely to answer health
+// probes.
+import { prisma } from '../lib/prisma.js';
 
 const router = express.Router();
-const prisma = new PrismaClient();
+
+// The health endpoint is polled continuously (a 15s monitor is ~240 hits/hour). Asking
+// GitHub for the rate limit on every hit spends the shared token's budget to report on
+// itself, so the answer is cached briefly.
+const GITHUB_HEALTH_TTL_MS = 60 * 1000;
+let githubHealthCache = { checkedAt: 0, value: null };
 
 // Health check endpoint
 router.get('/health', async (req, res) => {
@@ -39,20 +47,31 @@ router.get('/health', async (req, res) => {
 
         // GitHub API health check
         if (process.env.GITHUB_TOKEN) {
-            try {
-                const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
-                const rateLimit = await octokit.rateLimit.get();
-                health.checks.github = {
-                    status: 'healthy',
-                    remaining: rateLimit.data.rate.remaining,
-                    limit: rateLimit.data.rate.limit,
-                    reset: new Date(rateLimit.data.rate.reset * 1000).toISOString()
-                };
-            } catch (error) {
-                health.checks.github = {
-                    status: 'unhealthy',
-                    error: error.message
-                };
+            if (githubHealthCache.value && Date.now() - githubHealthCache.checkedAt < GITHUB_HEALTH_TTL_MS) {
+                health.checks.github = { ...githubHealthCache.value, cached: true };
+            } else {
+                try {
+                    const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
+                    const rateLimit = await octokit.rateLimit.get();
+                    githubHealthCache = {
+                        checkedAt: Date.now(),
+                        value: {
+                            status: 'healthy',
+                            remaining: rateLimit.data.rate.remaining,
+                            limit: rateLimit.data.rate.limit,
+                            reset: new Date(rateLimit.data.rate.reset * 1000).toISOString()
+                        }
+                    };
+                    health.checks.github = githubHealthCache.value;
+                } catch (error) {
+                    logger.error('Health check: GitHub API unreachable', { error: error.message });
+                    // Not cached: a failure should be retried on the next probe rather
+                    // than pinned as unhealthy for a minute.
+                    health.checks.github = {
+                        status: 'unhealthy',
+                        ...(process.env.NODE_ENV === 'production' ? {} : { error: error.message })
+                    };
+                }
             }
         } else {
             health.checks.github = {

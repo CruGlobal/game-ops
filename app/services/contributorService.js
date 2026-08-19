@@ -826,33 +826,51 @@ export const awardBadges = async (pullRequestNumber = null, username = null) => 
             }
 
             if (badgesToAward.length > 0) {
-                const badges = contributor.badges || [];
+                // This runs both per-event and as a 6-hour batch, so two writers can be
+                // holding the same stale snapshot of `contributor`. Writing the whole
+                // badges array and all twelve flags back from that snapshot meant one
+                // writer could re-push a badge the other had just awarded, or clobber a
+                // badge appended between the read and the write.
+                //
+                // Serialised per contributor, with the flags re-read inside the lock so
+                // they — not the snapshot — decide what still needs awarding.
+                const awarded = await prisma.$transaction(async (tx) => {
+                    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`badges:${contributor.username}`}, 0))`;
 
-                for (const { badge, image } of badgesToAward) {
+                    const fresh = await tx.contributor.findUnique({
+                        where: { username: contributor.username }
+                    });
+                    if (!fresh) return [];
+
+                    const badges = Array.isArray(fresh.badges) ? [...fresh.badges] : [];
+                    const flagUpdates = {};
+                    const newlyAwarded = [];
+
+                    for (const { badge, image, flag } of badgesToAward) {
+                        if (fresh[flag]) continue; // another writer got there first
+                        flagUpdates[flag] = true;
+                        badges.push({ badge, date: new Date().toISOString() });
+                        newlyAwarded.push({ badge, image });
+                    }
+
+                    if (newlyAwarded.length === 0) return [];
+
+                    await tx.contributor.update({
+                        where: { username: contributor.username },
+                        data: { badges, ...flagUpdates }
+                    });
+
+                    return newlyAwarded;
+                });
+
+                // Announce only what this writer actually awarded, and only after the
+                // write committed — previously the toast fired even when the badge was
+                // a duplicate.
+                for (const { badge, image } of awarded) {
                     console.log(`🎉 Congratulations @${contributor.username}, you've earned the ${badge}! 🎉\n\n![Badge](${domain}/images/${image})`);
                     results.push({ username: contributor.username, badge, badgeImage: image });
                     emitBadgeAwarded({ username: contributor.username, badgeName: badge, badgeType: 'achievement' });
-                    badges.push({ badge, date: new Date().toISOString() });
                 }
-
-                await prisma.contributor.update({
-                    where: { username: contributor.username },
-                    data: {
-                        badges,
-                        firstPrAwarded: contributor.firstPrAwarded,
-                        firstReviewAwarded: contributor.firstReviewAwarded,
-                        first10PrsAwarded: contributor.first10PrsAwarded,
-                        first10ReviewsAwarded: contributor.first10ReviewsAwarded,
-                        first50PrsAwarded: contributor.first50PrsAwarded,
-                        first50ReviewsAwarded: contributor.first50ReviewsAwarded,
-                        first100PrsAwarded: contributor.first100PrsAwarded,
-                        first100ReviewsAwarded: contributor.first100ReviewsAwarded,
-                        first500PrsAwarded: contributor.first500PrsAwarded,
-                        first500ReviewsAwarded: contributor.first500ReviewsAwarded,
-                        first1000PrsAwarded: contributor.first1000PrsAwarded,
-                        first1000ReviewsAwarded: contributor.first1000ReviewsAwarded
-                    }
-                });
             }
         }
     } catch (err) {
@@ -994,6 +1012,9 @@ export const getTopReviewersDateRange = async (startDate, endDate, page, limit) 
 
 // Get the top contributors based on PR count with gamification data
 export const getTopContributors = async (options = {}) => {
+    // The caller's limit was accepted and then ignored — take was hardcoded to 50, so
+    // the MCP tool's limit argument (and its documented 1-100 range) did nothing.
+    const limit = Number.isInteger(options.limit) && options.limit > 0 ? options.limit : 50;
     let contributors;
 
         // Check if DevOps filter is enabled globally
@@ -1023,7 +1044,7 @@ export const getTopContributors = async (options = {}) => {
             orderBy: {
                 prCount: 'desc'
             },
-            take: 50,
+            take: limit,
             select: {
                 username: true,
                 prCount: true,
@@ -1058,6 +1079,9 @@ export const getTopContributors = async (options = {}) => {
 
 // Get the top reviewers based on review count with gamification data
 export const getTopReviewers = async (options = {}) => {
+    // The caller's limit was accepted and then ignored — take was hardcoded to 50, so
+    // the MCP tool's limit argument (and its documented 1-100 range) did nothing.
+    const limit = Number.isInteger(options.limit) && options.limit > 0 ? options.limit : 50;
     let reviewers;
 
         // Check if DevOps filter is enabled globally
@@ -1087,7 +1111,7 @@ export const getTopReviewers = async (options = {}) => {
             orderBy: {
                 reviewCount: 'desc'
             },
-            take: 50,
+            take: limit,
             select: {
                 username: true,
                 prCount: true,
@@ -1263,50 +1287,29 @@ export async function getPRRangeInfo() {
             }
         });
 
-        // Calculate statistics from contributor data
-        const contributors = await prisma.contributor.findMany({
-            include: {
-                processedPRs: true,
-                contributions: true
-            }
-        });
+        // Aggregated in the database rather than in memory. This previously pulled every
+        // contributor together with every processed PR and every daily contribution row
+        // — tens of thousands of rows — to compute a handful of counts, a min and a max
+        // that indexes answer directly. One admin click, or one MCP get_data_overview
+        // call, materialised the lot.
+        const [counters, prBounds, distinctPRRows, dateBounds] = await Promise.all([
+            prisma.contributor.aggregate({ _sum: { prCount: true, reviewCount: true } }),
+            prisma.processedPR.aggregate({ _min: { prNumber: true }, _max: { prNumber: true } }),
+            // COUNT(DISTINCT ...) returns one row; groupBy would hand back ~11k of them
+            // just to take .length.
+            prisma.$queryRaw`SELECT COUNT(DISTINCT pr_number)::int AS n FROM processed_prs`,
+            prisma.contribution.aggregate({ _min: { date: true }, _max: { date: true } })
+        ]);
 
-        let totalPRs = 0;
-        let totalReviews = 0;
-        let oldestDate = null;
-        let newestDate = null;
-        let allPRNumbers = new Set();
-
-        contributors.forEach(contributor => {
-            // Convert BigInt to Number for addition
-            totalPRs += Number(contributor.prCount || 0n);
-            totalReviews += Number(contributor.reviewCount || 0n);
-
-            // Collect PR numbers from processed PRs
-            if (contributor.processedPRs) {
-                contributor.processedPRs.forEach(pr => {
-                    allPRNumbers.add(pr.prNumber);
-                });
-            }
-
-            // Find date ranges from contribution history (now a relation, not JSON array)
-            if (contributor.contributions && Array.isArray(contributor.contributions) && contributor.contributions.length > 0) {
-                contributor.contributions.forEach(contrib => {
-                    const contribDate = new Date(contrib.date);
-                    if (!oldestDate || contribDate < oldestDate) {
-                        oldestDate = contribDate;
-                    }
-                    if (!newestDate || contribDate > newestDate) {
-                        newestDate = contribDate;
-                    }
-                });
-            }
-        });
-
-        // Calculate PR range from collected numbers (convert BigInt to Number for sorting)
-        const prNumbers = Array.from(allPRNumbers).map(n => Number(n)).sort((a, b) => a - b);
-        const firstPR = prNumbers.length > 0 ? prNumbers[0] : null;
-        const latestPR = prNumbers.length > 0 ? prNumbers[prNumbers.length - 1] : null;
+        const uniquePRCount = Number(distinctPRRows?.[0]?.n || 0);
+        const totalPRs = Number(counters._sum.prCount || 0n);
+        const totalReviews = Number(counters._sum.reviewCount || 0n);
+        const oldestDate = dateBounds._min.date || null;
+        const newestDate = dateBounds._max.date || null;
+        const firstPR = prBounds._min.prNumber !== null && prBounds._min.prNumber !== undefined
+            ? Number(prBounds._min.prNumber) : null;
+        const latestPR = prBounds._max.prNumber !== null && prBounds._max.prNumber !== undefined
+            ? Number(prBounds._max.prNumber) : null;
 
         // Update or create metadata using Prisma
         metadata = await prisma.pRMetadata.upsert({
@@ -1319,7 +1322,7 @@ export async function getPRRangeInfo() {
             update: {
                 firstPRFetched: firstPR,
                 latestPRFetched: latestPR,
-                totalPRsInDB: prNumbers.length,
+                totalPRsInDB: uniquePRCount,
                 dateRangeStart: oldestDate,
                 dateRangeEnd: newestDate,
                 lastFetchDate: new Date()
@@ -1329,7 +1332,7 @@ export async function getPRRangeInfo() {
                 repoName: repoName,
                 firstPRFetched: firstPR,
                 latestPRFetched: latestPR,
-                totalPRsInDB: prNumbers.length,
+                totalPRsInDB: uniquePRCount,
                 dateRangeStart: oldestDate,
                 dateRangeEnd: newestDate,
                 lastFetchDate: new Date()
