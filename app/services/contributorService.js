@@ -181,59 +181,25 @@ export const updateContributor = async (username, type, date, merged = false) =>
     if (type === 'prCount') {
         updateData.prCount = { increment: 1 };
         
-        // Create or update Contribution record (daily aggregate)
-        const existingContribution = await prisma.contribution.findFirst({
-            where: {
-                contributorId: contributor.id,
-                date: dateOnly
+        // Upsert on the unique (contributor, date). The previous find-then-create let
+        // two same-day events both see no row and both insert.
+        await prisma.contribution.upsert({
+            where: { contributorId_date: { contributorId: contributor.id, date: dateOnly } },
+            create: { contributorId: contributor.id, date: dateOnly, count: 1, merged },
+            update: {
+                count: { increment: 1 },
+                ...(merged ? { merged: true } : {})
             }
         });
-
-        if (existingContribution) {
-            await prisma.contribution.update({
-                where: { id: existingContribution.id },
-                data: {
-                    count: { increment: 1 },
-                    merged: merged || existingContribution.merged
-                }
-            });
-        } else {
-            await prisma.contribution.create({
-                data: {
-                    contributorId: contributor.id,
-                    date: dateOnly,
-                    count: 1,
-                    merged: merged
-                }
-            });
-        }
     } else {
         updateData.reviewCount = { increment: 1 };
         
-        // Create or update Review record (daily aggregate)
-        const existingReview = await prisma.review.findFirst({
-            where: {
-                contributorId: contributor.id,
-                date: dateOnly
-            }
+        // Upsert on the unique (contributor, date), same reasoning as contributions.
+        await prisma.review.upsert({
+            where: { contributorId_date: { contributorId: contributor.id, date: dateOnly } },
+            create: { contributorId: contributor.id, date: dateOnly, count: 1 },
+            update: { count: { increment: 1 } }
         });
-
-        if (existingReview) {
-            await prisma.review.update({
-                where: { id: existingReview.id },
-                data: {
-                    count: { increment: 1 }
-                }
-            });
-        } else {
-            await prisma.review.create({
-                data: {
-                    contributorId: contributor.id,
-                    date: dateOnly,
-                    count: 1
-                }
-            });
-        }
     }
 
     const updated = await prisma.contributor.update({

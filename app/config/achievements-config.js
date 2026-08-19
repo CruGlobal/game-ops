@@ -198,7 +198,12 @@ export const checkAchievements = (contributor) => {
     const pointAchievements = ['points-1000', 'points-5000', 'points-10000'];
     for (const achId of pointAchievements) {
         const ach = ACHIEVEMENTS[achId];
-        if (!earnedIds.has(achId) && contributor.totalPoints >= ach.threshold) {
+        // allTimePoints, not totalPoints: the latter is zeroed every quarter, so a
+        // steady contributor earning 900 a quarter would never reach the 1,000/5,000/
+        // 10,000 thresholds no matter how long they contributed. getAchievementProgress
+        // already measures against allTimePoints, so the progress bar and the award
+        // check disagreed.
+        if (!earnedIds.has(achId) && Number(contributor.allTimePoints) >= ach.threshold) {
             newAchievements.push(ach);
         }
     }

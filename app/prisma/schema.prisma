@@ -75,6 +75,10 @@ model Contribution {
   merged        Boolean     @default(false)
   contributor   Contributor @relation(fields: [contributorId], references: [id], onDelete: Cascade)
 
+  // One row per contributor per day. The write path is find-then-create, so without
+  // this two same-day events could both miss and insert, leaving consumers that read
+  // a single row per day undercounting.
+  @@unique([contributorId, date])
   @@index([contributorId, date])
   @@map("contributions")
 }
@@ -86,6 +90,10 @@ model Review {
   count         Int         @default(0)
   contributor   Contributor @relation(fields: [contributorId], references: [id], onDelete: Cascade)
 
+  // One row per contributor per day. The write path is find-then-create, so without
+  // this two same-day events could both miss and insert, leaving consumers that read
+  // a single row per day undercounting.
+  @@unique([contributorId, date])
   @@index([contributorId, date])
   @@map("reviews")
 }

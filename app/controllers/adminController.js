@@ -354,7 +354,10 @@ export async function getQuarterlyLeaderboardController(req, res) {
 export async function getQuarterlyLeaderboardByQuarterController(req, res) {
     try {
         const { quarter } = req.params;
-        if (!/^\d{4}-Q[1-4]$/.test(quarter)) {
+        // Accept the tertile prefix too. systemType defaults to 'tertile', which
+        // produces labels like 2026-T2, so this rejected the default configuration's
+        // own periods: a tertile leaderboard 400'd even though its winner row existed.
+        if (!/^\d{4}-[QT][1-4]$/.test(quarter)) {
             return res.status(400).json({ success: false, message: 'Invalid quarter format' });
         }
         // DevOps members see DevOps winners unless they toggled to view non-DevOps
@@ -424,7 +427,7 @@ export async function recomputeCurrentQuarterController(req, res) {
 export async function recomputeHallOfFameController(req, res) {
     try {
         const { quarter } = req.body;
-        if (quarter && !/^\d{4}-Q[1-4]$/.test(quarter)) {
+        if (quarter && !/^\d{4}-[QT][1-4]$/.test(quarter)) {
             return res.status(400).json({ success: false, message: 'Invalid quarter format' });
         }
         console.log('Admin requested recompute Hall of Fame for quarter:', quarter || '(current)');

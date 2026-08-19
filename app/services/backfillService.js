@@ -204,32 +204,14 @@ async function processPR(pr) {
             }
 
             if (prCreated) {
-                // Find or create contribution record for this date
-                const existingContribution = await prisma.contribution.findFirst({
-                    where: {
-                        contributorId: contributor.id,
-                        date: dateOnly
-                    }
+                // Upsert on the unique (contributor, date). Now that the constraint
+                // exists, a find-then-create here would throw on any collision with a
+                // concurrent ingest rather than merging into the day's row.
+                await prisma.contribution.upsert({
+                    where: { contributorId_date: { contributorId: contributor.id, date: dateOnly } },
+                    create: { contributorId: contributor.id, date: dateOnly, count: 1, merged: true },
+                    update: { count: { increment: 1 }, merged: true }
                 });
-
-                if (existingContribution) {
-                    await prisma.contribution.update({
-                        where: { id: existingContribution.id },
-                        data: {
-                            count: { increment: 1 },
-                            merged: true
-                        }
-                    });
-                } else {
-                    await prisma.contribution.create({
-                        data: {
-                            contributorId: contributor.id,
-                            date: dateOnly,
-                            count: 1,
-                            merged: true
-                        }
-                    });
-                }
 
                 // Calculate and award points for the merged PR using labels/streak logic
                 const pointsData = calculatePoints(pr, contributor);
@@ -345,30 +327,11 @@ async function processPR(pr) {
                         }
 
                         if (reviewCreated) {
-                            // Find or create review record for this date
-                            const existingReviewDay = await prisma.review.findFirst({
-                                where: {
-                                    contributorId: reviewerRecord.id,
-                                    date: dateOnly
-                                }
+                            await prisma.review.upsert({
+                                where: { contributorId_date: { contributorId: reviewerRecord.id, date: dateOnly } },
+                                create: { contributorId: reviewerRecord.id, date: dateOnly, count: 1 },
+                                update: { count: { increment: 1 } }
                             });
-
-                            if (existingReviewDay) {
-                                await prisma.review.update({
-                                    where: { id: existingReviewDay.id },
-                                    data: {
-                                        count: { increment: 1 }
-                                    }
-                                });
-                            } else {
-                                await prisma.review.create({
-                                    data: {
-                                        contributorId: reviewerRecord.id,
-                                        date: dateOnly,
-                                        count: 1
-                                    }
-                                });
-                            }
 
                             // Award points for the review using PR number for traceability
                             const reviewDate = new Date(review.submitted_at);

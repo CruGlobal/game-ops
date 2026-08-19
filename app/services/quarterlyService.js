@@ -492,51 +492,65 @@ export async function updateQuarterlyStats(username, updates, activityDate = nul
             }
         }
 
-        const contributor = await prisma.contributor.findUnique({
-            where: { username },
-            select: { quarterlyStats: true }
+        // quarterlyStats is a single JSON blob, so this is a read-modify-write with no
+        // atomic increment available. Two webhooks for the same contributor — a PR
+        // worth 40 and a review worth 15 — both read {points: 100}; one writes 140, the
+        // other 115, and whichever lands second silently discards the other's points
+        // and its PR increment. point_history keeps both, so the quarter tally drifts
+        // below the history it is supposed to summarise, skewing the quarterly
+        // leaderboard, winner selection and the bills thresholds.
+        //
+        // Serialised per contributor. The lock is held only for this blob's update and
+        // released with the transaction however it ends.
+        return await prisma.$transaction(async (tx) => {
+            await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`quarterly-stats:${username}`}, 0))`;
+
+            const contributor = await tx.contributor.findUnique({
+                where: { username },
+                select: { quarterlyStats: true }
+            });
+
+            if (!contributor) {
+                console.warn(`Contributor ${username} not found for quarterly update`);
+                return null;
+            }
+
+            let quarterlyStats = contributor.quarterlyStats || {};
+
+            // Initialize quarterly stats if not set or if quarter changed
+            if (!quarterlyStats.currentQuarter || quarterlyStats.currentQuarter !== currentQuarter) {
+                quarterlyStats = {
+                    currentQuarter,
+                    quarterStartDate: start,
+                    quarterEndDate: end,
+                    prsThisQuarter: 0,
+                    reviewsThisQuarter: 0,
+                    pointsThisQuarter: 0,
+                    lastUpdated: new Date()
+                };
+            }
+
+            // Update stats
+            if (updates.prs) {
+                quarterlyStats.prsThisQuarter = (quarterlyStats.prsThisQuarter || 0) + updates.prs;
+            }
+            if (updates.reviews) {
+                quarterlyStats.reviewsThisQuarter = (quarterlyStats.reviewsThisQuarter || 0) + updates.reviews;
+            }
+            if (updates.points) {
+                quarterlyStats.pointsThisQuarter = (quarterlyStats.pointsThisQuarter || 0) + updates.points;
+            }
+
+            quarterlyStats.lastUpdated = new Date();
+
+            const updated = await tx.contributor.update({
+                where: { username },
+                data: { quarterlyStats },
+                select: { quarterlyStats: true }
+            });
+
+            return updated.quarterlyStats;
         });
-
-        if (!contributor) {
-            console.warn(`Contributor ${username} not found for quarterly update`);
-            return null;
-        }
-
-        let quarterlyStats = contributor.quarterlyStats || {};
-
-        // Initialize quarterly stats if not set or if quarter changed
-        if (!quarterlyStats.currentQuarter || quarterlyStats.currentQuarter !== currentQuarter) {
-            quarterlyStats = {
-                currentQuarter,
-                quarterStartDate: start,
-                quarterEndDate: end,
-                prsThisQuarter: 0,
-                reviewsThisQuarter: 0,
-                pointsThisQuarter: 0,
-                lastUpdated: new Date()
-            };
-        }
-
-        // Update stats
-        if (updates.prs) {
-            quarterlyStats.prsThisQuarter = (quarterlyStats.prsThisQuarter || 0) + updates.prs;
-        }
-        if (updates.reviews) {
-            quarterlyStats.reviewsThisQuarter = (quarterlyStats.reviewsThisQuarter || 0) + updates.reviews;
-        }
-        if (updates.points) {
-            quarterlyStats.pointsThisQuarter = (quarterlyStats.pointsThisQuarter || 0) + updates.points;
-        }
-
-        quarterlyStats.lastUpdated = new Date();
-
-        const updated = await prisma.contributor.update({
-            where: { username },
-            data: { quarterlyStats },
-            select: { quarterlyStats: true }
-        });
-
-        return updated.quarterlyStats;
     } catch (error) {
         console.error(`Error updating quarterly stats for ${username}:`, error);
         throw error;
@@ -884,14 +898,18 @@ export async function recomputeHallOfFame(quarterString) {
     const quarter = quarterString || await getCurrentQuarter();
     const { start, end } = await getQuarterDateRange(quarter);
 
-    // Sum points by contributor for the quarter (exclude achievement points)
+    // Rank on the SAME basis the live archive and the bills payout use: every point
+    // recorded in the window, challenge and achievement bonuses included.
+    //
+    // Restricting this to PR_MERGED + REVIEW_COMPLETED meant a recompute could crown a
+    // different winner than the one who was actually archived and paid — someone who
+    // won on 2,450 including bonuses could be replaced by a rival on 2,100 of "pure"
+    // points, leaving the Hall of Fame contradicting the payout record with nothing to
+    // explain the difference.
     const totals = await prisma.pointHistory.groupBy({
         by: ['contributorId'],
         where: {
-            timestamp: { gte: start, lte: end },
-            reason: {
-                in: [POINT_REASONS.PR_MERGED, POINT_REASONS.REVIEW_COMPLETED]
-            }
+            timestamp: { gte: start, lte: end }
         },
         _sum: { points: true }
     });
@@ -1121,6 +1139,11 @@ export async function recomputeHallOfFameAll() {
         return { updatedQuarters: [], message: 'No historical activity found' };
     }
 
+    // Kept deliberately, despite wiping rows that awards were paid against: the payout
+    // record does not live here. awardQuarterlyBills writes quarterly_awards and
+    // bill_gifts, neither of which this touches, so who was paid survives a rebuild
+    // independently of the Hall of Fame display.
+    //
     // Full rebuild: wipe every existing Hall of Fame row before regenerating.
     // recomputeHallOfFame keys rows by the `quarter` LABEL, and a config change
     // re-slices time and relabels periods (e.g. the tertile end-year offset shifts
