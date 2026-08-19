@@ -14,7 +14,6 @@ import {
     bulkActionController
 } from '../controllers/challengeController.js';
 import { getTemplates } from '../config/challenge-templates.js';
-import { ensureAuthenticated } from '../middleware/ensureAuthenticated.js';
 import { ensureDevOpsTeamMember } from '../middleware/ensureDevOpsTeamMember.js';
 
 const router = express.Router();

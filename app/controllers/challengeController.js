@@ -14,6 +14,10 @@ import {
     bulkDeleteChallenges
 } from '../services/challengeService.js';
 
+// difficulty is interpolated into a class attribute on the public /challenges page,
+// so every write path validates against this list.
+export const CHALLENGE_DIFFICULTIES = ['easy', 'medium', 'hard'];
+
 // Get all active challenges
 export const getActiveChallengesController = async (req, res) => {
     try {
@@ -39,10 +43,13 @@ export const getChallengeDetailsController = async (req, res) => {
 export const joinChallengeController = async (req, res) => {
     try {
         const { id } = req.params;
-        const { username } = req.body;
+
+        // Take the identity from the session, never from the body. Trusting
+        // req.body.username let any caller enrol an arbitrary contributor.
+        const username = req.user?.username;
 
         if (!username) {
-            return res.status(400).json({ error: 'Username is required' });
+            return res.status(401).json({ error: 'Authentication required' });
         }
 
         const result = await joinChallenge(username, id);
@@ -95,6 +102,10 @@ export const createOKRChallengeController = async (req, res) => {
             difficulty,
             okrMetadata
         } = req.body;
+
+        if (difficulty && !CHALLENGE_DIFFICULTIES.includes(difficulty)) {
+            return res.status(400).json({ error: `difficulty must be one of: ${CHALLENGE_DIFFICULTIES.join(', ')}` });
+        }
 
         // Validate required fields
         if (!title || !description || !labelFilters || !Array.isArray(labelFilters) || labelFilters.length === 0) {
@@ -180,6 +191,13 @@ export const createManualChallengeController = async (req, res) => {
             return res.status(400).json({
                 error: 'End date is required'
             });
+        }
+
+        // difficulty reaches the public /challenges page inside a class attribute, so
+        // constrain it here the same way updateChallengeController already does rather
+        // than trusting whatever the caller sends.
+        if (difficulty && !CHALLENGE_DIFFICULTIES.includes(difficulty)) {
+            return res.status(400).json({ error: `difficulty must be one of: ${CHALLENGE_DIFFICULTIES.join(', ')}` });
         }
 
         // Build challenge data
@@ -282,7 +300,7 @@ export const updateChallengeController = async (req, res) => {
         }
 
         // Validate difficulty if provided
-        if (updateData.difficulty && !['easy', 'medium', 'hard'].includes(updateData.difficulty)) {
+        if (updateData.difficulty && !CHALLENGE_DIFFICULTIES.includes(updateData.difficulty)) {
             return res.status(400).json({
                 error: 'Difficulty must be one of: easy, medium, hard'
             });

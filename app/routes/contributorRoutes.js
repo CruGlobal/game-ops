@@ -4,14 +4,10 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { validateDateRange, validatePagination, validateRequest } from '../utils/validation.js';
 import {
-    initializeDatabaseController,
-    fetchPRs,
-    awardContributorBadges,
     topContributors,
     topReviewers,
     topReviewersDateRange,
     topContributorsDateRange,
-    awardBillsAndVonettesController,
     fetchActivityController,
     getMonthlyAggregatedData,
     getAllAchievementsController,
@@ -66,9 +62,6 @@ import {
     retryBillGiftController,
     setBillsEmailController
 } from '../controllers/adminController.js';
-import { authenticate } from '../middleware/authMiddleware.js';
-import { login } from '../controllers/authController.js';
-import { ensureAuthenticated } from '../middleware/ensureAuthenticated.js';
 import { ensureDevOpsTeamMember } from '../middleware/ensureDevOpsTeamMember.js';
 import { getCronStatusController, setCronStatusController } from '../controllers/adminController.js';
 
@@ -76,26 +69,11 @@ const router = express.Router();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Route to initialize the database
-router.get('/initialize-database', authenticate, initializeDatabaseController);
-
-// Route to fetch pull requests
-router.get('/fetch-pull-requests', authenticate, fetchPRs);
-
-// Route to award badges to contributors
-router.get('/award-badges', authenticate, awardContributorBadges);
-
 // Route to get the top contributors
 router.get('/top-contributors', topContributors);
 
 // Route to get the top reviewers
 router.get('/top-reviewers', topReviewers);
-
-// Route to award Bills and Vonettes
-router.get('/award-bills-vonettes', authenticate, awardBillsAndVonettesController);
-
-// Admin login route
-router.post('/admin/login', login);
 
 // Route to get all contributors
 router.get('/admin/contributors', ensureDevOpsTeamMember, getContributors);

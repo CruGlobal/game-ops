@@ -23,7 +23,6 @@ import { errorHandler } from './middleware/errorHandler.js';
 import logger from './utils/logger.js';
 import session from 'express-session';
 import passport from './config/passport.js';
-import { ensureAuthenticated } from './middleware/ensureAuthenticated.js';
 import { ensureDevOpsTeamMember } from './middleware/ensureDevOpsTeamMember.js';
 import { ensureRepositoryAccess } from './middleware/ensureRepositoryAccess.js';
 import { socketConfig, SOCKET_EVENTS } from './config/websocket-config.js';
@@ -97,6 +96,10 @@ const limiter = rateLimit({
     message: 'Too many requests from this IP, please try again later.',
     standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
     legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+    // GitHub delivers every hook from a small IP pool, so a busy day can exhaust one
+    // shared per-IP budget. GitHub does not retry a 429, so the events are simply
+    // lost. The endpoint authenticates by HMAC signature, not by rate.
+    skip: (req) => req.path.startsWith('/api/webhooks/')
 });
 app.use(limiter);
 
@@ -106,16 +109,31 @@ if (process.env.NODE_ENV === 'production') {
     app.set('trust proxy', 1);
 }
 
-app.use(session({
-    secret: process.env.SESSION_SECRET || process.env.GITHUB_CLIENT_SECRET,
+// Falling back to the OAuth client secret couples two trust domains: rotating the
+// OAuth app would silently invalidate every session, and exposure of either secret
+// would compromise both. Refuse to boot instead of doing that quietly.
+if (!process.env.SESSION_SECRET) {
+    if (process.env.NODE_ENV === 'production') {
+        throw new Error('SESSION_SECRET is required in production');
+    }
+    logger.warn('SESSION_SECRET is not set; using an insecure development secret');
+}
+
+const sessionMiddleware = session({
+    secret: process.env.SESSION_SECRET || 'insecure-development-session-secret',
     resave: false,
     saveUninitialized: false,
     cookie: {
         httpOnly: true,
         sameSite: 'lax',
-        secure: process.env.NODE_ENV === 'production'
+        secure: process.env.NODE_ENV === 'production',
+        // Without a maxAge the cookie is a session cookie the server can never expire,
+        // and MemoryStore never evicts it.
+        maxAge: 12 * 60 * 60 * 1000
     }
-}));
+});
+
+app.use(sessionMiddleware);
 
 app.use(passport.initialize());
 app.use(passport.session());
@@ -126,6 +144,17 @@ const io = new Server(httpServer, socketConfig);
 
 // Set Socket.IO instance for use in other modules
 setSocketIO(io);
+
+// The socket streams the same org-gated data as the pages, so the handshake carries
+// the same requirement. Reusing the Express session middleware gives the handshake
+// access to the passport user without a second auth mechanism.
+io.engine.use(sessionMiddleware);
+io.use((socket, next) => {
+    if (process.env.NODE_ENV === 'test') return next();
+    if (socket.request.session?.passport?.user) return next();
+    logger.warn('Rejected unauthenticated socket handshake', { socketId: socket.id });
+    return next(new Error('Authentication required'));
+});
 
 // Socket.IO connection handling
 io.on(SOCKET_EVENTS.CONNECTION, (socket) => {
@@ -212,6 +241,19 @@ app.get('/analytics', ensureRepositoryAccess, (req, res) => {
 // Routes for GitHub authentication
 app.get('/auth/github', passport.authenticate('github', { scope: ['user:email'] }));
 
+// Without this there is no server-side way to end a session: the cookie stays valid
+// until it expires, and with MemoryStore the only other way to clear one is a restart.
+app.post('/logout', (req, res, next) => {
+    req.logout((err) => {
+        if (err) return next(err);
+        req.session.destroy((destroyErr) => {
+            if (destroyErr) return next(destroyErr);
+            res.clearCookie('connect.sid');
+            res.json({ success: true });
+        });
+    });
+});
+
 app.get('/auth/github/callback',
     // keepSessionInfo preserves req.session.returnTo across passport 0.6.0's
     // login session regeneration; without it deep links fall back to /leaderboard.
@@ -241,11 +283,17 @@ app.get('/admin', ensureDevOpsTeamMember, (req, res) => {
 });
 
 app.use(express.static('public'));
-app.use('/api', contributorRoutes);
+// Public by necessity: the ALB and Datadog probe these, and GitHub webhooks
+// authenticate by HMAC signature rather than by session.
 app.use('/api', healthRoutes);
-app.use('/api/challenges', challengeRoutes);
-app.use('/api/analytics', analyticsRoutes);
 app.use('/api/webhooks', webhookRoutes);
+
+// Everything else under /api serves exactly the data the org-gated pages render, so
+// it carries the same guard. ensureRepositoryAccess answers /api/* with 401 JSON
+// instead of an OAuth redirect.
+app.use('/api', ensureRepositoryAccess, contributorRoutes);
+app.use('/api/challenges', ensureRepositoryAccess, challengeRoutes);
+app.use('/api/analytics', ensureRepositoryAccess, analyticsRoutes);
 
 // Test routes (development only)
 if (process.env.NODE_ENV !== 'production') {

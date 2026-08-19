@@ -26,10 +26,14 @@ router.get('/health', async (req, res) => {
                 state: 'connected'
             };
         } catch (dbError) {
+            // /api/health is deliberately public for the ALB and Datadog, so the raw
+            // driver message (which carries host, database and query detail) must not
+            // travel with the response. Log it instead.
+            logger.error('Health check: database unreachable', { error: dbError.message });
             health.checks.database = {
                 status: 'unhealthy',
                 state: 'disconnected',
-                error: dbError.message
+                ...(process.env.NODE_ENV === 'production' ? {} : { error: dbError.message })
             };
         }
 
