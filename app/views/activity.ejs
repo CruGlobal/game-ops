@@ -46,7 +46,9 @@
                                min="1">
                     </div>
                 </div>
-                <button type="submit" id="fetchButton" class="btn btn-primary">
+                <!-- type="button": as a submit it navigated the page mid-fetch, killing every
+                     in-flight request so results never rendered. -->
+                <button type="button" id="fetchButton" class="btn btn-primary">
                     <span>🔍 Fetch Activity</span>
                 </button>
             </form>
