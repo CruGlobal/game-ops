@@ -527,4 +527,14 @@
         }
     };
 
+    // Bind the export buttons. They previously carried inline onclick attributes, which
+    // the nonce-only CSP refuses to run, so window.exportData was defined but
+    // unreachable and every export button was inert.
+    document.addEventListener('click', (event) => {
+        const button = event.target.closest('[data-export]');
+        if (!button) return;
+        event.preventDefault();
+        window.exportData(button.dataset.export);
+    });
+
 })();

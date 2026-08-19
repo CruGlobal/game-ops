@@ -49,7 +49,10 @@
 
 <script nonce="<%= nonce %>">
     // Pass authenticated user info to client JS
-    window.__currentUser = <%- user ? JSON.stringify({ username: user.username }) : 'null' %>;
+    <%# Escape < so the payload cannot terminate this script block. Safe today only
+        because a GitHub login cannot contain < or /, which is a property of the data
+        rather than of this code. %>
+    window.__currentUser = <%- user ? JSON.stringify({ username: user.username }).replace(/</g, '\\u003c') : 'null' %>;
 </script>
 <script src="/socket.io/socket.io.js"></script>
 <script src="/notification-settings.js"></script>

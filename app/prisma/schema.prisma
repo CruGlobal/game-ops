@@ -80,6 +80,10 @@ model Contribution {
   // a single row per day undercounting.
   @@unique([contributorId, date])
   @@index([contributorId, date])
+  // The contribution grid groups by date across all contributors. The composite index
+  // above leads with contributor_id, so it cannot serve that query and it fell back to
+  // a sequential scan on every request.
+  @@index([date])
   @@map("contributions")
 }
 
