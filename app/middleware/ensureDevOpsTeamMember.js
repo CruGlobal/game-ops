@@ -1,5 +1,11 @@
 import fetch from 'node-fetch';
 
+// The admin page fires a burst of admin API calls, each of which re-checked team
+// membership against GitHub — a serial round-trip and a rate-limit unit per request,
+// on the same token that ingestion uses. The verdict is stable for far longer than a
+// page load, so it is remembered on the session.
+const DEVOPS_MEMBERSHIP_TTL_MS = 15 * 60 * 1000;
+
 /**
  * Middleware to ensure user is a DevOps team member
  * Used for admin pages and admin API endpoints
@@ -13,6 +19,12 @@ export const ensureDevOpsTeamMember = async (req, res, next) => {
     }
 
     const isAuth = typeof req.isAuthenticated === 'function' ? req.isAuthenticated() : false;
+
+    if (isAuth && req.session?.devOpsVerifiedAt &&
+        Date.now() - req.session.devOpsVerifiedAt < DEVOPS_MEMBERSHIP_TTL_MS) {
+        return next();
+    }
+
     if (isAuth) {
         const token = process.env.GITHUB_TOKEN;
         const org = process.env.GITHUB_ORG; // Read GitHub organization from environment variable
@@ -29,6 +41,7 @@ export const ensureDevOpsTeamMember = async (req, res, next) => {
             if (response.ok) {
                 const membership = await response.json();
                 if (membership.state === 'active') {
+                    if (req.session) req.session.devOpsVerifiedAt = Date.now();
                     return next();
                 }
             } else {
