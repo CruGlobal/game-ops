@@ -1225,7 +1225,14 @@ export async function awardQuarterlyBills(quarterString) {
         console.log(`Awarding quarterly bills for ${quarter}`);
 
         // --- Non-DevOps awards (top 3 from filtered leaderboard) ---
-        const allContributors = await prisma.contributor.findMany({
+        // Ranked from point_history, exactly as archiveQuarterWinners now is. Reading
+        // contributor.quarterlyStats here would have paid a different person than the
+        // archive credits: the per-event path zeroes that cache the moment a
+        // contributor's first PR of the new quarter lands, and the rollover runs after
+        // the boundary — so the outgoing quarter's leader could be filtered out of
+        // their own payout by the `currentQuarter !== quarter` test below.
+        const billsTotals = await quarterTotalsFromHistory(quarter);
+        const contributorRows = await prisma.contributor.findMany({
             where: {
                 isDevOps: false,
                 username: {
@@ -1235,12 +1242,19 @@ export async function awardQuarterlyBills(quarterString) {
                 }
             },
             select: {
+                id: true,
                 username: true,
                 avatarUrl: true,
-                quarterlyStats: true,
                 totalBillsAwarded: true
             }
         });
+        const allContributors = contributorRows.map(c => ({
+            ...c,
+            quarterlyStats: {
+                currentQuarter: quarter,
+                ...(billsTotals.get(String(c.id)) || { prsThisQuarter: 0, reviewsThisQuarter: 0, pointsThisQuarter: 0 })
+            }
+        }));
 
         // Only contributors meeting minimum participation threshold qualify for awards
         const ranked = allContributors
@@ -1257,6 +1271,28 @@ export async function awardQuarterlyBills(quarterString) {
             { rank: 2, type: 'Bill',    value: 1, image: '1_bill_57X27.png' },
             { rank: 3, type: 'Bill',    value: 1, image: '1_bill_57X27.png' }
         ];
+
+        // Record the intended winners BEFORE paying any of them. The claim row is
+        // created at the top for concurrency, but results were only written at the very
+        // end — so a crash midway through the payout left a claimed quarter with null
+        // results. The retry short-circuits on P2002 with empty arrays, and
+        // sendTertileWinnerBills falls back to the stored results that were never
+        // written, so ranks 2 and 3 received neither a counter increment nor a gift and
+        // nothing recorded that they should have.
+        await prisma.quarterlyAward.update({
+            where: { quarter },
+            data: {
+                results: {
+                    intendedNonDevOpsWinners: ranked.slice(0, 3).map((c, i) => ({
+                        username: c.username,
+                        rank: awards[i].rank,
+                        type: awards[i].type,
+                        value: awards[i].value,
+                        points: c.quarterlyStats.pointsThisQuarter
+                    }))
+                }
+            }
+        });
 
         for (let i = 0; i < Math.min(ranked.length, 3); i++) {
             const contributor = ranked[i];
