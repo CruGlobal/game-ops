@@ -9,7 +9,7 @@ import { checkAndAwardAchievements } from './achievementService.js';
 import { updateStreak, checkStreakBadges } from './streakService.js';
 import { awardBadges } from './contributorService.js';
 import { autoJoinContributorToActiveChallenges } from './challengeService.js';
-import { isProxyBot, resolveProxyAuthor } from './attributionService.js';
+import { isProxyBot, resolveProxyAuthor, resolveContributorUsername } from './attributionService.js';
 
 const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
 const repoOwner = process.env.REPO_OWNER || 'CruGlobal';
@@ -132,7 +132,22 @@ function emitBackfillProgress() {
  */
 async function processPR(pr) {
     try {
-        const username = pr.user.login;
+        // Attribute exactly as the live pipeline does. Backfilling a range containing
+        // TerraBloks PRs previously created a contributor row for the bot itself and
+        // paid it points, streaks and achievements that processSingleMergedPR would
+        // never have awarded — so the same PR produced different results depending on
+        // whether it arrived by webhook or by backfill.
+        let username = pr.user.login;
+        if (isProxyBot(username)) {
+            const realAuthor = await resolveProxyAuthor(pr.number);
+            if (!realAuthor) {
+                return { prAdded: 0, reviewsAdded: 0, skipped: true };
+            }
+            username = realAuthor;
+        }
+        // And settle on the casing already stored, rather than creating a second row
+        // for a login recovered from a lowercased no-reply trailer.
+        username = await resolveContributorUsername(username);
         let prAdded = 0;
         let reviewsAdded = 0;
 
@@ -204,32 +219,14 @@ async function processPR(pr) {
             }
 
             if (prCreated) {
-                // Find or create contribution record for this date
-                const existingContribution = await prisma.contribution.findFirst({
-                    where: {
-                        contributorId: contributor.id,
-                        date: dateOnly
-                    }
+                // Upsert on the unique (contributor, date). Now that the constraint
+                // exists, a find-then-create here would throw on any collision with a
+                // concurrent ingest rather than merging into the day's row.
+                await prisma.contribution.upsert({
+                    where: { contributorId_date: { contributorId: contributor.id, date: dateOnly } },
+                    create: { contributorId: contributor.id, date: dateOnly, count: 1, merged: true },
+                    update: { count: { increment: 1 }, merged: true }
                 });
-
-                if (existingContribution) {
-                    await prisma.contribution.update({
-                        where: { id: existingContribution.id },
-                        data: {
-                            count: { increment: 1 },
-                            merged: true
-                        }
-                    });
-                } else {
-                    await prisma.contribution.create({
-                        data: {
-                            contributorId: contributor.id,
-                            date: dateOnly,
-                            count: 1,
-                            merged: true
-                        }
-                    });
-                }
 
                 // Calculate and award points for the merged PR using labels/streak logic
                 const pointsData = calculatePoints(pr, contributor);
@@ -269,7 +266,7 @@ async function processPR(pr) {
 
             for (const review of reviews) {
                 if (['APPROVED', 'CHANGES_REQUESTED'].includes((review.state || '').toUpperCase())) {
-                    const reviewerUsername = review.user.login;
+                    let reviewerUsername = review.user.login;
 
                     // Skip proxy-bot auto-approvals (e.g. TerraBloks as cru-devops)
                     // and self-reviews (proxy-bot PR authors resolved to the initiator).
@@ -278,7 +275,14 @@ async function processPR(pr) {
                     if (isProxyBot(effectiveAuthor)) {
                         effectiveAuthor = (await resolveProxyAuthor(pr.number)) || effectiveAuthor;
                     }
-                    if (effectiveAuthor === reviewerUsername) continue;
+                    // Case-insensitive, matching processSingleReview. A strict compare
+                    // let a self-review through whenever the two spellings differed.
+                    if (effectiveAuthor && effectiveAuthor.toLowerCase() === reviewerUsername.toLowerCase()) continue;
+
+                    // Exact-case lookups below would fork a contributor whose stored
+                    // spelling differs from what GitHub returns here, which is the same
+                    // defect resolveContributorUsername exists to prevent on the live path.
+                    reviewerUsername = await resolveContributorUsername(reviewerUsername);
 
                     const reviewer = await prisma.contributor.findUnique({
                         where: { username: reviewerUsername }
@@ -345,30 +349,11 @@ async function processPR(pr) {
                         }
 
                         if (reviewCreated) {
-                            // Find or create review record for this date
-                            const existingReviewDay = await prisma.review.findFirst({
-                                where: {
-                                    contributorId: reviewerRecord.id,
-                                    date: dateOnly
-                                }
+                            await prisma.review.upsert({
+                                where: { contributorId_date: { contributorId: reviewerRecord.id, date: dateOnly } },
+                                create: { contributorId: reviewerRecord.id, date: dateOnly, count: 1 },
+                                update: { count: { increment: 1 } }
                             });
-
-                            if (existingReviewDay) {
-                                await prisma.review.update({
-                                    where: { id: existingReviewDay.id },
-                                    data: {
-                                        count: { increment: 1 }
-                                    }
-                                });
-                            } else {
-                                await prisma.review.create({
-                                    data: {
-                                        contributorId: reviewerRecord.id,
-                                        date: dateOnly,
-                                        count: 1
-                                    }
-                                });
-                            }
 
                             // Award points for the review using PR number for traceability
                             const reviewDate = new Date(review.submitted_at);
@@ -561,6 +546,12 @@ export async function startBackfill(startDate, endDate, checkRateLimits = true, 
                 totalPRsProcessed += result.prAdded || 0;
                 totalReviewsProcessed += result.reviewsAdded || 0;
 
+                // emitBackfillProgress reads these; nothing ever incremented them, so the
+                // "new PRs / new reviews" figures in the progress UI sat at 0 for the
+                // whole run no matter how much was imported.
+                backfillState.newPRsAdded = totalPRsProcessed;
+                backfillState.newReviewsAdded = totalReviewsProcessed;
+
                 backfillState.progress.processedPRs++;
                 backfillState.progress.processedReviews = totalReviewsProcessed;
                 emitBackfillProgress();
@@ -581,9 +572,12 @@ export async function startBackfill(startDate, endDate, checkRateLimits = true, 
 
     // Complete PR/review import
         backfillState.progress.endTime = Date.now();
-    backfillState.progress.status = backfillState.shouldStop ? 'Stopped' : 'Recomputing leaderboards...';
-        backfillState.isRunning = false;
+        backfillState.progress.status = backfillState.shouldStop ? 'Stopped' : 'Recomputing leaderboards...';
 
+        // isRunning stays true through finalization. Clearing it here let the Start
+        // guard pass while the multi-minute recompute (quarterly stats, then a full
+        // Hall of Fame rebuild that wipes and regenerates every row) was still running,
+        // so a second backfill could interleave with the first one's rebuild.
         emitBackfillProgress();
 
         const duration = Math.floor((backfillState.progress.endTime - backfillState.progress.startTime) / 1000);
@@ -634,6 +628,11 @@ export async function startBackfill(startDate, endDate, checkRateLimits = true, 
             `Duration: ${duration}s` + hofSummary;
 
         logger.info(detailedMessage);
+
+        // Finalization is done, so the run is genuinely over and a new one may start.
+        backfillState.isRunning = false;
+        backfillState.progress.status = backfillState.shouldStop ? 'Stopped' : 'Complete';
+        emitBackfillProgress();
 
         return {
             success: true,

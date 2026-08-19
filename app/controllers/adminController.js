@@ -354,7 +354,10 @@ export async function getQuarterlyLeaderboardController(req, res) {
 export async function getQuarterlyLeaderboardByQuarterController(req, res) {
     try {
         const { quarter } = req.params;
-        if (!/^\d{4}-Q[1-4]$/.test(quarter)) {
+        // Accept the tertile prefix too. systemType defaults to 'tertile', which
+        // produces labels like 2026-T2, so this rejected the default configuration's
+        // own periods: a tertile leaderboard 400'd even though its winner row existed.
+        if (!/^\d{4}-[QT][1-4]$/.test(quarter)) {
             return res.status(400).json({ success: false, message: 'Invalid quarter format' });
         }
         // DevOps members see DevOps winners unless they toggled to view non-DevOps
@@ -424,7 +427,7 @@ export async function recomputeCurrentQuarterController(req, res) {
 export async function recomputeHallOfFameController(req, res) {
     try {
         const { quarter } = req.body;
-        if (quarter && !/^\d{4}-Q[1-4]$/.test(quarter)) {
+        if (quarter && !/^\d{4}-[QT][1-4]$/.test(quarter)) {
             return res.status(400).json({ success: false, message: 'Invalid quarter format' });
         }
         console.log('Admin requested recompute Hall of Fame for quarter:', quarter || '(current)');
@@ -931,11 +934,24 @@ export async function backfillBadgesController(req, res) {
                 badges.push({ badge: '1000 Reviews badge', date: contributor.createdAt.toISOString() });
             }
 
-            // Only update if badges array is different
-            if (badges.length > 0) {
+            // Merge, do not replace. This rebuilds only the twelve milestone badges from
+            // their flags; awardBadgeManualController pushes custom badges (an "MVP",
+            // say) into the same array, and replacing wholesale silently deleted them.
+            // Existing entries also keep their real award date rather than being
+            // rewritten to createdAt.
+            const milestoneNames = new Set(badges.map(b => b.badge));
+            const existing = Array.isArray(contributor.badges) ? contributor.badges : [];
+            const preserved = existing.filter(b => !milestoneNames.has(b?.badge));
+            const alreadyHeld = new Map(existing.filter(b => b?.badge).map(b => [b.badge, b]));
+            const merged = [
+                ...badges.map(b => alreadyHeld.get(b.badge) || b),
+                ...preserved
+            ];
+
+            if (merged.length > 0) {
                 await prisma.contributor.update({
                     where: { username: contributor.username },
-                    data: { badges }
+                    data: { badges: merged }
                 });
                 updatedCount++;
             }

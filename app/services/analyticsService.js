@@ -137,8 +137,17 @@ export const getTeamAnalytics = async (days = 30) => {
             }
         });
 
-        // Convert to time-series arrays
-        const dates = Object.keys(contributionsByDate).sort();
+        // Convert to time-series arrays.
+        // The axis is the union of all three series. Building it from contributions
+        // alone silently dropped any day that had reviews or points but no merged PR —
+        // a day with 12 reviews and 0 merges was simply absent — so the series summed
+        // to less than the summary totals beside it, and the activity CSV export
+        // inherited the same holes.
+        const dates = [...new Set([
+            ...Object.keys(contributionsByDate),
+            ...Object.keys(reviewsByDate),
+            ...Object.keys(pointsByDate)
+        ])].sort();
         const timeSeries = dates.map(date => ({
             date,
             contributions: contributionsByDate[date] || 0,

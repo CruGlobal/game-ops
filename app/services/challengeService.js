@@ -354,7 +354,22 @@ export const updateChallengeProgress = async (username, challengeId, increment =
             };
         }
 
-        const newProgress = participant.progress + increment;
+        // Increment in the database rather than writing back a value read earlier.
+        // Two qualifying PRs landing together both read progress 4 and both wrote 5, so
+        // the participant sat one short of a target they had actually reached — and if
+        // no further qualifying activity arrived before the window closed, the
+        // completion never paid out at all. The returned row is the post-increment
+        // value, so the completion check below tests the real total.
+        const updatedParticipant = await prisma.challengeParticipant.update({
+            where: {
+                challengeId_contributorId: {
+                    challengeId,
+                    contributorId: contributor.id
+                }
+            },
+            data: { progress: { increment } }
+        });
+        const newProgress = updatedParticipant.progress;
 
         // Check if completed
         if (newProgress >= challenge.target && !participant.completed) {
@@ -366,23 +381,11 @@ export const updateChallengeProgress = async (username, challengeId, increment =
                     }
                 },
                 data: {
-                    progress: newProgress,
                     completed: true
                 }
             });
             await completeChallenge(username, challengeId);
         } else {
-            await prisma.challengeParticipant.update({
-                where: {
-                    challengeId_contributorId: {
-                        challengeId,
-                        contributorId: contributor.id
-                    }
-                },
-                data: {
-                    progress: newProgress
-                }
-            });
 
             // Emit progress update
             emitChallengeProgress({
