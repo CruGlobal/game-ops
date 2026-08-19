@@ -4,11 +4,21 @@
 -- both pay out.
 
 -- Existing duplicates would make the index creation fail with a bare
--- "could not create unique index" and, because the container runs `prisma migrate
--- deploy` on boot, that failure blocks startup. Fail with an actionable message
--- instead. Deliberately does not delete anything: each duplicate row has matching
+-- "could not create unique index", so fail with an actionable message instead.
+-- Deliberately does not delete anything: each duplicate row has matching
 -- point_history and contributor totals that have to be reversed as a decision, not as
 -- a migration side effect.
+
+-- Correction: an earlier version of this comment said the container runs
+-- `prisma migrate deploy` on boot and that a failure here blocks startup. That is
+-- true of docker-compose only. Production runs `prisma db push` (see
+-- applications/game-ops/prod/application.tf in cru-terraform), which reconciles the
+-- database against schema.prisma and never reads this directory — there is no
+-- _prisma_migrations table in the production database at all. So this file only ever
+-- executes under docker-compose. The constraint itself does reach production,
+-- because it is also declared in schema.prisma as @@unique([contributorId,
+-- challengeId]) and db push creates it from there. Anything expressible only as raw
+-- SQL will not reach production this way.
 DO $$
 DECLARE
     duplicate_pairs integer;
