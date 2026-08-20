@@ -52,6 +52,17 @@ function buildYear(year) {
     s.add(observed(year, 10, 11));                     // Veterans Day
     s.add(key(year, 10, nthWeekday(year, 10, 4, 4)));  // Thanksgiving — 4th Thu Nov
     s.add(observed(year, 11, 25));                     // Christmas
+
+    // When Jan 1 of the NEXT year falls on a Saturday, its observed holiday is Dec 31 of
+    // THIS year. buildYear(year + 1) files that key under year + 1, but
+    // isUSFederalHoliday looks the date up in the set for the date's own year — so a
+    // Dec 31 observance was filed in one year's set and searched for in another's, and
+    // never found. Seed it here as well.
+    const nextNewYearObserved = observed(year + 1, 0, 1);
+    if (nextNewYearObserved.startsWith(`${year}-`)) {
+        s.add(nextNewYearObserved);
+    }
+
     return s;
 }
 

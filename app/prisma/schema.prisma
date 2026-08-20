@@ -243,6 +243,24 @@ model PRMetadata {
   @@map("pr_metadata")
 }
 
+/// Express session storage for connect-pg-simple.
+///
+/// Declared here deliberately. Production reconciles the schema with
+/// `prisma db push`, which makes the database match this file — a table it does not
+/// know about is liable to be DROPPED. connect-pg-simple would happily create this
+/// itself, and the next deploy would remove it, logging everyone out.
+///
+/// Shape must match what connect-pg-simple expects: sid primary key, sess as json,
+/// expire as timestamp(6) with an index used for pruning.
+model Session {
+  sid    String   @id
+  sess   Json     @db.Json
+  expire DateTime @db.Timestamp(6)
+
+  @@index([expire], map: "IDX_session_expire")
+  @@map("session")
+}
+
 model QuarterSettings {
   id                            String    @id @default("quarter-config")
   systemType                    String    @default("calendar") @map("system_type")

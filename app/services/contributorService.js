@@ -367,7 +367,13 @@ export const processSingleMergedPR = async (prData) => {
 
         // Update streak
         streakResult = await updateStreak(contributor, mergedAt);
-        await checkStreakBadges(contributor);
+        // Check badges against the streak AFTER the update. `contributor` is the
+        // pre-increment snapshot, so a contributor who reached 7 today only got the
+        // badge on their NEXT contribution — and at 6 they were checked against 5.
+        await checkStreakBadges({
+            ...contributor,
+            currentStreak: streakResult?.currentStreak ?? contributor.currentStreak
+        });
 
         // Award points based on PR labels
         pointsData = calculatePoints({ labels }, contributor);
@@ -587,7 +593,12 @@ export const processSingleReview = async (reviewData) => {
 
     // Update streak (reviews count as contributions) - must happen before challenge progress
     const reviewStreakResult = await updateStreak(reviewer, submittedAt);
-    await checkStreakBadges(reviewer);
+    // Same as the PR path: badges are checked against the post-update streak, not the
+    // snapshot that was read before it advanced.
+    await checkStreakBadges({
+        ...reviewer,
+        currentStreak: reviewStreakResult?.currentStreak ?? reviewer.currentStreak
+    });
 
     // Update challenge progress for reviews
     if (reviewer.activeChallenges && reviewer.activeChallenges.length > 0) {

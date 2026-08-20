@@ -1,4 +1,5 @@
 import { prisma } from '../lib/prisma.js';
+import { claimOnce, releaseClaim } from '../lib/appSettings.js';
 import { emitChallengeProgress, emitChallengeCompleted } from '../utils/socketEmitter.js';
 import { updateQuarterlyStats } from './quarterlyService.js';
 import { postNewChallengesSlack } from './slackService.js';
@@ -1059,6 +1060,27 @@ export const generateWeeklyChallenges = async () => {
         const endOfWeek = new Date(startOfWeek);
         endOfWeek.setDate(endOfWeek.getDate() + 7);
 
+        // Two things can trigger this — the Monday cron and the MCP
+        // generate_weekly_challenges tool — and nothing stopped both from running. There
+        // is no uniqueness on (title, week), so a second run created a duplicate set of
+        // active challenges. Because the duplicates carry different ids, a participant
+        // could complete both copies and be paid the reward twice.
+        //
+        // app_settings.key is a primary key, so the insert either succeeds for exactly
+        // one caller or returns nothing. Claim the week before generating anything.
+        const weekKey = `weekly_challenges:${startOfWeek.toISOString().slice(0, 10)}`;
+        const claimed = await claimOnce(weekKey, {
+            startDate: startOfWeek.toISOString(),
+            endDate: endOfWeek.toISOString()
+        });
+
+        if (!claimed) {
+            logger.info('Weekly challenges already generated for this week, skipping', {
+                weekStart: startOfWeek.toISOString().slice(0, 10)
+            });
+            return [];
+        }
+
         // Streaks only advance on working days, so the window's workday count is
         // the most anyone starting from zero can reach. A fixed 7 made the streak
         // challenge unwinnable except for contributors who carried a long streak
@@ -1146,6 +1168,15 @@ export const generateWeeklyChallenges = async () => {
         logger.error('Error generating weekly challenges', {
             error: error.message
         });
+        // Give the claim back. Holding it after a failure would mark the week done and
+        // leave it permanently without challenges.
+        try {
+            const failedWeek = new Date();
+            failedWeek.setHours(0, 0, 0, 0);
+            await releaseClaim(`weekly_challenges:${failedWeek.toISOString().slice(0, 10)}`);
+        } catch (releaseError) {
+            logger.error('Could not release the weekly-challenge claim', { error: releaseError.message });
+        }
         throw error;
     }
 };

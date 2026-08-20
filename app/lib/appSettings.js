@@ -44,6 +44,33 @@ export const CRON_TASK_DEFAULTS = {
   streakCheck:      { enabled: false, label: 'Streak Verification', schedule: 'Daily midnight' }
 };
 
+/**
+ * Claim a one-shot job for a period, atomically.
+ *
+ * `key` is the primary key, so INSERT ... ON CONFLICT DO NOTHING is the whole guard:
+ * exactly one caller gets a row back, everyone else gets nothing. Used to stop a job
+ * with two triggers (a cron and an MCP tool, say) from running twice for the same
+ * period.
+ *
+ * @returns {Promise<boolean>} true if THIS caller won the claim
+ */
+export async function claimOnce(key, detail = {}) {
+    const rows = await prisma.$queryRaw`
+        INSERT INTO app_settings (key, value)
+        VALUES (${key}, ${JSON.stringify(detail)}::jsonb)
+        ON CONFLICT (key) DO NOTHING
+        RETURNING key`;
+    return Array.isArray(rows) && rows.length > 0;
+}
+
+/**
+ * Give a claim back, so a failed run can be retried instead of the period being
+ * permanently marked done.
+ */
+export async function releaseClaim(key) {
+    await prisma.$executeRaw`DELETE FROM app_settings WHERE key = ${key}`;
+}
+
 export async function ensureAppSettingsTable() {
   // Execute DDL statements individually (Postgres disallows multiple commands in one prepared statement)
   try { await prisma.$executeRawUnsafe(CREATE_TABLE_SQL); } catch (e) { /* ignore if fails */ }
