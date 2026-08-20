@@ -22,6 +22,7 @@ import { syncDevOpsTeamFromGitHub } from './services/devOpsTeamService.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import logger from './utils/logger.js';
 import session from 'express-session';
+import connectPgSimple from 'connect-pg-simple';
 import passport from './config/passport.js';
 import { ensureDevOpsTeamMember } from './middleware/ensureDevOpsTeamMember.js';
 import { ensureRepositoryAccess } from './middleware/ensureRepositoryAccess.js';
@@ -121,7 +122,42 @@ if (!process.env.SESSION_SECRET) {
     logger.warn('SESSION_SECRET is not set; using an insecure development secret');
 }
 
+// Sessions live in Postgres, not in express-session's default MemoryStore.
+//
+// MemoryStore meant every deploy logged everyone out — this happened repeatedly in a
+// single afternoon of deploys — it never evicted expired entries, and raising the ECS
+// task count above one would have broken auth outright, since a request could land on a
+// task that had never seen the session.
+//
+// createTableIfMissing is deliberately false: the `session` table is declared in
+// schema.prisma so `prisma db push` owns it. If connect-pg-simple created it instead,
+// db push would treat it as an object the schema does not describe and drop it on the
+// next deploy.
+//
+// Tests keep MemoryStore. The suite truncates tables between tests, and coupling the
+// session store to that would add failure modes without testing anything real.
+const useDatabaseSessions = process.env.NODE_ENV !== 'test' && !!process.env.DATABASE_URL;
+
+let sessionStore;
+if (useDatabaseSessions) {
+    const PgSession = connectPgSimple(session);
+    sessionStore = new PgSession({
+        conString: process.env.DATABASE_URL,
+        tableName: 'session',
+        createTableIfMissing: false,
+        // Sweep expired rows periodically so the table cannot grow without bound the way
+        // MemoryStore did.
+        pruneSessionInterval: 60 * 15
+    });
+    sessionStore.on('error', (err) => {
+        logger.error('Session store error', { error: err.message });
+    });
+} else {
+    logger.warn('Using in-memory session store (test mode or no DATABASE_URL)');
+}
+
 const sessionMiddleware = session({
+    ...(sessionStore ? { store: sessionStore } : {}),
     secret: process.env.SESSION_SECRET || 'insecure-development-session-secret',
     resave: false,
     saveUninitialized: false,
