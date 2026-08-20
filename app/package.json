@@ -27,7 +27,6 @@
     "@modelcontextprotocol/sdk": "^1.30.0",
     "@octokit/rest": "^20.0.0",
     "@prisma/client": "^6.17.1",
-    "aws-sdk": "^2.1048.0",
     "cors": "^2.8.5",
     "dotenv": "^16.0.0",
     "ejs": "^3.1.8",
@@ -44,6 +43,7 @@
     "pg": "^8.16.3",
     "prisma": "^6.17.1",
     "socket.io": "^4.8.1",
+    "yargs": "^17.0.0",
     "zod": "^3.25.76"
   },
   "devDependencies": {

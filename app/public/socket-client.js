@@ -89,10 +89,6 @@
     });
 
     // Contributor activity event
-    socket.on('contributor-activity', (data) => {
-        addActivityToFeed(data);
-    });
-
     // Gamification event handlers
     socket.on('streak-update', (data) => {
         showToast(`🔥 ${data.username} has a ${data.currentStreak}-day streak!`, 'success');
@@ -177,21 +173,11 @@
         );
     }
 
-    function addActivityToFeed(data) {
-        const feed = document.getElementById('activity-feed');
-        if (!feed) return;
+    // The activity-feed handler that lived here is gone. It was unreachable — nothing
+    // emits contributorActivity and no view contains #activity-feed — and it
+    // interpolated username and activityType into innerHTML unescaped, so it was a
+    // latent injection sink waiting for someone to wire up an emitter.
 
-        const item = document.createElement('div');
-        item.className = 'activity-item new';
-        item.innerHTML = `
-            <span class="activity-time">${formatTime(data.timestamp)}</span>
-            <span class="activity-user">${data.username}</span>
-            <span class="activity-type">${data.activityType}</span>
-        `;
-
-        feed.insertBefore(item, feed.firstChild);
-        setTimeout(() => item.classList.remove('new'), 100);
-    }
 
     function formatTime(timestamp) {
         const date = new Date(timestamp);
@@ -273,10 +259,17 @@
     }
 
     // Helper function to escape HTML in toast messages
-    function escapeHtml(text) {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
+    function escapeHtml(value) {
+        // Must escape quotes too: the textContent/innerHTML trick this replaced leaves " and
+        // ' untouched, so an interpolated value could still break out of a double-quoted
+        // attribute even though it was "escaped". Matches public/escape-html.js.
+        if (value === null || value === undefined) return '';
+        return String(value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
     }
 
     // Gamification helper functions
@@ -296,63 +289,6 @@
             element.classList.add('highlight-update');
             setTimeout(() => element.classList.remove('highlight-update'), 2000);
         }
-    }
-
-    function showAchievementModal(data) {
-        // Enhanced achievement notification modal with confetti and animations
-        const modal = document.createElement('div');
-        modal.className = 'achievement-modal';
-
-        // Determine badge icon based on achievement type
-        const badgeIcon = data.badgeIcon || '🏆';
-        const badgeColor = data.badgeColor || '#ffd93d';
-
-        modal.innerHTML = `
-            <div class="achievement-modal-overlay"></div>
-            <div class="achievement-modal-content">
-                <button class="achievement-close-btn" aria-label="Close">×</button>
-                <div class="achievement-confetti"></div>
-                <div class="achievement-badge">
-                    <div class="achievement-badge-ring"></div>
-                    <div class="achievement-badge-icon">${escapeHtml(badgeIcon)}</div>
-                </div>
-                <h2 class="achievement-title">Achievement Unlocked!</h2>
-                <h3 class="achievement-name">${escapeHtml(data.achievementName)}</h3>
-                <p class="achievement-description">${escapeHtml(data.description || '')}</p>
-                <div class="achievement-points">
-                    <span class="points-label">Reward</span>
-                    <span class="points-value">+${data.points} points</span>
-                </div>
-                <button class="achievement-action-btn">Awesome!</button>
-            </div>
-        `;
-
-        document.body.appendChild(modal);
-
-        // Add confetti particles
-        const confettiContainer = modal.querySelector('.achievement-confetti');
-        createConfetti(confettiContainer);
-
-        // Event handlers
-        const closeBtn = modal.querySelector('.achievement-close-btn');
-        const actionBtn = modal.querySelector('.achievement-action-btn');
-
-        const closeModal = () => {
-            modal.classList.remove('show');
-            setTimeout(() => modal.remove(), 200);
-        };
-
-        closeBtn.addEventListener('click', closeModal);
-        actionBtn.addEventListener('click', closeModal);
-
-        // Click overlay to close
-        modal.querySelector('.achievement-modal-overlay').addEventListener('click', closeModal);
-
-        // Trigger animation
-        setTimeout(() => modal.classList.add('show'), 10);
-
-        // Auto-remove after 1 second
-        setTimeout(closeModal, 1000);
     }
 
     // Create confetti particles for celebration effect

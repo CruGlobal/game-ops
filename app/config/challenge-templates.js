@@ -114,10 +114,3 @@ const templates = [
 
 export const getTemplates = () => templates;
 
-export const getTemplateById = (id) => templates.find(t => t.id === id);
-
-export const getTemplatesByCategory = (category) =>
-    templates.filter(t => t.category === category);
-
-export const getTemplateCategories = () =>
-    [...new Set(templates.map(t => t.category))];

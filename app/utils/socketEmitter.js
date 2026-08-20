@@ -62,16 +62,6 @@ export const emitReviewUpdate = (data) => {
 };
 
 // Emit contributor activity event
-export const emitContributorActivity = (data) => {
-    if (!ioInstance) return;
-
-    ioInstance.to('game-ops-updates').emit(SOCKET_EVENTS.CONTRIBUTOR_ACTIVITY, {
-        username: data.username,
-        activityType: data.activityType,
-        details: data.details,
-        timestamp: new Date()
-    });
-};
 
 // Emit streak update event
 export const emitStreakUpdate = (data) => {
