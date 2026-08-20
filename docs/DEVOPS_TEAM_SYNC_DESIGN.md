@@ -1,5 +1,10 @@
 # DevOps Team Dynamic Sync via GitHub Teams API
 
+> **Status: implemented and superseded.** This is the original design document, kept for
+> context. Do not follow its deploy steps: it predates the current pipeline, in which
+> production applies schema changes with `prisma db push` from `schema.prisma` and never
+> runs `prisma migrate deploy`. See `docs/DEPLOYMENT.md`.
+
 **Feature:** Automatically detect DevOps team members from GitHub Teams
 **Team Name:** `devops-engineering-team`
 **Method:** GitHub Teams API with caching

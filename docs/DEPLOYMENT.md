@@ -10,9 +10,6 @@ Complete guide for deploying the Game Ops to various environments.
 - [Local Development](#local-development)
 - [Docker Deployment](#docker-deployment)
 - [Production Deployment](#production-deployment)
-  - [AWS](#aws-deployment)
-  - [Heroku](#heroku-deployment)
-  - [DigitalOcean](#digitalocean-deployment)
 - [Database Setup](#database-setup)
 - [Monitoring & Logging](#monitoring--logging)
 - [Troubleshooting](#troubleshooting)
@@ -78,12 +75,10 @@ GITHUB_CALLBACK_URL=http://localhost:3000/auth/github/callback
 GITHUB_ORG=your-org-name
 GITHUB_REPO=your-repo-name
 
-# Feature Flags (optional)
-ENABLE_CHALLENGES=true
-ENABLE_STREAKS=true
-ENABLE_POINTS=true
-CHALLENGE_AUTO_CREATE=true
-CHALLENGE_DURATION_DAYS=7
+# (Removed: ENABLE_CHALLENGES / ENABLE_STREAKS / ENABLE_POINTS /
+#  CHALLENGE_AUTO_CREATE / CHALLENGE_DURATION_DAYS were documented here but are read
+#  nowhere in the codebase. Challenge generation is toggled from the admin UI's cron
+#  task settings, not by environment variable.)
 ```
 
 ### 4. Generate Session Secret
@@ -225,336 +220,62 @@ docker-compose -f docker-compose.prod.yml up -d
 
 ## Production Deployment
 
-### AWS Deployment
+Production and stage are deployed by CI, not by hand. The sections that used to live
+here described Heroku, a manual ECR push and an EC2 + PM2 setup — none of which this
+application uses.
 
-#### Option 1: AWS ECS (Elastic Container Service)
+### What actually happens
 
-**1. Create ECR Repository**
+1. A merge to `main` triggers **Build & Deploy ECS** (`.github/workflows/build-deploy-ecs.yml`),
+   which builds the image and tags it `production-<build>`.
+2. It hands off to **`CruGlobal/cru-deploy`** (`promote-ecs.yml`), which updates the ECS
+   service and waits for the new task to take traffic before draining the old one.
+3. The task definition runs two containers: **`db-migrate`**, which applies the schema,
+   and **`app`**, whose command is plain `npm start` (see `Dockerfile`).
 
-```bash
-# Login to ECR
-aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin <account-id>.dkr.ecr.us-east-1.amazonaws.com
+Infrastructure — the service, task definition, secrets and the migrate command — is
+defined in **`applications/game-ops/<env>/application.tf` in the `cru-terraform`
+repository**, not here.
 
-# Create repository
-aws ecr create-repository --repository-name game-ops --region us-east-1
+### Schema changes
 
-# Build and push image
-docker build -t game-ops .
-docker tag game-ops:latest <account-id>.dkr.ecr.us-east-1.amazonaws.com/game-ops:latest
-docker push <account-id>.dkr.ecr.us-east-1.amazonaws.com/game-ops:latest
+The `db-migrate` container runs:
+
+```
+npx prisma db push --accept-data-loss --skip-generate
 ```
 
-**2. Create ECS Task Definition**
+**`db push` reads `schema.prisma` and nothing else.** It never reads
+`prisma/migrations/`, and the production database has no `_prisma_migrations` table.
 
-```json
-{
-  "family": "game-ops",
-  "networkMode": "awsvpc",
-  "requiresCompatibilities": ["FARGATE"],
-  "cpu": "512",
-  "memory": "1024",
-  "containerDefinitions": [
-    {
-      "name": "game-ops",
-      "image": "<account-id>.dkr.ecr.us-east-1.amazonaws.com/game-ops:latest",
-      "portMappings": [
-        {
-          "containerPort": 3000,
-          "protocol": "tcp"
-        }
-      ],
-      "environment": [
-        {
-          "name": "NODE_ENV",
-          "value": "production"
-        }
-      ],
-      "secrets": [
-        {
-          "name": "GITHUB_TOKEN",
-          "valueFrom": "arn:aws:secretsmanager:us-east-1:<account-id>:secret:github-token"
-        },
-        {
-          "name": "SESSION_SECRET",
-          "valueFrom": "arn:aws:secretsmanager:us-east-1:<account-id>:secret:session-secret"
-        }
-      ],
-      "logConfiguration": {
-        "logDriver": "awslogs",
-        "options": {
-          "awslogs-group": "/ecs/game-ops",
-          "awslogs-region": "us-east-1",
-          "awslogs-stream-prefix": "ecs"
-        }
-      }
-    }
-  ]
-}
-```
+- A change expressible only as raw SQL — a functional index, a trigger, a data
+  backfill — **will not reach production**, however correct the migration file is.
+- Because `db push` makes the database match `schema.prisma`, an object that file does
+  not describe can also be **dropped**.
+- Migration files are still written so the docker-compose path stays in step and the
+  intent is reviewable, but `schema.prisma` is the source of truth for production.
 
-**3. Create ECS Service**
+A successful run logs `🚀 Your database is now in sync with your Prisma schema`; a
+no-op logs `The database is already in sync with the Prisma schema`. Both appear in
+Datadog under `service:game-ops`.
 
-```bash
-aws ecs create-service \
-  --cluster game-ops-cluster \
-  --service-name game-ops \
-  --task-definition game-ops \
-  --desired-count 2 \
-  --launch-type FARGATE \
-  --network-configuration "awsvpcConfiguration={subnets=[subnet-xxx],securityGroups=[sg-xxx],assignPublicIp=ENABLED}"
-```
+### Secrets
 
-#### Option 2: AWS EC2
+Application secrets live in AWS Parameter Store under `/ecs/game-ops/<env>/` and are
+injected by the task definition. Create or rotate them with the `cru` CLI
+(`cru application secrets -n game-ops -e p`) — several, including `SESSION_SECRET`, are
+created out of band and deliberately do not appear in Terraform.
 
-**1. Launch EC2 Instance**
+`SESSION_SECRET` is **required** in production: the app refuses to boot without it
+rather than silently falling back to another secret.
 
-```bash
-# Use Amazon Linux 2 AMI
-# Instance type: t3.medium (recommended)
-# Security Group: Allow ports 80, 443, 3000, 22
-```
+### Verifying a deploy
 
-**2. SSH into Instance**
+- `gh run list --repo CruGlobal/game-ops --branch main` — build and test status
+- `gh run list --repo CruGlobal/cru-deploy --workflow promote-ecs.yml` — the ECS promotion
+- Datadog `service:game-ops env:prod` — the boot sequence, the `db push` result, and
+  `Cron system initialized`
 
-```bash
-ssh -i your-key.pem ec2-user@your-instance-ip
-```
-
-**3. Install Dependencies**
-
-```bash
-# Install Node.js
-curl -fsSL https://rpm.nodesource.com/setup_18.x | sudo bash -
-sudo yum install -y nodejs git
-
-# Install Docker
-sudo yum install -y docker
-sudo service docker start
-sudo usermod -a -G docker ec2-user
-```
-
-**4. Clone and Deploy**
-
-```bash
-git clone https://github.com/yourusername/game-ops.git
-cd game-ops
-
-# Set environment variables
-sudo nano /etc/environment
-
-# Start with Docker Compose
-docker-compose -f docker-compose.prod.yml up -d
-```
-
-**5. Configure Nginx**
-
-```nginx
-server {
-    listen 80;
-    server_name your-domain.com;
-
-    location / {
-        proxy_pass http://localhost:3000;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_cache_bypass $http_upgrade;
-    }
-}
-```
-
-**6. Setup SSL with Let's Encrypt**
-
-```bash
-sudo yum install -y certbot python3-certbot-nginx
-sudo certbot --nginx -d your-domain.com
-```
-
----
-
-### Heroku Deployment
-
-**1. Install Heroku CLI**
-
-```bash
-curl https://cli-assets.heroku.com/install.sh | sh
-heroku login
-```
-
-**2. Create Heroku App**
-
-```bash
-heroku create your-app-name
-```
-
-**3. Add PostgreSQL Add-on**
-
-```bash
-heroku addons:create heroku-postgresql:mini
-```
-
-**4. Set Environment Variables**
-
-```bash
-heroku config:set GITHUB_TOKEN=your_token
-heroku config:set SESSION_SECRET=$(openssl rand -hex 32)
-heroku config:set NODE_ENV=production
-heroku config:set GITHUB_ORG=your-org
-heroku config:set GITHUB_REPO=your-repo
-```
-
-**5. Create Procfile**
-
-```bash
-echo "web: cd app && npx prisma migrate deploy && npm start" > Procfile
-```
-
-**6. Deploy**
-
-```bash
-git add .
-git commit -m "Configure for Heroku"
-git push heroku main
-
-# Open app
-heroku open
-```
-
-**7. Scale Dynos**
-
-```bash
-heroku ps:scale web=1
-```
-
----
-
-### DigitalOcean Deployment
-
-**1. Create Droplet**
-
-- Choose Ubuntu 22.04 LTS
-- Select plan (minimum: 2GB RAM, 2 vCPUs)
-- Add SSH key
-- Enable monitoring
-
-**2. Initial Server Setup**
-
-```bash
-# SSH into droplet
-ssh root@your-droplet-ip
-
-# Update packages
-apt update && apt upgrade -y
-
-# Create non-root user
-adduser deployuser
-usermod -aG sudo deployuser
-su - deployuser
-```
-
-**3. Install Dependencies**
-
-```bash
-# Install Node.js
-curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
-sudo apt-get install -y nodejs
-
-# Install Docker
-curl -fsSL https://get.docker.com -o get-docker.sh
-sudo sh get-docker.sh
-sudo usermod -aG docker $USER
-
-# Install Docker Compose
-sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-sudo chmod +x /usr/local/bin/docker-compose
-```
-
-**4. Clone and Deploy**
-
-```bash
-git clone https://github.com/yourusername/game-ops.git
-cd game-ops
-```
-
-**5. Configure Environment**
-
-```bash
-cd app
-nano .env
-# Add your environment variables
-```
-
-**6. Setup Process Manager (PM2)**
-
-```bash
-sudo npm install -g pm2
-
-# Start application
-cd app
-pm2 start scoreboard.js --name game-ops
-
-# Save PM2 configuration
-pm2 save
-
-# Setup PM2 to start on boot
-pm2 startup
-```
-
-**7. Configure Firewall**
-
-```bash
-sudo ufw allow 22
-sudo ufw allow 80
-sudo ufw allow 443
-sudo ufw enable
-```
-
-**8. Setup Nginx Reverse Proxy**
-
-```bash
-sudo apt install -y nginx
-
-sudo nano /etc/nginx/sites-available/game-ops
-```
-
-Add configuration:
-
-```nginx
-server {
-    listen 80;
-    server_name your-domain.com;
-
-    location / {
-        proxy_pass http://localhost:3000;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_cache_bypass $http_upgrade;
-    }
-}
-```
-
-Enable site:
-
-```bash
-sudo ln -s /etc/nginx/sites-available/game-ops /etc/nginx/sites-enabled/
-sudo nginx -t
-sudo systemctl restart nginx
-```
-
-**9. Setup SSL**
-
-```bash
-sudo apt install -y certbot python3-certbot-nginx
-sudo certbot --nginx -d your-domain.com
-```
-
----
 
 ## Database Setup
 

@@ -1,5 +1,11 @@
 # Duplicate Detection & Fix System
 
+> **Status: historical.** A snapshot of one incident from October 2025, kept for the
+> record. It references `scripts/validation/`, which does not exist, and troubleshoots
+> "MongoDB is running" — this application uses PostgreSQL via Prisma. The duplicate
+> classes it describes are now prevented by unique constraints rather than cleaned up
+> after the fact. Do not follow its steps.
+
 ## Overview
 
 The duplicate detection and fix system helps identify and repair data integrity issues in the GitHub PR Scoreboard database, specifically:
