@@ -1,5 +1,10 @@
 # Feature Implementation Plan: DevOps Filter & Challenge Initialization
 
+> **Status: implemented and superseded.** This is the original design document, kept for
+> context. Do not follow its deploy steps: it predates the current pipeline, in which
+> production applies schema changes with `prisma db push` from `schema.prisma` and never
+> runs `prisma migrate deploy`. See `docs/DEPLOYMENT.md`.
+
 **Branch:** `feature/devops-filter-and-challenge-init`
 **Date:** November 14, 2025
 **Status:** Planning

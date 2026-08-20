@@ -69,9 +69,16 @@ npx jest --testNamePattern="badge"
 ## Test Environment
 
 Tests use:
-- **In-Memory MongoDB**: Provided by `mongodb-memory-server`
-- **Mocked GitHub API**: Using `nock` for HTTP request mocking
-- **Isolated Test Environment**: Each test runs in isolation with clean database state
+- **A real PostgreSQL database.** `mongodb-memory-server` is not a dependency and never
+  was in this codebase — the suite runs against the `DATABASE_URL` in `app/.env.test`
+  (locally a `game_ops_test` database; in CI the Postgres service container defined in
+  `.github/workflows/test.yml`). Apply the schema with
+  `npx prisma migrate deploy` pointed at that URL before the first run.
+- **Mocked GitHub API**: `@octokit/rest` is mocked per-suite with
+  `jest.unstable_mockModule`; `nock` is also available for raw HTTP.
+- **Isolated Test Environment**: `__tests__/setup.js` truncates every table in
+  `afterEach`, so tests do not inherit each other's rows. If you add a model, add it
+  there too — a missing table makes results order-dependent.
 
 ### Environment Variables
 Tests use `.env.test` with safe test values:

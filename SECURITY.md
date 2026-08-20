@@ -29,6 +29,6 @@ If you discover a security vulnerability, please report it by emailing [security
 - Rate limiting on all endpoints
 - Input validation and sanitization
 - Helmet.js security headers
-- MongoDB query sanitization
+- Parameterised queries via Prisma (the datastore is PostgreSQL; there is no MongoDB)
 - Environment-based error handling (no stack traces in production)
 - Structured logging without sensitive data exposure

@@ -141,14 +141,11 @@ LOG_LEVEL=debug
 ```bash
 npm install
 
-# Run Prisma migrations to set up database schema
+# Create the local schema from the migration files
 npx prisma migrate deploy
 
 # Generate Prisma Client
 npx prisma generate
-
-# (Optional) Seed initial data
-npm run seed
 ```
 
 5. **Start the application**
@@ -183,7 +180,9 @@ npx prisma studio
 # Create a new migration after schema changes
 npx prisma migrate dev --name description_of_changes
 
-# Apply migrations in production
+# Apply migration files to a local database.
+# NOT the production path: production runs `prisma db push` from schema.prisma via a
+# db-migrate container (configured in cru-terraform), and never reads prisma/migrations/.
 npx prisma migrate deploy
 
 # Reset database (development only - WARNING: deletes all data)

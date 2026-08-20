@@ -87,11 +87,34 @@ cru application invoke -n game-ops -e s --task cron
   - `GITHUB_ORG`: Organization name (optional, defaults to `REPO_OWNER`)
   - `DEVOPS_TEAM_SLUG`: GitHub team slug (optional, defaults to `devops-engineering-team`)
 
+### How schema changes reach each environment
+
+**This differs by environment and it matters.**
+
+| Environment | Mechanism | Reads |
+|---|---|---|
+| Production / stage (ECS) | `npx prisma db push --accept-data-loss --skip-generate`, run as a `db-migrate` container at task start. Configured in `applications/game-ops/<env>/application.tf` in **cru-terraform**, not here. | `schema.prisma` only |
+| Local docker-compose | `npx prisma migrate deploy` (see `docker-compose.yml`) | `prisma/migrations/` |
+
+Two consequences:
+
+1. **`prisma/migrations/*.sql` never executes in production.** There is no
+   `_prisma_migrations` table in the production database. A change expressible only as
+   raw SQL — a functional index, a trigger, a data backfill — will not reach production
+   no matter how correct the migration file is.
+2. **Anything the schema must enforce has to be declared in `schema.prisma`.** `db push`
+   makes the database match that file, so an object it does not know about can also be
+   *dropped*.
+
+Migration files are still written, so the docker-compose path stays in step and the
+intent is reviewable — but treat `schema.prisma` as the source of truth for what
+production will actually have.
+
 ### Prisma Commands
 ```bash
 cd app
 
-# Apply migrations to database
+# Apply migration files to a LOCAL database (not the production path — see above)
 npx prisma migrate deploy
 
 # Create new migration (development)
@@ -154,18 +177,18 @@ npx prisma migrate reset
 - **NEW: Points system** (totalPoints, pointsHistory with timestamps)
 - **NEW: Challenge participation** (activeChallenges, completedChallenges)
 - **NEW: Streak badges** (sevenDay, thirtyDay, ninetyDay, yearLong)
-- **PHASE 1: Duplicate prevention** (processedPRs, processedReviews arrays with PR numbers and dates)
-- **PHASE 2: Quarterly stats** (quarterlyStats subdocument with currentQuarter, prsThisQuarter, reviewsThisQuarter, pointsThisQuarter, quarter date range)
+- **Duplicate prevention**: `processedPRs` / `processedReviews` are related tables, not embedded arrays, each with a unique constraint that arbitrates concurrent writers
+- **Quarterly stats**: `quarterlyStats` is a JSON column and is a *cache*. Standings that matter — archival, bills, the Hall of Fame — are derived from `point_history`, because the per-event path re-initialises this JSON at a quarter boundary
 - **DevOps Team Tracking** (isDevOps flag, devOpsTeamSyncedAt timestamp)
 
-**Challenge Schema** (`app/models/challenge.js`):
+**Challenge model** (`prisma/schema.prisma`, `model Challenge`):
 - Challenge metadata (title, description, type, target, reward)
 - Status tracking (active, expired, completed)
 - Date ranges (startDate, endDate)
 - Participant tracking with progress
 - Difficulty levels and categories
 
-**PRMetadata Schema** (`app/models/prMetadata.js`) - **PHASE 1**:
+**PRMetadata model** (`prisma/schema.prisma`, `model PRMetadata`):
 - Repository identification (repoOwner, repoName)
 - PR range tracking (firstPRFetched, latestPRFetched, totalPRsInDB)
 - Date range tracking (dateRangeStart, dateRangeEnd)
@@ -189,7 +212,7 @@ npx prisma migrate reset
   - devOpsTeamLastSync: Last sync timestamp from GitHub
   - devOpsTeamSyncEnabled: Enable/disable automatic daily sync
 
-**QuarterlyWinner Schema** (`app/models/quarterlyWinner.js`) - **PHASE 2**:
+**QuarterlyWinner model** (`prisma/schema.prisma`, `model QuarterlyWinner`):
 - quarter: Unique identifier (e.g., "2025-Q1")
 - winner: Top contributor (username, avatarUrl, stats)
 - top3: Array of top 3 contributors with rank and stats
@@ -228,7 +251,7 @@ npx prisma migrate reset
 
 **Utilities** (`app/utils/`):
 - **NEW:** `socketEmitter.js`: Centralized WebSocket event emission
-- **NEW:** `logger.js`: Winston-based logging system
+- `logger.js`: a small hand-rolled `Logger` class writing JSON lines to stdout (winston is not a dependency)
 
 ### Automation
 - Daily cron job fetches merged PRs and reviews using GitHub API
@@ -248,57 +271,53 @@ npx prisma migrate reset
 - CSP with nonce for inline scripts
 
 ### File Structure
+
+Regenerated against the actual tree. The previous version described an architecture that
+no longer exists — `scoreboard.js` as the entry point, Mongoose schemas under `models/`,
+and `config/db-config.js` / `config/passport-config.js`, none of which are present.
+
 ```
 app/
-├── scoreboard.js              # Main server entry point with Socket.IO
-├── __tests__/                # Test suites
-│   ├── integration/          # Integration tests (API, WebSocket)
-│   ├── unit/                 # Unit tests (services, controllers)
-│   └── setup.js              # Test utilities and helpers
-├── config/                   # Configuration files
-│   ├── db-config.js          # Database connection
-│   ├── passport-config.js    # Authentication config
-│   └── points-config.js      # Points calculation rules
-├── controllers/              # Request handlers
-│   ├── contributorController.js
-│   ├── challengeController.js  # NEW
-│   ├── analyticsController.js  # NEW
-│   ├── adminController.js
-│   └── authController.js
-├── middleware/               # Authentication and error handling
-├── models/                   # Legacy (empty - migrated to Prisma)
-│   ├── contributor.js        # Updated with gamification fields
-│   └── challenge.js          # NEW
-├── routes/                   # API route definitions
-│   ├── contributorRoutes.js
-│   ├── challengeRoutes.js    # NEW
-│   └── analyticsRoutes.js    # NEW
-├── services/                 # Business logic layer
-│   ├── contributorService.js # Updated with points/streaks
-│   ├── streakService.js      # NEW
-│   ├── challengeService.js   # NEW
-│   └── analyticsService.js   # NEW
-├── utils/                    # Utilities
-│   ├── socketEmitter.js      # NEW - WebSocket helpers
-│   └── logger.js             # NEW - Logging
+├── server.js                 # Entry point: Express, Socket.IO, CSP, sessions, cron
+├── lib/
+│   ├── prisma.js             # The shared PrismaClient — import this, never `new`
+│   ├── appSettings.js        # app_settings table: cron enable flags
+│   └── inFlightWork.js       # Tracks post-response work so SIGTERM can drain it
+├── config/
+│   ├── passport.js           # GitHub OAuth strategy
+│   ├── points-config.js      # Point values and POINT_REASONS
+│   ├── achievements-config.js
+│   ├── challenge-templates.js
+│   └── websocket-config.js
+├── controllers/              # Request handlers (thin; logic lives in services/)
+├── services/                 # Business logic
+│   ├── contributorService.js # Ingestion: PR/review claims, counters, badges
+│   ├── quarterlyService.js   # Quarter lifecycle, archival, bills
+│   ├── challengeService.js   ├── pointsService.js
+│   ├── achievementService.js ├── streakService.js
+│   ├── attributionService.js # Proxy-bot + username-casing resolution
+│   ├── webhookService.js     ├── backfillService.js
+│   ├── analyticsService.js   ├── billsService.js
+│   ├── devOpsTeamService.js  ├── slackService.js
+│   └── discussionService.js
+├── middleware/               # ensureRepositoryAccess, ensureDevOpsTeamMember, errorHandler
+├── routes/                   # Route definitions
+├── mcp/                      # MCP server mounted at /mcp
+├── prisma/
+│   ├── schema.prisma         # Source of truth for the production schema (db push)
+│   └── migrations/           # Applied by docker-compose only — NOT in production
 ├── views/                    # EJS templates
-│   ├── index.ejs             # Updated with real-time features
-│   ├── charts.ejs
-│   ├── challenges.ejs        # NEW
-│   ├── analytics.ejs         # NEW
-│   ├── activity.ejs
-│   ├── admin.ejs
-│   └── partials/
-│       └── nav.ejs           # Updated navigation
-└── public/                   # Static assets
-    ├── modern-design-system.css  # NEW - Design tokens
-    ├── theme-toggle.js           # NEW - Dark mode
-    ├── socket-client.js          # NEW - WebSocket client
-    ├── challenges-client.js      # NEW - Challenge interactions
-    ├── analytics-client.js       # NEW - Analytics & charts
-    ├── styles.css                # Updated styles
-    └── scripts.js                # Updated with toast system
+├── public/                   # Browser JS and static assets
+├── scripts/                  # Operational scripts (see scripts/README.md)
+├── utils/                    # logger.js, validation.js, socketEmitter.js, holidays.js
+└── __tests__/
+    ├── unit/                 # Service and controller tests
+    ├── integration/          # API and WebSocket tests
+    └── setup.js              # Shared harness; cleans every table between tests
 ```
+
+There is no `models/` directory — persistence is Prisma, defined in
+`prisma/schema.prisma`.
 
 ### Key Features
 
@@ -747,20 +766,20 @@ Bills and Vonettes are real-world rewards: **40 Bills = 1 day off work**.
 
 ### WebSocket Connection Issues
 - Verify Socket.IO client version matches server version
-- Check CORS configuration in `scoreboard.js`
+- Check CORS configuration in `server.js`
 - Ensure port 3000 is accessible
 - Check browser console for connection errors
 
 ### Database Connection Issues
-- Verify PostgreSQL is running (`docker ps` - look for `postgres_scoreboard`)
+- Verify PostgreSQL is running (`docker ps` - look for `postgres_game_ops`)
 - Check `DATABASE_URL` environment variable
 - Ensure Docker container is healthy: `docker-compose ps`
 - Check logs: `docker-compose logs postgres`
-- Verify schema migrations applied: `npx prisma migrate deploy`
+- Verify the local schema is current: `npx prisma migrate deploy` (local only; production uses `db push`)
 
 ### Test Failures
 - Ensure `NODE_ENV=test` is set
-- Verify test database initialized: `npx prisma migrate deploy` (with test DATABASE_URL)
+- Verify test database initialized: `npx prisma migrate deploy` (with the test DATABASE_URL from `app/.env.test`)
 - Clear test database: `await prisma.contributor.deleteMany({})`
 - Check for open handles: `npm test -- --detectOpenHandles`
 - Verify ES modules support: `node --experimental-vm-modules`

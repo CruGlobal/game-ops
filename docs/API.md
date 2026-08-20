@@ -1,5 +1,15 @@
 # API Documentation
 
+> **Accuracy note.** This document had drifted: it listed endpoints that do not exist,
+> used MongoDB `ObjectId` examples from a datastore this app no longer uses, and omitted
+> everything added since (webhooks, DevOps-team admin, bill gifts, recompute, quarterly
+> leaderboards). The paths below have been corrected against `app/routes/`, but treat the
+> route files as authoritative — they are the only list that cannot go stale.
+>
+> Note also that `/api` now requires GitHub org membership (`ensureRepositoryAccess`);
+> only `/api/health`, the other probes, and the signature-verified
+> `/api/webhooks/github` are public.
+
 Complete API reference for the Game Ops application.
 
 **Base URL:** `http://localhost:3000` (development)
@@ -31,7 +41,7 @@ Most endpoints are publicly accessible. Admin endpoints require authentication v
 
 ## Contributor Endpoints
 
-### GET /api/contributors
+### GET /api/contributors  (does not exist; use /api/admin/contributors)
 
 Get all contributors sorted by PR count.
 
@@ -288,7 +298,7 @@ curl http://localhost:3000/api/challenges/507f1f77bcf86cd799439013
 
 ---
 
-### POST /api/challenges/join
+### POST /api/challenges/:id/join
 
 Join an active challenge.
 
@@ -427,7 +437,7 @@ curl http://localhost:3000/api/challenges/user/johndoe
 
 **Note**: Streaks track consecutive **business days** (Mon-Fri) where a contributor either merges a PR or completes a code review. Weekend gaps are allowed and don't break streaks.
 
-### GET /api/streaks/leaderboard
+### GET /api/leaderboard/streaks
 
 Get the streak leaderboard.
 
@@ -473,7 +483,7 @@ curl http://localhost:3000/api/streaks/leaderboard?limit=20
 
 ---
 
-### GET /api/streaks/:username
+### GET /api/:username/streak
 
 Get streak statistics for a specific user.
 
@@ -523,7 +533,7 @@ curl http://localhost:3000/api/streaks/johndoe
 
 All admin endpoints require authentication via GitHub OAuth.
 
-### POST /api/admin/fetch-prs
+### GET /api/fetch-pull-requests  (removed — see note)
 
 Manually trigger PR fetching process.
 
@@ -545,7 +555,7 @@ curl -X POST http://localhost:3000/api/admin/fetch-prs \
 
 ---
 
-### POST /api/admin/award-badges
+### GET /api/award-badges  (removed — see note)
 
 Manually trigger badge awarding process.
 
@@ -569,7 +579,7 @@ curl -X POST http://localhost:3000/api/admin/award-badges \
 
 ---
 
-### POST /api/admin/generate-challenges
+### POST /api/admin/generate-challenges  (does not exist; challenge generation is a cron task toggled in the admin UI)
 
 Manually generate weekly challenges.
 
@@ -878,3 +888,18 @@ For API questions or issues:
 ---
 
 **Last Updated:** October 2025
+
+
+## Removed endpoints
+
+The JWT/password admin subsystem was deleted. These no longer exist, and neither does
+`POST /api/admin/login`:
+
+- `GET /api/initialize-database`
+- `GET /api/fetch-pull-requests`
+- `GET /api/award-badges`
+- `GET /api/award-bills-vonettes`
+
+They were unreachable in production in any case — no credentials were configured, so no
+token could be minted. Authentication is GitHub OAuth plus the httpOnly session cookie;
+admin access is DevOps team membership.
