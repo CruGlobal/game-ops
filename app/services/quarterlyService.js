@@ -68,9 +68,13 @@ export async function getQuarterConfig() {
  */
 export async function getCurrentQuarter() {
     const config = await getQuarterConfig();
+    // UTC parts, because getQuarterDateRange builds its windows in UTC. Reading local
+    // parts here meant that on any server not set to UTC the label and the range it
+    // pairs with could disagree around a boundary — the label saying one period while
+    // the dates described another.
     const now = new Date();
-    const currentYear = now.getFullYear();
-    const currentMonth = now.getMonth() + 1; // 1-12
+    const currentYear = now.getUTCFullYear();
+    const currentMonth = now.getUTCMonth() + 1; // 1-12
 
     // Get Q1 start month from config
     const q1Start = config.q1StartMonth;
@@ -123,7 +127,12 @@ export async function getQuarterDateRange(quarterString) {
 
     // Day 0 of the month after endMonth0 = last day of endMonth0
     const lastDay = new Date(Date.UTC(endYear, endMonth0 + 1, 0)).getUTCDate();
-    const endDate = new Date(Date.UTC(endYear, endMonth0, lastDay, 23, 59, 59));
+    // 23:59:59.999, not 23:59:59.000. The next period starts at 00:00:00.000, so ending
+    // a millisecond short of the second left a 999ms hole: updateQuarterlyStats gates on
+    // `>= start && <= end`, so activity timestamped in that window belonged to no period
+    // and was dropped from quarterly stats entirely. Nothing finer than a millisecond is
+    // representable in a JS Date, so this closes the gap rather than narrowing it.
+    const endDate = new Date(Date.UTC(endYear, endMonth0, lastDay, 23, 59, 59, 999));
 
     return { start: startDate, end: endDate };
 }
