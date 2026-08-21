@@ -5,6 +5,7 @@ import { updateQuarterlyStats } from './quarterlyService.js';
 import { postNewChallengesSlack } from './slackService.js';
 import { postNewChallengesDiscussion } from './discussionService.js';
 import { countWorkingDays } from '../utils/holidays.js';
+import { FULL_WORKWEEK } from './streakService.js';
 import logger from '../utils/logger.js';
 
 /**
@@ -112,6 +113,31 @@ const handleChallengeCreated = async (challenge, { skipNotifications = false } =
 };
 
 /**
+ * The most a streak challenge can ask for.
+ *
+ * A streak is the workdays contributed in the current week, so a target above that is
+ * both unreachable and a request to work more than a five-day week. Every creator — the
+ * admin UI, the MCP `create_challenge` tool, the Monday cron — goes through
+ * createChallenge, so clamping here is what keeps the ceiling from being re-raised by a
+ * hand-entered target. Other challenge types are untouched.
+ */
+function cappedStreakTarget({ type, target, startDate, endDate }) {
+    if (type !== 'streak' || typeof target !== 'number') return target;
+
+    // A window wider than a week still caps at one week's workdays, since the tally
+    // resets every Monday. A narrower window caps at the workdays it actually holds.
+    const windowWorkdays = startDate && endDate ? countWorkingDays(startDate, endDate) : FULL_WORKWEEK;
+    const reachable = Math.min(FULL_WORKWEEK, windowWorkdays || FULL_WORKWEEK);
+    if (target <= reachable) return target;
+
+    logger.info('Clamped streak challenge target to the reachable maximum', {
+        requested: target,
+        target: reachable
+    });
+    return reachable;
+}
+
+/**
  * Create a new challenge
  * @param {Object} challengeData - Challenge data
  * @param {Object} [options]
@@ -124,6 +150,7 @@ export const createChallenge = async (challengeData, options = {}) => {
         const challenge = await prisma.challenge.create({
             data: {
                 ...challengeData,
+                target: cappedStreakTarget(challengeData),
                 challengeCategory: challengeData.challengeCategory || 'general' // Default to general
             }
         });
