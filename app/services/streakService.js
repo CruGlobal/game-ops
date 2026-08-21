@@ -1,34 +1,56 @@
 import { prisma } from '../lib/prisma.js';
 import { emitStreakUpdate } from '../utils/socketEmitter.js';
-import { isNonWorkingDay } from '../utils/holidays.js';
+import { isNonWorkingDay, startOfWorkWeek, countWorkingDays } from '../utils/holidays.js';
 import logger from '../utils/logger.js';
 
 /**
- * Count working days strictly after startDate, up to and including endDate.
- * A working day is a weekday that is not a US federal holiday — so weekends and
- * holidays never count against a streak.
- * @param {Date} startDate - exclusive
- * @param {Date} endDate - inclusive
- * @returns {Number}
+ * A streak is the number of workdays in the CURRENT week on which a contributor
+ * contributed: 0 to 5, or 0 to 4 in a week holding a federal holiday. It resets every
+ * Monday.
+ *
+ * The ceiling is a property of the value, not a display rule, so nothing downstream can
+ * reward or challenge anyone for working more than a five-day week. Weekend and holiday
+ * work is neutral in both directions: it cannot break a streak and it cannot advance one.
+ *
+ * The tally is derived from the per-day `Contribution` and `Review` rows rather than
+ * accumulated, which makes it recomputable and idempotent under replay. Every caller
+ * writes its day row before calling in — see `updateContributor` in contributorService.
  */
-function getWorkingDaysBetween(startDate, endDate) {
-    let workingDays = 0;
-    let currentDate = new Date(startDate);
-    currentDate.setDate(currentDate.getDate() + 1); // day after startDate
-    while (currentDate <= endDate) {
-        if (!isNonWorkingDay(currentDate)) workingDays++;
-        currentDate.setDate(currentDate.getDate() + 1);
+
+/** The most a normal week can hold. Holiday weeks are lower; see `weekWindow`. */
+export const FULL_WORKWEEK = 5;
+
+/** Collapses two Dates that fall on the same calendar day to one key. */
+const dayKey = (date) => `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+
+/** The Monday-to-Monday window containing `asOf`, plus the workdays it holds. */
+function weekWindow(asOf) {
+    const start = startOfWorkWeek(asOf);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 7);
+    return { start, end, ceiling: countWorkingDays(start, end) };
+}
+
+/** Distinct workdays inside `window` on which this contributor merged a PR or reviewed. */
+async function weeklyTally(contributorId, window) {
+    const where = { contributorId, date: { gte: window.start, lt: window.end } };
+    const [contributions, reviews] = await Promise.all([
+        prisma.contribution.findMany({ where, select: { date: true } }),
+        prisma.review.findMany({ where, select: { date: true } })
+    ]);
+
+    const days = new Set();
+    for (const row of [...contributions, ...reviews]) {
+        if (!isNonWorkingDay(row.date)) days.add(dayKey(row.date));
     }
-    return workingDays;
+    return days.size;
 }
 
 /**
- * Update contributor's streak based on new contribution date
- * Streak continues across weekends but breaks if workdays are missed
- * Contributions include both PR merges and code reviews
- * @param {Object} contributor - Contributor document
+ * Recompute a contributor's streak from this week's contribution rows.
+ * @param {Object} contributor - Contributor record
  * @param {Date} contributionDate - Date of the new contribution
- * @returns {Object} Updated streak data
+ * @returns {Object} { currentStreak, ceiling, changed, weekendOrHoliday }
  */
 export const updateStreak = async (contributor, contributionDate) => {
     try {
@@ -36,149 +58,68 @@ export const updateStreak = async (contributor, contributionDate) => {
         if (!contributor || typeof contributor.username !== 'string' || !contributor.username.trim()) {
             throw new Error('Invalid contributor username');
         }
-        const today = new Date(contributionDate);
-        today.setHours(0, 0, 0, 0);
 
-        const lastDate = contributor.lastContributionDate
-            ? new Date(contributor.lastContributionDate)
-            : null;
+        const day = new Date(contributionDate);
+        day.setHours(0, 0, 0, 0);
+        const window = weekWindow(day);
+        const previous = Number(contributor.currentStreak);
 
-        if (lastDate) {
-            lastDate.setHours(0, 0, 0, 0);
-
-            // Out-of-order guard: ignore a contribution dated before the last
-            // recorded one (late webhooks / backfill) so it can't regress state.
-            if (today < lastDate) {
-                return {
-                    currentStreak: Number(contributor.currentStreak),
-                    streakContinued: false,
-                    streakBroken: false,
-                    ignoredOutOfOrder: true
-                };
-            }
-
-            const calendarDays = Math.floor((today - lastDate) / (1000 * 60 * 60 * 24));
-            const workingDaysGap = getWorkingDaysBetween(lastDate, today);
-
-            if (calendarDays === 0) {
-                // Same day contribution - no streak change
-                return {
-                    currentStreak: Number(contributor.currentStreak),
-                    streakContinued: false,
-                    streakBroken: false
-                };
-            } else if (workingDaysGap === 0) {
-                // Only weekend days elapsed (e.g. Fri → Sat/Sun). Record the latest
-                // contribution date but don't change the streak. Storing a weekend
-                // date here is safe: weekend days contribute 0 business days, so the
-                // gap to any later weekday is identical whether the baseline sits on
-                // the weekend day or the prior Friday.
-                await prisma.contributor.update({
-                    where: { username: contributor.username },
-                    data: {
-                        lastContributionDate: today
-                    }
-                });
-
-                logger.info('Streak maintained across weekend', {
-                    username: contributor.username,
-                    currentStreak: Number(contributor.currentStreak),
-                    calendarDays,
-                    workingDaysGap
-                });
-
-                return {
-                    currentStreak: Number(contributor.currentStreak),
-                    streakContinued: false,
-                    streakBroken: false,
-                    weekendGap: true
-                };
-            } else if (workingDaysGap === 1) {
-                // Next business day - increment streak
-                const newCurrentStreak = Number(contributor.currentStreak) + 1;
-                const newLongestStreak = Math.max(newCurrentStreak, Number(contributor.longestStreak));
-
-                const updated = await prisma.contributor.update({
-                    where: { username: contributor.username },
-                    data: {
-                        currentStreak: newCurrentStreak,
-                        longestStreak: newLongestStreak,
-                        lastContributionDate: today
-                    }
-                });
-
-                // Emit WebSocket event
-                emitStreakUpdate({
-                    username: updated.username,
-                    currentStreak: Number(updated.currentStreak),
-                    longestStreak: Number(updated.longestStreak)
-                });
-
-                logger.info('Streak continued', {
-                    username: updated.username,
-                    currentStreak: Number(updated.currentStreak),
-                    calendarDays,
-                    workingDaysGap
-                });
-
-                return {
-                    currentStreak: Number(updated.currentStreak),
-                    streakContinued: true,
-                    streakBroken: false
-                };
-            } else {
-                // Missed business days - streak broken, reset to 1
-                const oldStreak = Number(contributor.currentStreak);
-
-                const updated = await prisma.contributor.update({
-                    where: { username: contributor.username },
-                    data: {
-                        currentStreak: 1,
-                        lastContributionDate: today
-                    }
-                });
-
-                logger.info('Streak broken', {
-                    username: updated.username,
-                    oldStreak,
-                    newStreak: 1,
-                    calendarDays,
-                    workingDaysGap: workingDaysGap,
-                    missedBusinessDays: workingDaysGap - 1
-                });
-
-                return {
-                    currentStreak: 1,
-                    streakContinued: false,
-                    streakBroken: true,
-                    oldStreak
-                };
-            }
-        } else {
-            // First contribution - start streak
-            const updated = await prisma.contributor.update({
-                where: { username: contributor.username },
-                data: {
-                    currentStreak: 1,
-                    longestStreak: 1,
-                    lastContributionDate: today
-                }
-            });
-
-            logger.info('Streak started', {
-                username: updated.username
+        if (isNonWorkingDay(day)) {
+            // Nothing to record. Writing lastContributionDate here would be enough to
+            // make a weekend commit look like a workday to anything reading it.
+            logger.info('Streak unchanged for non-working day', {
+                username: contributor.username,
+                date: day,
+                currentStreak: previous
             });
 
             return {
-                currentStreak: 1,
-                streakContinued: false,
-                streakBroken: false,
-                firstStreak: true
+                currentStreak: previous,
+                ceiling: window.ceiling,
+                changed: false,
+                weekendOrHoliday: true
             };
         }
+
+        const contributorId = contributor.id ?? (await prisma.contributor.findUnique({
+            where: { username: contributor.username },
+            select: { id: true }
+        }))?.id;
+
+        const tally = await weeklyTally(contributorId, window);
+
+        const updated = await prisma.contributor.update({
+            where: { username: contributor.username },
+            data: {
+                currentStreak: tally,
+                lastContributionDate: day
+            }
+        });
+
+        if (tally !== previous) {
+            emitStreakUpdate({
+                username: updated.username,
+                currentStreak: tally,
+                longestStreak: Number(updated.longestStreak)
+            });
+        }
+
+        logger.info('Streak recomputed', {
+            username: updated.username,
+            currentStreak: tally,
+            ceiling: window.ceiling,
+            weekStart: window.start
+        });
+
+        return {
+            currentStreak: tally,
+            ceiling: window.ceiling,
+            changed: tally !== previous,
+            weekendOrHoliday: false
+        };
     } catch (error) {
         logger.error('Error updating streak', {
-            username: contributor.username,
+            username: contributor?.username,
             error: error.message
         });
         throw error;
@@ -186,69 +127,33 @@ export const updateStreak = async (contributor, contributionDate) => {
 };
 
 /**
- * Check and award streak badges
- * @param {Object} contributor - Contributor document
+ * Award the one streak badge: contributing on every workday of a week.
+ *
+ * The 30, 90 and 365-day chain badges are retired — nothing awards them any more, and
+ * the `thirtyDayBadge` / `ninetyDayBadge` / `yearLongBadge` columns keep whatever they
+ * already hold so nobody loses a badge they earned under the old rules.
+ *
+ * @param {Object} contributor - Contributor record
  * @returns {Array} Newly awarded streak badges
  */
 export const checkStreakBadges = async (contributor) => {
     try {
-        const newBadges = [];
         const streak = Number(contributor.currentStreak);
-        const updateData = {};
-        let needsUpdate = false;
+        if (streak < FULL_WORKWEEK || contributor.sevenDayBadge) return [];
 
-        // Check 7-day streak
-        if (streak >= 7 && !contributor.sevenDayBadge) {
-            updateData.sevenDayBadge = true;
-            newBadges.push({ name: 'Week Warrior', days: 7 });
-            needsUpdate = true;
-            logger.info('Streak badge awarded', {
-                username: contributor.username,
-                badge: '7-day streak'
-            });
-        }
+        // `seven_day_badge` is a legacy column name from the 7/30/90/365 ladder; it now
+        // records a full workweek. Renaming it would cost a migration for no behavior.
+        await prisma.contributor.update({
+            where: { username: contributor.username },
+            data: { sevenDayBadge: true }
+        });
 
-        // Check 30-day streak
-        if (streak >= 30 && !contributor.thirtyDayBadge) {
-            updateData.thirtyDayBadge = true;
-            newBadges.push({ name: 'Monthly Master', days: 30 });
-            needsUpdate = true;
-            logger.info('Streak badge awarded', {
-                username: contributor.username,
-                badge: '30-day streak'
-            });
-        }
+        logger.info('Streak badge awarded', {
+            username: contributor.username,
+            badge: 'Week Warrior'
+        });
 
-        // Check 90-day streak
-        if (streak >= 90 && !contributor.ninetyDayBadge) {
-            updateData.ninetyDayBadge = true;
-            newBadges.push({ name: 'Quarter Champion', days: 90 });
-            needsUpdate = true;
-            logger.info('Streak badge awarded', {
-                username: contributor.username,
-                badge: '90-day streak'
-            });
-        }
-
-        // Check 365-day streak
-        if (streak >= 365 && !contributor.yearLongBadge) {
-            updateData.yearLongBadge = true;
-            newBadges.push({ name: 'Year-Long Hero', days: 365 });
-            needsUpdate = true;
-            logger.info('Streak badge awarded', {
-                username: contributor.username,
-                badge: '365-day streak'
-            });
-        }
-
-        if (needsUpdate) {
-            await prisma.contributor.update({
-                where: { username: contributor.username },
-                data: updateData
-            });
-        }
-
-        return newBadges;
+        return [{ name: 'Week Warrior', workdays: FULL_WORKWEEK }];
     } catch (error) {
         logger.error('Error checking streak badges', {
             username: contributor.username,
@@ -287,50 +192,60 @@ export const resetStreak = async (contributor) => {
 };
 
 /**
- * Daily verification: break streaks that have gone stale.
+ * Daily reconciliation: recompute every contributor's streak from this week's rows.
  *
- * `updateStreak` only runs when someone contributes, so an idle contributor's
- * streak would otherwise stay frozen at its old value. Run this once a day: for
- * each contributor with an active streak, if more than one working day has
- * elapsed since their last contribution (i.e. they missed a full working day),
- * reset the current streak to 0. Weekends and holidays don't count, so a streak
- * survives Fri→Mon and across holidays.
+ * `updateStreak` only runs when someone contributes, so without this an idle
+ * contributor would carry last week's tally forward. Running daily rather than only on
+ * Monday makes it self-healing: a missed run costs nothing, and any value that drifted
+ * from the source rows — including the pre-cap chain values, which ran into the
+ * hundreds — is corrected on the next pass.
  *
  * @param {Date} [asOf] - the day to evaluate against (defaults to today)
- * @returns {Object} { checked, broken }
+ * @returns {Object} { checked, updated }
  */
-export const verifyStreaks = async (asOf = new Date()) => {
-    const today = new Date(asOf);
-    today.setHours(0, 0, 0, 0);
+export const reconcileWeeklyStreaks = async (asOf = new Date()) => {
+    const window = weekWindow(asOf);
+    const where = { date: { gte: window.start, lt: window.end } };
 
-    const active = await prisma.contributor.findMany({
-        where: { currentStreak: { gt: 0 }, lastContributionDate: { not: null } },
-        select: { username: true, currentStreak: true, lastContributionDate: true }
-    });
+    const [contributions, reviews, contributors] = await Promise.all([
+        prisma.contribution.findMany({ where, select: { contributorId: true, date: true } }),
+        prisma.review.findMany({ where, select: { contributorId: true, date: true } }),
+        prisma.contributor.findMany({
+            select: { id: true, username: true, currentStreak: true, longestStreak: true }
+        })
+    ]);
 
-    let broken = 0;
-    for (const c of active) {
-        const last = new Date(c.lastContributionDate);
-        last.setHours(0, 0, 0, 0);
-        if (today <= last) continue; // contributed today (or clock skew) — leave it
-        // Working days strictly after `last`, up to today. 1 means today is the
-        // first working day since — still alive. >1 means a working day was missed.
-        if (getWorkingDaysBetween(last, today) > 1) {
-            await prisma.contributor.update({
-                where: { username: c.username },
-                data: { currentStreak: 0 }
-            });
-            emitStreakUpdate({ username: c.username, currentStreak: 0, longestStreak: undefined });
-            broken++;
-            logger.info('Streak expired (idle)', {
-                username: c.username,
-                oldStreak: Number(c.currentStreak),
-                lastContributionDate: c.lastContributionDate
-            });
-        }
+    const daysByContributor = new Map();
+    for (const row of [...contributions, ...reviews]) {
+        if (isNonWorkingDay(row.date)) continue;
+        if (!daysByContributor.has(row.contributorId)) daysByContributor.set(row.contributorId, new Set());
+        daysByContributor.get(row.contributorId).add(dayKey(row.date));
     }
-    logger.info('Streak verification complete', { checked: active.length, broken });
-    return { checked: active.length, broken };
+
+    let updated = 0;
+    for (const c of contributors) {
+        const tally = daysByContributor.get(c.id)?.size ?? 0;
+        if (Number(c.currentStreak) === tally) continue;
+
+        await prisma.contributor.update({
+            where: { id: c.id },
+            data: { currentStreak: tally }
+        });
+        emitStreakUpdate({
+            username: c.username,
+            currentStreak: tally,
+            longestStreak: Number(c.longestStreak)
+        });
+        updated++;
+    }
+
+    logger.info('Weekly streak reconciliation complete', {
+        checked: contributors.length,
+        updated,
+        weekStart: window.start,
+        ceiling: window.ceiling
+    });
+    return { checked: contributors.length, updated };
 };
 
 /**
@@ -420,9 +335,12 @@ export const getStreakLeaderboard = async (limit = 10, options = {}) => {
                 // Exclude DevOps team members if filter is enabled
                 ...(excludeDevOps && { isDevOps: false })
             },
+            // Ties break on username, not on longestStreak: that column still holds
+            // pre-cap chains in the dozens, so ordering by it would keep ranking people
+            // on how long they once went without a day off.
             orderBy: [
                 { currentStreak: 'desc' },
-                { longestStreak: 'desc' }
+                { username: 'asc' }
             ],
             take: limit,
             select: {

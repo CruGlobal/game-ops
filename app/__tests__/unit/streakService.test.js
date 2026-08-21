@@ -1,7 +1,8 @@
-import { describe, it, expect, beforeEach, afterEach, afterAll, jest } from '@jest/globals';
-import { isUSFederalHoliday, isNonWorkingDay, countWorkingDays } from '../../utils/holidays.js';
+import { describe, it, expect, beforeEach, afterEach, afterAll } from '@jest/globals';
+import { isUSFederalHoliday, isNonWorkingDay, countWorkingDays, startOfWorkWeek } from '../../utils/holidays.js';
 import {
     updateStreak,
+    reconcileWeeklyStreaks,
     checkStreakBadges,
     resetStreak,
     getStreakStats,
@@ -12,6 +13,46 @@ import { createTestContributor } from '../setup.js';
 
 // Note: Socket emitter and logger are not mocked in this test file
 // These services will use their real implementations during tests
+
+// A streak is "workdays contributed this week", so every case below fixes the calendar.
+// June 2026: 1=Mon 2=Tue 3=Wed 4=Thu 5=Fri 6=Sat 7=Sun 8=Mon.
+// The week of Mon Jun 29 2026 holds Fri Jul 3, the observed Independence Day, so its
+// ceiling is 4 rather than 5.
+const MON = new Date(2026, 5, 1);
+const TUE = new Date(2026, 5, 2);
+const WED = new Date(2026, 5, 3);
+const THU = new Date(2026, 5, 4);
+const FRI = new Date(2026, 5, 5);
+const SAT = new Date(2026, 5, 6);
+const SUN = new Date(2026, 5, 7);
+const NEXT_MON = new Date(2026, 5, 8);
+const HOL_MON = new Date(2026, 5, 29);
+const HOL_TUE = new Date(2026, 5, 30);
+const HOL_WED = new Date(2026, 6, 1);
+const HOL_THU = new Date(2026, 6, 2);
+const HOL_FRI = new Date(2026, 6, 3); // observed Independence Day
+
+const dayOnly = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+
+// The tally is derived from the per-day rows that the PR and review paths write before
+// they call updateStreak, so the tests have to write them too.
+const contributedOn = (contributorId, ...dates) =>
+    prisma.contribution.createMany({
+        data: dates.map(date => ({ contributorId, date: dayOnly(date), count: 1, merged: true }))
+    });
+
+const reviewedOn = (contributorId, ...dates) =>
+    prisma.review.createMany({
+        data: dates.map(date => ({ contributorId, date: dayOnly(date), count: 1 }))
+    });
+
+const makeContributor = (overrides = {}) =>
+    prisma.contributor.create({ data: createTestContributor(overrides) });
+
+const streakOf = async (username) => {
+    const c = await prisma.contributor.findUnique({ where: { username } });
+    return Number(c.currentStreak);
+};
 
 describe('StreakService', () => {
     beforeEach(async () => {
@@ -24,302 +65,255 @@ describe('StreakService', () => {
     });
 
     describe('updateStreak', () => {
-        it('should start a new streak for first contribution', async () => {
-            const contributor = await prisma.contributor.create({
-                data: createTestContributor({
-                    username: 'newcomer',
-                    currentStreak: 0,
-                    longestStreak: 0,
-                    lastContributionDate: null
-                })
-            });
+        it('counts the workdays contributed so far this week', async () => {
+            const c = await makeContributor({ username: 'tally' });
+            await contributedOn(c.id, MON, TUE);
 
-            const result = await updateStreak(contributor, new Date());
+            const result = await updateStreak(c, TUE);
 
-            expect(result.currentStreak).toBe(1);
-            expect(result.firstStreak).toBe(true);
-            expect(result.streakContinued).toBe(false);
-            expect(result.streakBroken).toBe(false);
-
-            const updated = await prisma.contributor.findUnique({ where: { username: 'newcomer' } });
-            expect(Number(updated.currentStreak)).toBe(1);
-            expect(Number(updated.longestStreak)).toBe(1);
-            expect(updated.lastContributionDate).toBeDefined();
+            expect(result.currentStreak).toBe(2);
+            expect(await streakOf('tally')).toBe(2);
         });
 
-        // Fixed anchor dates (local midnight) so business-day logic is deterministic
-        // and not dependent on the weekday the suite happens to run. June 2026:
-        //   1=Mon 2=Tue 3=Wed 4=Thu 5=Fri 6=Sat 8=Mon
-        const MON = new Date(2026, 5, 1);
-        const TUE = new Date(2026, 5, 2);
-        const THU = new Date(2026, 5, 4);
-        const FRI = new Date(2026, 5, 5);
-        const SAT = new Date(2026, 5, 6);
-        const NEXT_MON = new Date(2026, 5, 8);
+        it('tops out at the five workdays in the week', async () => {
+            const c = await makeContributor({ username: 'fullWeek' });
+            await contributedOn(c.id, MON, TUE, WED, THU, FRI);
 
-        it('should increment streak for consecutive business-day contribution', async () => {
-            const contributor = await prisma.contributor.create({
-                data: createTestContributor({
-                    username: 'consistent',
-                    currentStreak: 5,
-                    longestStreak: 5,
-                    lastContributionDate: MON
-                })
-            });
+            const result = await updateStreak(c, FRI);
 
-            const result = await updateStreak(contributor, TUE);
-
-            expect(result.currentStreak).toBe(6);
-            expect(result.streakContinued).toBe(true);
-            expect(result.streakBroken).toBe(false);
-
-            const updated = await prisma.contributor.findUnique({ where: { username: 'consistent' } });
-            expect(Number(updated.currentStreak)).toBe(6);
-            expect(Number(updated.longestStreak)).toBe(6); // Updated longest
-        });
-
-        it('should not change streak for same-day contribution', async () => {
-            const morning = new Date(2026, 5, 2, 10);
-
-            const contributor = await prisma.contributor.create({
-                data: createTestContributor({
-                    username: 'sameDayUser',
-                    currentStreak: 3,
-                    longestStreak: 5,
-                    lastContributionDate: morning
-                })
-            });
-
-            const afternoon = new Date(2026, 5, 2, 15);
-            const result = await updateStreak(contributor, afternoon);
-
-            expect(result.currentStreak).toBe(3);
-            expect(result.streakContinued).toBe(false);
-            expect(result.streakBroken).toBe(false);
-        });
-
-        it('should reset streak when business-day gap is more than 1', async () => {
-            // Mon → Thu skips Tue and Wed (two missed business days)
-            const contributor = await prisma.contributor.create({
-                data: createTestContributor({
-                    username: 'broken',
-                    currentStreak: 10,
-                    longestStreak: 10,
-                    lastContributionDate: MON
-                })
-            });
-
-            const result = await updateStreak(contributor, THU);
-
-            expect(result.currentStreak).toBe(1);
-            expect(result.streakBroken).toBe(true);
-            expect(result.oldStreak).toBe(10);
-            expect(result.streakContinued).toBe(false);
-
-            const updated = await prisma.contributor.findUnique({ where: { username: 'broken' } });
-            expect(Number(updated.currentStreak)).toBe(1);
-            expect(Number(updated.longestStreak)).toBe(10); // Longest should remain unchanged
-        });
-
-        it('should continue streak across a weekend (Fri → Mon)', async () => {
-            const contributor = await prisma.contributor.create({
-                data: createTestContributor({
-                    username: 'weekendSpanner',
-                    currentStreak: 5,
-                    longestStreak: 5,
-                    lastContributionDate: FRI
-                })
-            });
-
-            const result = await updateStreak(contributor, NEXT_MON);
-
-            expect(result.currentStreak).toBe(6);
-            expect(result.streakContinued).toBe(true);
-            expect(result.streakBroken).toBe(false);
-        });
-
-        it('should not change streak for a weekend-only contribution (Fri → Sat)', async () => {
-            // Saturday has no business day after Friday, so the streak is held steady
-            // (neither incremented nor broken) and the contribution date is recorded.
-            const contributor = await prisma.contributor.create({
-                data: createTestContributor({
-                    username: 'weekendContributor',
-                    currentStreak: 5,
-                    longestStreak: 5,
-                    lastContributionDate: FRI
-                })
-            });
-
-            const result = await updateStreak(contributor, SAT);
-
-            expect(result.weekendGap).toBe(true);
             expect(result.currentStreak).toBe(5);
-            expect(result.streakContinued).toBe(false);
-            expect(result.streakBroken).toBe(false);
+            expect(result.ceiling).toBe(5);
         });
 
-        it('should update longest streak when current exceeds it', async () => {
-            const contributor = await prisma.contributor.create({
-                data: createTestContributor({
-                    username: 'recordBreaker',
-                    currentStreak: 20,
-                    longestStreak: 15, // Current is already higher
-                    lastContributionDate: MON
-                })
-            });
+        it('does not require the workdays to be consecutive', async () => {
+            const c = await makeContributor({ username: 'gappy' });
+            await contributedOn(c.id, MON, THU);
 
-            await updateStreak(contributor, TUE);
+            const result = await updateStreak(c, THU);
 
-            const updated = await prisma.contributor.findUnique({ where: { username: 'recordBreaker' } });
-            expect(Number(updated.currentStreak)).toBe(21);
-            expect(Number(updated.longestStreak)).toBe(21); // Should update to new record
+            // Missing Tuesday and Wednesday costs those two days and nothing more.
+            expect(result.currentStreak).toBe(2);
+        });
+
+        it('counts a workday once however many contributions land on it', async () => {
+            const c = await makeContributor({ username: 'busyDay' });
+            await contributedOn(c.id, MON);
+            await reviewedOn(c.id, MON);
+
+            const result = await updateStreak(c, MON);
+
+            expect(result.currentStreak).toBe(1);
+        });
+
+        it('counts reviews the same as merged PRs', async () => {
+            const c = await makeContributor({ username: 'reviewer' });
+            await reviewedOn(c.id, MON, TUE);
+
+            const result = await updateStreak(c, TUE);
+
+            expect(result.currentStreak).toBe(2);
+        });
+
+        it('ignores a weekend contribution entirely', async () => {
+            const c = await makeContributor({ username: 'saturdayWorker' });
+            await contributedOn(c.id, MON, TUE, WED, THU);
+            await updateStreak(c, THU);
+
+            const midWeek = await prisma.contributor.findUnique({ where: { username: 'saturdayWorker' } });
+            await contributedOn(c.id, SAT);
+            const result = await updateStreak(midWeek, SAT);
+
+            expect(result.currentStreak).toBe(4);
+            expect(result.weekendOrHoliday).toBe(true);
+            const after = await prisma.contributor.findUnique({ where: { username: 'saturdayWorker' } });
+            expect(Number(after.currentStreak)).toBe(4);
+            expect(after.lastContributionDate).toEqual(dayOnly(THU));
+        });
+
+        it('ignores a Sunday contribution too', async () => {
+            const c = await makeContributor({ username: 'sundayWorker' });
+            await contributedOn(c.id, SUN);
+
+            const result = await updateStreak(c, SUN);
+
+            expect(result.weekendOrHoliday).toBe(true);
+            expect(await streakOf('sundayWorker')).toBe(0);
+        });
+
+        it('does not let weekend work cover a missed Friday', async () => {
+            // The old chain logic measured the gap from the last contribution, so
+            // Thursday then Saturday counted Friday as the one elapsed workday and
+            // incremented: weekend work paying for a skipped workday.
+            const c = await makeContributor({ username: 'rescuer' });
+            await contributedOn(c.id, THU);
+            const afterThu = await updateStreak(c, THU);
+            expect(afterThu.currentStreak).toBe(1);
+
+            const snapshot = await prisma.contributor.findUnique({ where: { username: 'rescuer' } });
+            await contributedOn(c.id, SAT);
+            const result = await updateStreak(snapshot, SAT);
+
+            expect(result.currentStreak).toBe(1);
+            expect(await streakOf('rescuer')).toBe(1);
+        });
+
+        it('caps a federal-holiday week at four, and ignores work on the holiday', async () => {
+            const c = await makeContributor({ username: 'holidayWeek' });
+            await contributedOn(c.id, HOL_MON, HOL_TUE, HOL_WED, HOL_THU);
+
+            const result = await updateStreak(c, HOL_THU);
+
+            expect(result.currentStreak).toBe(4);
+            expect(result.ceiling).toBe(4);
+
+            const snapshot = await prisma.contributor.findUnique({ where: { username: 'holidayWeek' } });
+            await contributedOn(c.id, HOL_FRI);
+            const onHoliday = await updateStreak(snapshot, HOL_FRI);
+
+            expect(onHoliday.weekendOrHoliday).toBe(true);
+            expect(await streakOf('holidayWeek')).toBe(4);
+        });
+
+        it('starts over in a new week', async () => {
+            const c = await makeContributor({ username: 'freshWeek' });
+            await contributedOn(c.id, MON, TUE, WED, THU, FRI);
+            await updateStreak(c, FRI);
+
+            const snapshot = await prisma.contributor.findUnique({ where: { username: 'freshWeek' } });
+            await contributedOn(c.id, NEXT_MON);
+            const result = await updateStreak(snapshot, NEXT_MON);
+
+            expect(result.currentStreak).toBe(1);
+        });
+
+        it('is zero when this week has no contribution rows', async () => {
+            // The tally is derived, not accumulated: an event with no day row behind it
+            // does not count. Every production caller writes the row first.
+            const c = await makeContributor({ username: 'ghost' });
+
+            const result = await updateStreak(c, TUE);
+
+            expect(result.currentStreak).toBe(0);
+        });
+
+        it('clamps a legacy chain value down to this week', async () => {
+            const c = await makeContributor({ username: 'legacy', currentStreak: 47, longestStreak: 49 });
+            await contributedOn(c.id, MON);
+
+            const result = await updateStreak(c, MON);
+
+            expect(result.currentStreak).toBe(1);
+        });
+
+        it('ignores the time of day on the contribution', async () => {
+            const c = await makeContributor({ username: 'lateNight' });
+            await contributedOn(c.id, MON);
+
+            const result = await updateStreak(c, new Date(2026, 5, 1, 23, 59, 59));
+
+            expect(result.currentStreak).toBe(1);
+        });
+    });
+
+    describe('reconcileWeeklyStreaks', () => {
+        it('zeroes a contributor whose last contribution predates this week', async () => {
+            const c = await makeContributor({ username: 'lastWeekOnly', currentStreak: 5 });
+            await contributedOn(c.id, MON, TUE);
+
+            const result = await reconcileWeeklyStreaks(NEXT_MON);
+
+            expect(await streakOf('lastWeekOnly')).toBe(0);
+            expect(result.updated).toBe(1);
+        });
+
+        it('clamps a legacy chain value to the real weekly tally', async () => {
+            const c = await makeContributor({ username: 'inherited', currentStreak: 47 });
+            await contributedOn(c.id, MON);
+            await reviewedOn(c.id, TUE);
+
+            await reconcileWeeklyStreaks(WED);
+
+            expect(await streakOf('inherited')).toBe(2);
+        });
+
+        it('leaves an already-correct tally alone', async () => {
+            const c = await makeContributor({ username: 'accurate', currentStreak: 1 });
+            await contributedOn(c.id, MON);
+
+            const result = await reconcileWeeklyStreaks(TUE);
+
+            expect(result.updated).toBe(0);
+            expect(await streakOf('accurate')).toBe(1);
+        });
+
+        it('does not count weekend rows', async () => {
+            const c = await makeContributor({ username: 'weekendRows', currentStreak: 3 });
+            await contributedOn(c.id, MON, SAT, SUN);
+
+            await reconcileWeeklyStreaks(SAT);
+
+            expect(await streakOf('weekendRows')).toBe(1);
         });
     });
 
     describe('checkStreakBadges', () => {
-        it('should award Week Warrior badge for 7-day streak', async () => {
-            const contributor = await prisma.contributor.create({
-                data: createTestContributor({
-                    username: 'weekWarrior',
-                    currentStreak: 7,
-                    sevenDayBadge: false,
-                    thirtyDayBadge: false,
-                    ninetyDayBadge: false,
-                    yearLongBadge: false
-                })
-            });
+        it('awards Week Warrior for a full workweek', async () => {
+            const contributor = await makeContributor({ username: 'weekWarrior', currentStreak: 5 });
 
             const badges = await checkStreakBadges(contributor);
 
             expect(badges).toHaveLength(1);
             expect(badges[0].name).toBe('Week Warrior');
-            expect(badges[0].days).toBe(7);
+            expect(badges[0].workdays).toBe(5);
 
             const updated = await prisma.contributor.findUnique({ where: { username: 'weekWarrior' } });
             expect(updated.sevenDayBadge).toBe(true);
         });
 
-        it('should award Monthly Master badge for 30-day streak', async () => {
-            const contributor = await prisma.contributor.create({
-                data: createTestContributor({
-                    username: 'monthlyMaster',
-                    currentStreak: 30,
-                    sevenDayBadge: true,
-                    thirtyDayBadge: false,
-                    ninetyDayBadge: false,
-                    yearLongBadge: false
-                })
-            });
+        it('awards nothing short of a full workweek', async () => {
+            const contributor = await makeContributor({ username: 'fourFifths', currentStreak: 4 });
 
             const badges = await checkStreakBadges(contributor);
 
-            expect(badges).toHaveLength(1);
-            expect(badges[0].name).toBe('Monthly Master');
-            expect(badges[0].days).toBe(30);
+            expect(badges).toHaveLength(0);
+            const updated = await prisma.contributor.findUnique({ where: { username: 'fourFifths' } });
+            expect(updated.sevenDayBadge).toBe(false);
         });
 
-        it('should award Quarter Champion badge for 90-day streak', async () => {
-            const contributor = await prisma.contributor.create({
-                data: createTestContributor({
-                    username: 'quarterChamp',
-                    currentStreak: 90,
-                    sevenDayBadge: true,
-                    thirtyDayBadge: true,
-                    ninetyDayBadge: false,
-                    yearLongBadge: false
-                })
-            });
-
-            const badges = await checkStreakBadges(contributor);
-
-            expect(badges).toHaveLength(1);
-            expect(badges[0].name).toBe('Quarter Champion');
-            expect(badges[0].days).toBe(90);
-        });
-
-        it('should award Year-Long Hero badge for 365-day streak', async () => {
-            const contributor = await prisma.contributor.create({
-                data: createTestContributor({
-                    username: 'yearHero',
-                    currentStreak: 365,
-                    sevenDayBadge: true,
-                    thirtyDayBadge: true,
-                    ninetyDayBadge: true,
-                    yearLongBadge: false
-                })
-            });
-
-            const badges = await checkStreakBadges(contributor);
-
-            expect(badges).toHaveLength(1);
-            expect(badges[0].name).toBe('Year-Long Hero');
-            expect(badges[0].days).toBe(365);
-        });
-
-        it('should award multiple badges at once if eligible', async () => {
-            const contributor = await prisma.contributor.create({
-                data: createTestContributor({
-                    username: 'multiBadge',
-                    currentStreak: 100,
-                    sevenDayBadge: false,
-                    thirtyDayBadge: false,
-                    ninetyDayBadge: false,
-                    yearLongBadge: false
-                })
-            });
-
-            const badges = await checkStreakBadges(contributor);
-
-            expect(badges).toHaveLength(3); // 7-day, 30-day, 90-day
-            expect(badges.some(b => b.name === 'Week Warrior')).toBe(true);
-            expect(badges.some(b => b.name === 'Monthly Master')).toBe(true);
-            expect(badges.some(b => b.name === 'Quarter Champion')).toBe(true);
-        });
-
-        it('should not award badges already earned', async () => {
-            const contributor = await prisma.contributor.create({
-                data: createTestContributor({
-                    username: 'alreadyEarned',
-                    currentStreak: 30,
-                    sevenDayBadge: true,
-                    thirtyDayBadge: true,
-                    ninetyDayBadge: false,
-                    yearLongBadge: false
-                })
-            });
-
-            const badges = await checkStreakBadges(contributor);
-
-            expect(badges).toHaveLength(0); // No new badges
-        });
-
-        it('should return empty array for streak below first threshold', async () => {
-            const contributor = await prisma.contributor.create({
-                data: createTestContributor({
-                    username: 'earlyDays',
-                    currentStreak: 5,
-                    sevenDayBadge: false,
-                    thirtyDayBadge: false,
-                    ninetyDayBadge: false,
-                    yearLongBadge: false
-                })
+        it('does not award a badge twice', async () => {
+            const contributor = await makeContributor({
+                username: 'alreadyEarned',
+                currentStreak: 5,
+                sevenDayBadge: true
             });
 
             const badges = await checkStreakBadges(contributor);
 
             expect(badges).toHaveLength(0);
         });
+
+        it('never awards the retired 30, 90 and 365-day chain badges', async () => {
+            // A value this high cannot be produced any more, and even when one is read
+            // off an old row it must not unlock a multi-month chain badge.
+            const contributor = await makeContributor({ username: 'marathoner', currentStreak: 365 });
+
+            const badges = await checkStreakBadges(contributor);
+
+            expect(badges.map(b => b.name)).toEqual(['Week Warrior']);
+            const updated = await prisma.contributor.findUnique({ where: { username: 'marathoner' } });
+            expect(updated.thirtyDayBadge).toBe(false);
+            expect(updated.ninetyDayBadge).toBe(false);
+            expect(updated.yearLongBadge).toBe(false);
+        });
     });
 
     describe('resetStreak', () => {
         it('should reset streak to zero', async () => {
-            const contributor = await prisma.contributor.create({
-                data: createTestContributor({
-                    username: 'resetUser',
-                    currentStreak: 15,
-                    longestStreak: 20,
-                    lastContributionDate: new Date()
-                })
+            const contributor = await makeContributor({
+                username: 'resetUser',
+                currentStreak: 5,
+                longestStreak: 20,
+                lastContributionDate: new Date()
             });
 
             const result = await resetStreak(contributor);
@@ -335,37 +329,26 @@ describe('StreakService', () => {
 
     describe('getStreakStats', () => {
         it('should return streak statistics for existing user', async () => {
-            const today = new Date();
-            await prisma.contributor.create({
-                data: createTestContributor({
-                    username: 'statsUser',
-                    currentStreak: 25,
-                    longestStreak: 30,
-                    lastContributionDate: today,
-                    sevenDayBadge: true,
-                    thirtyDayBadge: true,
-                    ninetyDayBadge: false,
-                    yearLongBadge: false
-                })
+            await makeContributor({
+                username: 'statsUser',
+                currentStreak: 5,
+                longestStreak: 5,
+                lastContributionDate: FRI,
+                sevenDayBadge: true
             });
 
             const stats = await getStreakStats('statsUser');
 
             expect(stats.username).toBe('statsUser');
-            expect(stats.currentStreak).toBe(25);
-            expect(stats.longestStreak).toBe(30);
-            expect(stats.lastContributionDate).toBeDefined();
+            expect(stats.currentStreak).toBe(5);
             expect(stats.streakBadges.sevenDay).toBe(true);
-            expect(stats.streakBadges.thirtyDay).toBe(true);
+            expect(stats.streakBadges.thirtyDay).toBe(false);
         });
 
         it('should return default stats for non-existent user', async () => {
-            const stats = await getStreakStats('nonExistent');
+            const stats = await getStreakStats('nobody');
 
-            expect(stats.username).toBe('nonExistent');
             expect(stats.currentStreak).toBe(0);
-            expect(stats.longestStreak).toBe(0);
-            expect(stats.lastContributionDate).toBeNull();
             expect(stats.streakBadges.sevenDay).toBe(false);
         });
     });
@@ -374,45 +357,37 @@ describe('StreakService', () => {
         it('should return top contributors by current streak', async () => {
             await prisma.contributor.createMany({
                 data: [
-                    createTestContributor({ username: 'user1', currentStreak: 10, longestStreak: 15 }),
-                    createTestContributor({ username: 'user2', currentStreak: 25, longestStreak: 25 }),
-                    createTestContributor({ username: 'user3', currentStreak: 5, longestStreak: 20 }),
-                    createTestContributor({ username: 'user4', currentStreak: 15, longestStreak: 15 })
+                    createTestContributor({ username: 'user1', currentStreak: 2 }),
+                    createTestContributor({ username: 'user2', currentStreak: 5 }),
+                    createTestContributor({ username: 'user3', currentStreak: 1 }),
+                    createTestContributor({ username: 'user4', currentStreak: 3 })
                 ]
             });
 
             const leaderboard = await getStreakLeaderboard(3);
 
-            expect(leaderboard).toHaveLength(3);
-            expect(leaderboard[0].username).toBe('user2');
-            expect(Number(leaderboard[0].currentStreak)).toBe(25);
-            expect(leaderboard[1].username).toBe('user4');
-            expect(Number(leaderboard[1].currentStreak)).toBe(15);
-            expect(leaderboard[2].username).toBe('user1');
-            expect(Number(leaderboard[2].currentStreak)).toBe(10);
+            expect(leaderboard.map(r => r.username)).toEqual(['user2', 'user4', 'user1']);
+            expect(leaderboard[0].currentStreak).toBe(5);
         });
 
-        it('should use longest streak as tiebreaker', async () => {
+        it('breaks ties by username, not by a historical chain', async () => {
+            // longestStreak still holds pre-cap chains (47, 49). Ordering by it would
+            // keep ranking people on how long they once went without a day off.
             await prisma.contributor.createMany({
                 data: [
-                    createTestContributor({ username: 'tied1', currentStreak: 10, longestStreak: 30 }),
-                    createTestContributor({ username: 'tied2', currentStreak: 10, longestStreak: 20 })
+                    createTestContributor({ username: 'zoe', currentStreak: 3, longestStreak: 49 }),
+                    createTestContributor({ username: 'adam', currentStreak: 3, longestStreak: 3 })
                 ]
             });
 
             const leaderboard = await getStreakLeaderboard();
 
-            expect(leaderboard[0].username).toBe('tied1');
-            expect(leaderboard[1].username).toBe('tied2');
+            expect(leaderboard.map(r => r.username)).toEqual(['adam', 'zoe']);
         });
 
         it('should return top 10 by default', async () => {
             const contributors = Array.from({ length: 15 }, (_, i) =>
-                createTestContributor({
-                    username: `user${i}`,
-                    currentStreak: i + 1,
-                    longestStreak: i + 1
-                })
+                createTestContributor({ username: `user${i}`, currentStreak: (i % 5) + 1 })
             );
 
             await prisma.contributor.createMany({ data: contributors });
@@ -420,67 +395,23 @@ describe('StreakService', () => {
             const leaderboard = await getStreakLeaderboard();
 
             expect(leaderboard).toHaveLength(10);
-            expect(Number(leaderboard[0].currentStreak)).toBe(15); // Highest
-        });
-
-        it('should return selected fields only', async () => {
-            await prisma.contributor.create({
-                data: createTestContributor({
-                    username: 'selectTest',
-                    currentStreak: 5,
-                    longestStreak: 10,
-                    avatarUrl: 'https://example.com/avatar.png'
-                })
-            });
-
-            const leaderboard = await getStreakLeaderboard(1);
-
-            expect(leaderboard[0]).toHaveProperty('username');
-            expect(leaderboard[0]).toHaveProperty('avatarUrl');
-            expect(leaderboard[0]).toHaveProperty('currentStreak');
-            expect(leaderboard[0]).toHaveProperty('longestStreak');
-            expect(leaderboard[0]).toHaveProperty('streakBadges');
         });
 
         it('should return empty array when no contributors exist', async () => {
             const leaderboard = await getStreakLeaderboard();
 
-            expect(leaderboard).toHaveLength(0);
+            expect(leaderboard).toEqual([]);
         });
     });
 
     describe('Edge Cases', () => {
         it('should handle contributor save errors gracefully', async () => {
-            const contributor = await prisma.contributor.create({
-                data: createTestContributor({
-                    username: 'errorUser',
-                    currentStreak: 5,
-                    longestStreak: 5,
-                    lastContributionDate: new Date()
-                })
-            });
+            const contributor = await makeContributor({ username: 'errorUser', currentStreak: 1 });
 
             // Force an error by invalidating the contributor
             contributor.username = null; // Invalid username
 
-            await expect(updateStreak(contributor, new Date())).rejects.toThrow();
-        });
-
-        it('should handle date edge cases correctly', async () => {
-            const contributor = await prisma.contributor.create({
-                data: createTestContributor({
-                    username: 'dateEdge',
-                    currentStreak: 1,
-                    longestStreak: 1,
-                    lastContributionDate: new Date('2025-01-01T23:59:59')
-                })
-            });
-
-            // Contribution exactly 1 day later
-            const result = await updateStreak(contributor, new Date('2025-01-02T00:00:01'));
-
-            expect(result.currentStreak).toBe(2);
-            expect(result.streakContinued).toBe(true);
+            await expect(updateStreak(contributor, MON)).rejects.toThrow();
         });
     });
 
@@ -555,5 +486,25 @@ describe('countWorkingDays (challenge window sizing)', () => {
         const start = new Date(2026, 7, 3, 23, 59, 59);
         const end = new Date(2026, 7, 10, 0, 0, 1);
         expect(countWorkingDays(start, end)).toBe(5);
+    });
+});
+
+describe('startOfWorkWeek', () => {
+    it('returns the same day for a Monday', () => {
+        expect(startOfWorkWeek(new Date(2026, 5, 1, 14, 30))).toEqual(new Date(2026, 5, 1));
+    });
+
+    it('walks back to Monday from mid-week', () => {
+        expect(startOfWorkWeek(new Date(2026, 5, 4))).toEqual(new Date(2026, 5, 1));
+    });
+
+    it('keeps Saturday and Sunday in the week that began on Monday', () => {
+        expect(startOfWorkWeek(new Date(2026, 5, 6))).toEqual(new Date(2026, 5, 1));
+        expect(startOfWorkWeek(new Date(2026, 5, 7))).toEqual(new Date(2026, 5, 1));
+    });
+
+    it('crosses a month boundary', () => {
+        // Wed Jul 1 2026 belongs to the week that started Mon Jun 29.
+        expect(startOfWorkWeek(new Date(2026, 6, 1))).toEqual(new Date(2026, 5, 29));
     });
 });
