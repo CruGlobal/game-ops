@@ -74,6 +74,74 @@ describe('ChallengeService', () => {
 
             await expect(createChallenge(invalidData)).rejects.toThrow();
         });
+
+        it('clamps a streak target to what a week can hold', async () => {
+            // A streak counts the workdays in the current week, so a target above that
+            // is unreachable — and asking for it is asking someone to work more than a
+            // five-day week. Every creator (admin UI, MCP, the Monday cron) lands here.
+            const challenge = await createChallenge({
+                title: '30-Day Streak',
+                description: 'The ultimate test of consistency',
+                type: 'streak',
+                target: 30,
+                reward: 500,
+                status: 'active',
+                startDate: new Date(2026, 5, 1),
+                endDate: new Date(2026, 6, 15),
+                difficulty: 'hard',
+                category: 'individual'
+            });
+
+            expect(challenge.target).toBe(5);
+        });
+
+        it('clamps a streak target to a holiday week ceiling', async () => {
+            // Mon Jun 29 2026 to Mon Jul 6: Fri Jul 3 is the observed July 4 holiday.
+            const challenge = await createChallenge({
+                title: 'Holiday Week Streak',
+                description: 'Contribute every workday',
+                type: 'streak',
+                target: 5,
+                reward: 300,
+                status: 'active',
+                startDate: new Date(2026, 5, 29),
+                endDate: new Date(2026, 6, 6),
+                difficulty: 'hard',
+                category: 'individual'
+            });
+
+            expect(challenge.target).toBe(4);
+        });
+
+        it('leaves a reachable streak target alone, and never touches other types', async () => {
+            const streak = await createChallenge({
+                title: 'Three Days',
+                description: 'Contribute on three workdays',
+                type: 'streak',
+                target: 3,
+                reward: 150,
+                status: 'active',
+                startDate: new Date(2026, 5, 1),
+                endDate: new Date(2026, 5, 8),
+                difficulty: 'easy',
+                category: 'individual'
+            });
+            expect(streak.target).toBe(3);
+
+            const points = await createChallenge({
+                title: 'Point Hunter',
+                description: 'Earn 500 points',
+                type: 'points',
+                target: 500,
+                reward: 150,
+                status: 'active',
+                startDate: new Date(2026, 5, 1),
+                endDate: new Date(2026, 5, 8),
+                difficulty: 'easy',
+                category: 'individual'
+            });
+            expect(points.target).toBe(500);
+        });
     });
 
     describe('getActiveChallenges', () => {

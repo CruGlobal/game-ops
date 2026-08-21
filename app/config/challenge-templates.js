@@ -30,7 +30,7 @@ const templates = [
         category: 'weekly',
         type: 'streak',
         title: 'Streak Challenge',
-        description: 'Maintain a contribution streak for the entire week!',
+        description: 'Contribute on all 5 workdays this week. Weekends and holidays never count!',
         target: 5,
         reward: 300,
         difficulty: 'hard',
@@ -97,19 +97,10 @@ const templates = [
         reward: 300,
         difficulty: 'medium',
         durationDays: 14
-    },
-    {
-        id: '30-day-streak',
-        name: '30-Day Streak (Hard)',
-        category: 'monthly',
-        type: 'streak',
-        title: '30-Day Streak Challenge',
-        description: 'Maintain a 30-day contribution streak. The ultimate test of consistency!',
-        target: 30,
-        reward: 500,
-        difficulty: 'hard',
-        durationDays: 45
     }
+    // A 30-day streak template used to live here. A streak now counts the workdays in
+    // the current week, so 30 is unreachable by construction — and asking for it meant
+    // asking someone to take at most two days off in six weeks.
 ];
 
 export const getTemplates = () => templates;

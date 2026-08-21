@@ -40,8 +40,9 @@ harmless — they no-op when there is nothing to fix.
   so it would now delete legitimately distinct achievements that happen to be worth the
   same. No dry-run guard. Superseded by the `(contributor_id, achievement_id)` unique
   constraint, which prevents the duplicates it was written to clean up.
-- `test-workweek-streaks.js` — writes a real `streak-test-user` into whatever database is
-  configured and only cleans up on success. Superseded by the unit tests.
+Removed for the same reason: `test-workweek-streaks.js` wrote a real `streak-test-user`
+into whatever database was configured, cleaned up only on success, and asserted the
+retired consecutive-day streak model. The unit tests cover the weekly tally.
 
 ## Notes
 

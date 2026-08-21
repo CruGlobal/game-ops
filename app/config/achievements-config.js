@@ -50,37 +50,23 @@ export const ACHIEVEMENTS = {
     },
 
     // Streak Achievements
+    //
+    // One tier only. A streak is the workdays contributed in the current week, so 5 is
+    // the highest it can reach and nothing here can ask for more. The 30, 90 and
+    // 365-day tiers are gone: getAchievementProgress renders a goal for every entry in
+    // this object, so leaving them behind a flag would have kept advertising
+    // multi-month chains as targets. Anyone who already earned one keeps it — the
+    // Achievement row carries its own name and description.
+    //
+    // The `streak-7` id is legacy. Keeping it is what stops an existing Week Warrior
+    // from being paid a second time for the same badge.
     'streak-7': {
         id: 'streak-7',
         name: 'Week Warrior',
-        description: 'Maintain a 7-day contribution streak',
+        description: 'Contribute on every workday of a week',
         category: 'streak',
-        threshold: 7,
+        threshold: 5,
         points: 100
-    },
-    'streak-30': {
-        id: 'streak-30',
-        name: 'Monthly Master',
-        description: 'Maintain a 30-day contribution streak',
-        category: 'streak',
-        threshold: 30,
-        points: 300
-    },
-    'streak-90': {
-        id: 'streak-90',
-        name: 'Quarter Champion',
-        description: 'Maintain a 90-day contribution streak',
-        category: 'streak',
-        threshold: 90,
-        points: 750
-    },
-    'streak-365': {
-        id: 'streak-365',
-        name: 'Year-Long Hero',
-        description: 'Maintain a 365-day contribution streak',
-        category: 'streak',
-        threshold: 365,
-        points: 2000
     },
 
     // Review Achievements
@@ -177,7 +163,7 @@ export const checkAchievements = (contributor) => {
     }
 
     // Check streak achievements
-    const streakAchievements = ['streak-7', 'streak-30', 'streak-90', 'streak-365'];
+    const streakAchievements = ['streak-7'];
     for (const achId of streakAchievements) {
         const ach = ACHIEVEMENTS[achId];
         if (!earnedIds.has(achId) && contributor.currentStreak >= ach.threshold) {
