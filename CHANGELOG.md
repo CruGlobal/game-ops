@@ -4,6 +4,22 @@ All notable changes to Game Ops are documented in this file.
 
 ---
 
+## [Unreleased] - 2026-08-21
+
+### Changed
+- **Streaks are now a weekly workday tally, and nothing rewards more than a five-day week** - a streak was an unbounded chain of consecutive contribution days, and the reward system was keyed to it: badges at 7 / 30 / 90 / 365, achievements paying up to 2000 points, PR point multipliers up to 2.0x, and a 30-day streak challenge template. Because `getAchievementProgress` renders a goal for every entry in the achievements config, the 90 and 365-day chains were advertised as targets on the achievements page. A streak is now the number of workdays in the current week on which a contributor merged a PR or completed a review: 0 to 5, or 0 to 4 in a week holding a federal holiday, resetting every Monday. The ceiling is a property of the value rather than a display rule, so no reward can be re-keyed above a five-day week. It is a tally rather than a chain, so a day off costs that day and nothing more, and the value is derived from the per-day `Contribution` and `Review` rows rather than accumulated, which makes it idempotent under replay. `verifyStreaks` becomes `reconcileWeeklyStreaks` and recomputes every contributor nightly, which is also what normalizes the live values inherited from the old model.
+
+- **Weekend and holiday work no longer advances a streak** - `updateStreak` incremented whenever the working-day gap since the last contribution was exactly 1, which assumed the new contribution landed on a workday. Contributing Thursday, skipping Friday and contributing Saturday counted Friday as that single elapsed workday, so the streak survived and grew: weekend work paid for a skipped workday, and resting the weekend was the only way to lose the streak. `verifyStreaks` shared the off-by-one, so a streak read alive all weekend and a Saturday merge collected the stale multiplier. Weekend and holiday contributions are now ignored in both directions - they never count for a streak and never count against one. The test suite covered Friday-to-Saturday and had no Thursday-to-Saturday case, which is how this survived a rewrite and two reviews.
+
+- **One streak badge, one achievement tier, one point multiplier** - Week Warrior is awarded for contributing on every workday of a week (reusing the legacy `seven_day_badge` column, so no migration). Monthly Master, Quarter Champion and Year-Long Hero are retired: nothing awards them, and the columns keep whatever they already hold, so nobody loses a badge earned under the old rules. The streak achievement threshold is 5 and the 30 / 90 / 365 entries are deleted rather than flagged, since a flag would have left them on the achievements page as goals; already-earned rows still render because `Achievement` carries its own name and description. The multiplier is a single 1.1x tier at a full workweek, replacing 1.1x / 1.25x / 1.5x / 2.0x - the old top tier doubled every PR's points for never taking a day off. The `30-day-streak` challenge template is removed: it asked for 30 workdays inside a 45-day window, which holds about 32.
+
+- **The streak leaderboard no longer ranks on historical chains** - ties broke on `longestStreak`, which still holds pre-cap values in the dozens, so ordering by it kept ranking people on how long they once went without a day off. Ties now break on username, the "Longest Streak" ranking option is gone from the leaderboard view, and `longestStreak` is no longer written or displayed; the stored data is left as history.
+
+### Removed
+- `app/scripts/test-workweek-streaks.js` - asserted the retired consecutive-day model and wrote a real test user into whatever database was configured, cleaning up only on success. The unit suite covers the weekly tally.
+
+---
+
 ## [Unreleased] - 2026-07-28
 
 ### Fixed

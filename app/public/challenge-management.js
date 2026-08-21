@@ -70,7 +70,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const helpTexts = {
             'pr-merge': 'Number of PRs to merge',
             'review': 'Number of code reviews to complete',
-            'streak': 'Number of consecutive contribution days',
+            'streak': 'Workdays to contribute on during the week (5 max, 4 in a holiday week)',
             'points': 'Total points to earn'
         };
         targetHelpText.textContent = helpTexts[type] || 'Number of items to complete';
