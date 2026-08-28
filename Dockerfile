@@ -60,3 +60,9 @@ LABEL "com.datadoghq.ad.logs"='[{"source": "node", "service": "game-ops", "log_p
 EXPOSE 3000
 
 CMD ["npm", "start"]
+
+# Build-identity value for Datadog. Last on purpose: nothing in the build needs
+# the version, so a new build number invalidates no earlier layer. "dev" covers
+# local builds; the pipeline passes --build-arg VERSION=<yyyy-mm-dd>-<n>.
+ARG VERSION="dev"
+ENV DD_VERSION=${VERSION}
