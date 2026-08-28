@@ -42,8 +42,8 @@ const templates = [
         category: 'weekly',
         type: 'points',
         title: 'Points Race',
-        description: 'Earn as many points as possible through PRs, reviews, and more!',
-        target: 100,
+        description: 'Earn 500 points this week from merged PRs and reviews',
+        target: 500,
         reward: 250,
         difficulty: 'medium',
         durationDays: 7

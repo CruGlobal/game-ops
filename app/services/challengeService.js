@@ -1115,11 +1115,11 @@ export const generateWeeklyChallenges = async () => {
             },
             {
                 title: 'Point Hunter',
-                description: 'Earn 500 points this week',
+                description: 'Earn 500 points this week from merged PRs and reviews',
                 type: 'points',
                 target: 500,
-                reward: 150,
-                difficulty: 'easy'
+                reward: 250,
+                difficulty: 'medium'
             }
         ];
 
