@@ -1,0 +1,36 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    # The app is a single npm project under app/; package.json and
+    # package-lock.json live there, not at the repo root.
+    directory: /app
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "chore(npm)"
+    labels:
+      - dependencies
+      - javascript
+    groups:
+      # One grouped PR for routine minor/patch bumps so they verify and
+      # auto-merge together. Majors stay ungrouped → individual PRs held for
+      # human review (the auto-merge workflow only clears patch/minor).
+      npm-updates:
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "chore(actions)"
+    labels:
+      - dependencies
+      - github-actions
+    groups:
+      actions-updates:
+        update-types:
+          - minor
+          - patch

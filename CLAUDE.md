@@ -110,6 +110,16 @@ Migration files are still written, so the docker-compose path stays in step and 
 intent is reviewable — but treat `schema.prisma` as the source of truth for what
 production will actually have.
 
+### How a change ships
+
+Merging to `main` deploys nothing. A nightly build at 05:00 UTC (or a manual
+dispatch of `pipeline-v2.yml`) turns the tip of `main` into a candidate image that
+auto-deploys to stage; production ships only on a manual promote in `cru-deploy`.
+Stage sleeps nightly (`stop_schedule`, 5 PM ET) with no scheduled wake-up, so a fresh
+candidate lands on a stopped service until someone starts it with the `cru` CLI.
+Dark-ship an unfinished change behind the app's own toggles rather than holding it
+out of `main`. Full path: `docs/DEPLOYMENT.md`.
+
 ### Prisma Commands
 ```bash
 cd app
