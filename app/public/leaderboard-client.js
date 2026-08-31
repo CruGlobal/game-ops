@@ -476,8 +476,7 @@ const VIEW_LABELS = {
     totalPoints: 'total points earned',
     prCount: 'pull requests merged',
     reviewCount: 'code reviews completed',
-    currentStreak: 'current contribution streak',
-    longestStreak: 'longest contribution streak'
+    currentStreak: 'workdays contributed this week'
 };
 
 function updateViewDescription() {
@@ -492,7 +491,7 @@ function updateViewDescription() {
 function updateSortIndicator() {
     const keyMap = {
         totalPoints: 'allTimePoints', prCount: 'prCount', reviewCount: 'reviewCount',
-        currentStreak: 'currentStreak', longestStreak: 'currentStreak'
+        currentStreak: 'currentStreak'
     };
     const activeKey = keyMap[currentSort] || 'allTimePoints';
     document.querySelectorAll('#all-time-table thead th').forEach(th => {
@@ -548,7 +547,7 @@ function createQuarterlyCard(user, rank, maxPoints = 0) {
         ${numCellHTML('prsThisQuarter', prsThisQuarter)}
         ${numCellHTML('reviewsThisQuarter', reviewsThisQuarter)}
         ${pointsCellHTML('pointsThisQuarter', pointsThisQuarter, maxPoints)}
-        ${numCellHTML('currentStreak', user.currentStreak || 0, { suffix: ' days' })}
+        ${numCellHTML('currentStreak', user.currentStreak || 0, { suffix: ' workdays' })}
     `;
     return row;
 }
@@ -779,7 +778,7 @@ function createLeaderboardCard(user, rank, type, maxPoints = 0) {
         ${numCellHTML('prCount', user.prCount || 0)}
         ${numCellHTML('reviewCount', user.reviewCount || 0)}
         ${pointsCellHTML('allTimePoints', lifetimePoints, maxPoints)}
-        ${numCellHTML('currentStreak', user.currentStreak || 0, { suffix: ' days' })}
+        ${numCellHTML('currentStreak', user.currentStreak || 0, { suffix: ' workdays' })}
     `;
     return row;
 }
@@ -1076,7 +1075,7 @@ function showError(message) {
                 const el = card.querySelector(`[data-stat="${stat}"]`);
                 if (!el) continue;
 
-                const displayValue = stat === 'currentStreak' ? `${newValue} days` : String(newValue);
+                const displayValue = stat === 'currentStreak' ? `${newValue} workdays` : String(newValue);
                 const currentText = el.textContent.trim();
 
                 if (currentText !== displayValue) {

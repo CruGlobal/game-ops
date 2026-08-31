@@ -91,7 +91,16 @@
     // Contributor activity event
     // Gamification event handlers
     socket.on('streak-update', (data) => {
-        showToast(`🔥 ${data.username} has a ${data.currentStreak}-day streak!`, 'success');
+        // A streak is the workdays contributed this week, so "N-day streak" read as N
+        // calendar days in a row -- the expectation the weekly cap exists to remove.
+        //
+        // Silent at zero on purpose: the nightly reconcile emits an update for every
+        // contributor whose tally changed, so the Monday reset would otherwise open one
+        // toast per active contributor in every browser, each announcing a 0-day streak.
+        // The display still updates, so the cell drops to 0 either way.
+        if (data.currentStreak > 0) {
+            showToast(`🔥 ${data.username} has contributed ${data.currentStreak} workdays this week!`, 'success');
+        }
         updateStreakDisplay(data);
     });
 
