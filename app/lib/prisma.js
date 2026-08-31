@@ -6,6 +6,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 import { PrismaClient } from '@prisma/client';
+import { PrismaPg } from '@prisma/adapter-pg';
 import logger from '../utils/logger.js';
 
 const globalForPrisma = global;
@@ -28,7 +29,10 @@ if (process.env.NODE_ENV === 'test') {
   }
 }
 
+// Prisma 7 requires a driver adapter: the client no longer reads
+// DATABASE_URL from the schema and will refuse to construct without one.
 export const prisma = globalForPrisma.prisma || new PrismaClient({
+  adapter: new PrismaPg({ connectionString: dbUrl }),
   log: logConfig.map(level => ({
     emit: 'event',
     level
