@@ -89,13 +89,41 @@ export function isNonWorkingDay(date) {
 }
 
 /**
+ * Workdays in a normal week, and so the ceiling on a streak: a streak counts the workdays
+ * contributed in the current week. A week holding a federal holiday holds fewer -- use
+ * `countWorkingDays` for a specific window rather than assuming this number.
+ *
+ * It lives here, beside the working-day calendar itself, so the streak engine and the
+ * reward configs read one definition instead of each keeping their own.
+ */
+export const FULL_WORKWEEK = 5;
+
+/**
+ * Local midnight on the Monday that starts `date`'s week. Saturday and Sunday
+ * belong to the week they followed, not the one about to begin.
+ *
+ * This is the boundary a streak resets on, and it is deliberately the same
+ * boundary the Monday challenge cron uses, so a streak tally and the
+ * `Streak Builder` target it feeds always describe the same seven days.
+ *
+ * @param {Date} date
+ * @returns {Date}
+ */
+export function startOfWorkWeek(date) {
+    const monday = new Date(date);
+    monday.setHours(0, 0, 0, 0);
+    // getDay(): 0=Sun..6=Sat. Sunday is 6 days into its week, not 1 day before the next.
+    const daysSinceMonday = (monday.getDay() + 6) % 7;
+    monday.setDate(monday.getDate() - daysSinceMonday);
+    return monday;
+}
+
+/**
  * Count the working days a challenge window spans: start inclusive, end
  * exclusive, compared by calendar day so the time of day never matters.
  *
- * This is the ceiling on how far a streak can advance inside the window, since
- * streaks only move on working days. Note the different boundaries from
- * streakService's internal gap counter, which measures the days *between* two
- * contributions and so excludes its start.
+ * This is the ceiling on a streak inside the window, since streaks only count
+ * working days.
  *
  * @param {Date} startDate - inclusive
  * @param {Date} endDate - exclusive

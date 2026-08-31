@@ -267,7 +267,7 @@ npx prisma migrate reset
 - Daily cron job fetches merged PRs and reviews using GitHub API
 - Automatic badge awarding system with GitHub comment notifications
 - **Quarterly Bill/Vonette awards**: 1st place → 1 Vonette (5 Bills), 2nd/3rd → 1 Bill each; DevOps members earn 1 Bill for 50+ contributions
-- **NEW:** Daily streak verification and badge awarding (runs at midnight)
+- **NEW:** Daily weekly-streak reconciliation and badge awarding (runs at midnight)
 - **NEW:** Weekly challenge generation (runs Monday 00:00)
 - **NEW:** Hourly expired challenge cleanup
 - **NEW:** Points calculation on PR merge with label-based bonuses
@@ -349,14 +349,18 @@ There is no `models/` directory — persistence is Prisma, defined in
 - Automatic reconnection handling
 
 #### **NEW: Gamification System**
-- **Workweek Streak Tracking:**
+- **Weekly Streak Tracking:**
   - Tracks **both PR merges and code reviews** as contributions
-  - **Business day streaks** (Mon-Fri) - weekend gaps don't break streaks
-  - Allows Friday → Monday without breaking (weekend gap is valid)
-  - Breaks only when missing weekdays (e.g., Thursday → Tuesday skipping Friday)
-  - Streak badges: Week Warrior (7d), Monthly Master (30d), Quarter Champion (90d), Year-Long Hero (365d)
+  - A streak is the **workdays contributed in the current week** (Mon-Fri minus US federal
+    holidays), 0-5, resetting every Monday. Nothing can exceed it, so no reward can ask
+    for more than a five-day week
+  - Not a chain: Mon + Thu is 2, and a missed day costs that day only
+  - Weekend and holiday contributions are ignored in both directions
+  - Derived from the per-day `Contribution` / `Review` rows, not accumulated, so it is
+    idempotent under replay and reconciled nightly by `reconcileWeeklyStreaks`
+  - One streak badge: Week Warrior (a full workweek). The 30/90/365-day chain badges are
+    retired — not awarded, existing ones kept
   - Streak leaderboard with real-time updates
-  - Smart notifications for milestones and breaks
 
 - **Points System:**
   - Base points for PRs and reviews
@@ -689,15 +693,15 @@ Defined in `app/config/points-config.js`:
 - **Documentation PR:** 0 bonus (10 total) - detected via `documentation` label
 
 ### Streak Badge Thresholds
-- **Week Warrior:** 7 consecutive days
-- **Monthly Master:** 30 consecutive days
-- **Quarter Champion:** 90 consecutive days
-- **Year-Long Hero:** 365 consecutive days
+- **Week Warrior:** every workday of a week (5, or 4 in a holiday week)
+- Retired, no longer awarded: Monthly Master, Quarter Champion, Year-Long Hero. They
+  required 30 / 90 / 365 consecutive contribution days. The `thirty_day_badge`,
+  `ninety_day_badge` and `year_long_badge` columns keep what they already hold.
 
 ### Challenge Types
 1. **pr-merge**: Merge X PRs during challenge period
 2. **review**: Complete X code reviews during challenge period
-3. **streak**: Maintain X-day contribution streak
+3. **streak**: Contribute on all X workdays of the challenge week (X = that week's workdays)
 4. **points**: Earn X points during challenge period
 
 ### Challenge Rewards
@@ -743,7 +747,7 @@ Bills and Vonettes are real-world rewards: **40 Bills = 1 day off work**.
 2. **Award Badges:** `awardContributorBadgesCron()` - Check and award milestone badges
 
 ### Daily Jobs (runs at 00:00 UTC)
-1. **Check Streaks:** Verify contributor streaks, award streak badges
+1. **Reconcile Streaks:** Recompute every contributor's weekly tally, award streak badges
 2. **Check Quarterly Reset:** `checkAndResetIfNewQuarter()` - Detect quarter boundaries, award quarterly bills/vonettes, archive winners, reset stats and points
 3. **Sync DevOps Team** (at 2 AM UTC): `syncDevOpsTeamFromGitHub()` - Sync DevOps team members from GitHub Teams API
 

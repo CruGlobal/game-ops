@@ -1,3 +1,5 @@
+import { FULL_WORKWEEK } from '../utils/holidays.js';
+
 export const POINT_VALUES = {
     // Label-based PR points
     'bug': 50,
@@ -11,12 +13,16 @@ export const POINT_VALUES = {
     // Review points
     'review': 15,
 
-    // Streak bonuses (multipliers)
-    'streak-7': 1.1,   // 10% bonus
-    'streak-30': 1.25, // 25% bonus
-    'streak-90': 1.5,  // 50% bonus
-    'streak-365': 2.0  // 100% bonus (double points)
+    // Streak bonus (multiplier). One tier, at a full workweek: a streak counts the
+    // workdays contributed in the current week, so there is no longer any chain to pay
+    // compounding points for. The old 30/90/365-day tiers topped out at double points
+    // for never taking a day off.
+    'streak-workweek': 1.1 // 10% bonus
 };
+
+// Re-exported rather than redeclared: the ceiling is one number, defined beside the
+// working-day calendar in utils/holidays.js.
+export { FULL_WORKWEEK };
 
 export const POINT_REASONS = {
     PR_MERGED: 'PR Merged',
@@ -49,12 +55,10 @@ export const calculatePRPoints = (labels, currentStreak = 0) => {
     const prType = detectPRType(labels);
     let basePoints = POINT_VALUES[prType];
 
-    // Apply streak multiplier
-    let multiplier = 1.0;
-    if (currentStreak >= 365) multiplier = POINT_VALUES['streak-365'];
-    else if (currentStreak >= 90) multiplier = POINT_VALUES['streak-90'];
-    else if (currentStreak >= 30) multiplier = POINT_VALUES['streak-30'];
-    else if (currentStreak >= 7) multiplier = POINT_VALUES['streak-7'];
+    // Apply streak multiplier. A holiday week caps the streak at 4, so the bonus is not
+    // reachable that week; the alternative, paying it at 4, would hand it out for a
+    // four-day week in every other week of the year.
+    const multiplier = currentStreak >= FULL_WORKWEEK ? POINT_VALUES['streak-workweek'] : 1.0;
 
     return Math.round(basePoints * multiplier);
 };
