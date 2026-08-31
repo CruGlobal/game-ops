@@ -89,6 +89,16 @@ export function isNonWorkingDay(date) {
 }
 
 /**
+ * Workdays in a normal week, and so the ceiling on a streak: a streak counts the workdays
+ * contributed in the current week. A week holding a federal holiday holds fewer -- use
+ * `countWorkingDays` for a specific window rather than assuming this number.
+ *
+ * It lives here, beside the working-day calendar itself, so the streak engine and the
+ * reward configs read one definition instead of each keeping their own.
+ */
+export const FULL_WORKWEEK = 5;
+
+/**
  * Local midnight on the Monday that starts `date`'s week. Saturday and Sunday
  * belong to the week they followed, not the one about to begin.
  *

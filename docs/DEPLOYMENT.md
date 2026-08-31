@@ -226,12 +226,24 @@ application uses.
 
 ### What actually happens
 
-1. A merge to `main` triggers **Build & Deploy ECS** (`.github/workflows/build-deploy-ecs.yml`),
-   which builds the image and tags it `production-<build>`.
-2. It hands off to **`CruGlobal/cru-deploy`** (`promote-ecs.yml`), which updates the ECS
-   service and waits for the new task to take traffic before draining the old one.
-3. The task definition runs two containers: **`db-migrate`**, which applies the schema,
-   and **`app`**, whose command is plain `npm start` (see `Dockerfile`).
+Game Ops is on Cru's build-once / promote-the-artifact pipeline (v2). One
+environment-neutral image is built from `main` and every environment deploys that
+exact artifact, pinned by digest.
+
+1. **Merging to `main` deploys nothing.** A nightly scheduled build
+   (`.github/workflows/pipeline-v2.yml`, 05:00 UTC) builds the tip of `main` into a
+   candidate image; a manual `workflow_dispatch` does the same on demand. Both reuse
+   the existing candidate when `main` has not moved.
+2. The candidate is deployed to **release-candidate** (stage) automatically. Stage
+   sleeps nightly (`stop_schedule`, 5 PM ET) with no scheduled wake-up, so a nightly
+   candidate lands on a stopped service and looks like it did nothing — start stage
+   with the `cru` CLI before verifying.
+3. **Production ships only on a manual promote** in **`CruGlobal/cru-deploy`**, which
+   re-deploys the already-built candidate by digest. There is no automatic path from a
+   merge to production; dark-ship a change with the app's own feature toggles until it
+   is ready to promote.
+4. Each deploy's task definition runs two containers: **`db-migrate`**, which applies
+   the schema, and **`app`**, whose command is plain `npm start` (see `Dockerfile`).
 
 Infrastructure — the service, task definition, secrets and the migrate command — is
 defined in **`applications/game-ops/<env>/application.tf` in the `cru-terraform`
@@ -271,8 +283,8 @@ rather than silently falling back to another secret.
 
 ### Verifying a deploy
 
-- `gh run list --repo CruGlobal/game-ops --branch main` — build and test status
-- `gh run list --repo CruGlobal/cru-deploy --workflow promote-ecs.yml` — the ECS promotion
+- `gh run list --repo CruGlobal/game-ops --workflow pipeline-v2.yml` — the candidate build
+- `gh run list --repo CruGlobal/cru-deploy` — the release-candidate deploy and any promote
 - Datadog `service:game-ops env:prod` — the boot sequence, the `db push` result, and
   `Cron system initialized`
 
