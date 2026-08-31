@@ -111,8 +111,7 @@ function populateStatsGrid() {
     document.getElementById('statPRs').textContent = contributorData.prCount || 0;
     document.getElementById('statReviews').textContent = contributorData.reviewCount || 0;
     document.getElementById('statPoints').textContent = contributorData.totalPoints || 0;
-    document.getElementById('statStreak').textContent = `${contributorData.currentStreak || 0} days`;
-    document.getElementById('statLongestStreak').textContent = `Longest: ${contributorData.longestStreak || 0} days`;
+    document.getElementById('statStreak').textContent = `${contributorData.currentStreak || 0} workdays`;
     document.getElementById('statBills').textContent = contributorData.totalBillsAwarded || 0;
     document.getElementById('statBadges').textContent = contributorData.badges?.length || 0;
 }
@@ -497,10 +496,7 @@ function initializeSocketIO() {
     socket.on('streak-update', (data) => {
         if (data.username === username) {
             console.log('Streak updated for current user:', data);
-            document.getElementById('statStreak').textContent = `${data.currentStreak} days`;
-            if (data.longestStreak) {
-                document.getElementById('statLongestStreak').textContent = `Longest: ${data.longestStreak} days`;
-            }
+            document.getElementById('statStreak').textContent = `${data.currentStreak} workdays`;
         }
     });
 

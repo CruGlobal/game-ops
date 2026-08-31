@@ -1,11 +1,39 @@
 name: Build & Deploy ECS
 
+# PARKED — the v1 build+deploy path, kept only as a manual escape hatch.
+#
+# It builds an environment-SPECIFIC image (the reusable build-ecs workflow infers
+# environment from the branch: `main` → production, `staging` → staging) and
+# pushes `<env>-<build-number>` tags to the `game-ops` ECR repo. That is exactly
+# what pipeline v2 replaces with one environment-agnostic image promoted by
+# digest, so this is no longer how Game Ops ships — it exists so the v1
+# build+deploy is still reachable by hand if the v2 path itself is what breaks.
+#
+# ⚠️ THE BUILD LEG HAS A HARD EXPIRY — READ THIS BEFORE RELYING ON IT.
+# The `build` job below calls `build-ecs.yml`, which assumes the ECS `TaskRole`
+# (via `setup-env`'s default `role-suffix: TaskRole`) and exposes no input to
+# point it anywhere else. The companion cru-terraform pipeline-v2 PR moves
+# `applications/game-ops` onto the v2 module, where the `TaskRole` becomes a pure
+# RUNTIME identity: its GitHub OIDC trust is removed and the build identity moves
+# to a dedicated `game-ops-<env>-GitHubRole`. That happens per environment, so
+# from the moment the PROD APPLY lands, dispatching this workflow on `main` fails
+# with `AccessDenied` while requesting credentials (and a dispatch on `staging`
+# fails the same way once the stage apply lands). It cannot be redirected without
+# editing the upstream reusable workflow.
+#
+# After those applies this file is historical reference plus a v1 DEPLOY of an
+# already-built v1 image — the `deploy` job's `trigger-deploy` path uses the
+# shared `GitHubDeployECS` role, which the module change does not touch, so it can
+# still re-point ECS at an `<env>-<build-number>` tag that already exists in ECR.
+# It is NOT a fallback for "pipeline v2 failed to build": that failure mode and
+# this one arrive together, and no new v1 image can be produced after the prod
+# apply.
 on:
-  push:
-    branches:
-      # Automatically build and deploy main and staging. Additional branches may be added.
-      - main
-      - staging
+  # Parked v1 escape hatch — do not re-add push triggers. This app builds and
+  # deploys through .github/workflows/pipeline-v2.yml; this workflow stays
+  # dispatch-only so the v1 build+deploy path is still reachable by hand.
+  # Restoring the push trigger would double-build every merge and push v1's
+  # environment-specific `production-<n>` tags alongside v2's candidates.
   workflow_dispatch:
     # Allows manual build and deploy of any branch/ref
     inputs:
@@ -13,13 +41,13 @@ on:
         type: boolean
         description: Deploy image after building?
         required: true
-        default: "false"
+        default: 'false'
 
 jobs:
   # Build and push container image to ECR. Builds occur in the project repository.
   build:
     name: Build
-    uses: CruGlobal/.github/.github/workflows/build-ecs.yml@v1
+    uses: CruGlobal/.github/.github/workflows/build-ecs.yml@v2
 
   # Triggers an ECS deployment in https://github.com/CruGlobal/cru-deploy/actions.
   # All deployments happen in the cru-deploy repo.
@@ -27,9 +55,9 @@ jobs:
     name: Deploy
     runs-on: ubuntu-latest
     needs: build
-    if: github.event_name != 'workflow_dispatch' || github.event.inputs.auto-deploy == 'true'
+    if: github.event.inputs.auto-deploy == 'true'
     steps:
-      - uses: CruGlobal/.github/actions/trigger-deploy@v1
+      - uses: CruGlobal/.github/actions/trigger-deploy@v2
         with:
           github-token: ${{ secrets.CRU_DEPLOY_GITHUB_TOKEN }}
           project-name: ${{ needs.build.outputs.project-name }}

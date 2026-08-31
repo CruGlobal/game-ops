@@ -435,7 +435,7 @@ curl http://localhost:3000/api/challenges/user/johndoe
 
 ## Streak Endpoints
 
-**Note**: Streaks track consecutive **business days** (Mon-Fri) where a contributor either merges a PR or completes a code review. Weekend gaps are allowed and don't break streaks.
+**Note**: `currentStreak` is the number of workdays in the current week (Mon-Fri, minus US federal holidays) on which a contributor merged a PR or completed a code review. It resets every Monday and cannot exceed the workdays the week holds — 5 normally, 4 in a holiday week. Weekend and holiday contributions are ignored in both directions. `longestStreak` is frozen historical data from the retired consecutive-day model and is no longer written.
 
 ### GET /api/leaderboard/streaks
 

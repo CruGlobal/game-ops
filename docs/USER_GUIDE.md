@@ -225,8 +225,8 @@ Each quarter is displayed in a card showing:
    - Don't wait until last week
 
 2. **Stay Consistent**
-   - Daily contributions add up
-   - Maintain streak for bonus points
+   - Contributions across the week add up
+   - A full workweek earns the bonus multiplier
 
 3. **Focus on Points**
    - Label PRs correctly (bug, feature)
@@ -284,16 +284,16 @@ Earned by completing code reviews:
 
 ### Streak Badges
 
-Earned by maintaining **workweek contribution streaks** (Mon-Fri, weekends don't break streaks):
-
 | Badge | Requirement | Icon |
 |-------|------------|------|
-| **Week Warrior** | 7-day streak | 🔥 |
-| **Monthly Master** | 30-day streak | 🌙 |
-| **Quarter Champion** | 90-day streak | 👑 |
-| **Year-Long Hero** | 365-day streak | 🏅 |
+| **Week Warrior** | Contribute on every workday of a week (5, or 4 in a holiday week) | 🔥 |
 
-**Note**: Streaks count business days only. Weekend gaps are allowed!
+**Note**: A streak counts the workdays in the current week, so 5 is as high as it goes.
+Nothing here asks for more than a five-day week.
+
+**Retired badges**: Monthly Master 🌙, Quarter Champion 👑 and Year-Long Hero 🏅 required
+unbroken chains of 30, 90 and 365 contribution days. They are no longer awarded. If you
+already earned one it stays on your profile.
 
 ### How Badges Are Awarded
 
@@ -308,31 +308,35 @@ Earned by maintaining **workweek contribution streaks** (Mon-Fri, weekends don't
 
 ### What is a Streak?
 
-A streak counts consecutive **business days** (Monday-Friday) where you contribute to the repository by either:
+Your streak is the number of **workdays in the current week** (Monday-Friday, minus any
+federal holiday) on which you contributed, by either:
 - **Merging a Pull Request**, OR
 - **Completing a Code Review**
 
 **Key Features:**
-- ✅ **Weekends don't break streaks** - Friday → Monday = streak continues!
-- ✅ **Reviews count equally** - Both PRs and reviews maintain your streak
-- ✅ **Business days only** - Only weekdays (Mon-Fri) are counted
-- ❌ **Missing weekdays breaks streak** - Thursday → Tuesday (skipping Friday) = broken
+- ✅ **It resets every Monday** - a fresh 0 out of 5, nothing carried forward
+- ✅ **Reviews count equally** - both PRs and reviews count the day
+- ✅ **A day off costs that day only** - Monday and Thursday is 2 out of 5, and skipping
+  Wednesday takes nothing else away from you
+- ✅ **Weekends and holidays are neutral** - working one never counts for you, and never
+  counts against you
+- ✅ **5 is the maximum** - 4 in a week holding a federal holiday. No badge, bonus or
+  challenge asks for more than a five-day week
 
 ### How Streaks Work
 
-**Starting a Streak:**
-- Merge a PR or complete a review
-- Your streak starts at 1 day
+**Starting a week:**
+- Merge a PR or complete a review on a workday
+- Your streak reads 1 out of that week's workdays
 
-**Continuing a Streak:**
-- Contribute at least once per day
-- Streak increments by 1
-- Time zone: UTC (00:00 - 23:59)
+**Through the week:**
+- Each additional workday you contribute on adds 1
+- Several PRs on one day still count that one day
+- It stops at the number of workdays the week holds
 
-**Breaking a Streak:**
-- Miss a full day without contributing
-- Streak resets to 0
-- Longest streak is preserved
+**New week:**
+- Monday starts over at 0
+- Missing a day is not a penalty; it is simply a day you did not contribute on
 
 ### Viewing Your Streak
 
@@ -341,23 +345,20 @@ A streak counts consecutive **business days** (Monday-Friday) where you contribu
 - Shows current streak number
 
 **On Profile Page:**
-- Current streak
-- Longest streak ever achieved
+- This week's streak
 - Last contribution date
 - Streak badges earned
 
 ### Streak Tips
 
 ✅ **Best Practices:**
-- Set daily reminders
-- Review PRs if you can't merge one
-- Check your streak before end of day (UTC)
-- Use streak calendar to track progress
+- Review a PR if you have nothing ready to merge — reviews count the same
+- Contribute during your workday; nothing about a streak rewards evenings or weekends
 
 ❌ **Common Mistakes:**
-- Forgetting time zone differences
-- Only contributing on workdays
-- Not checking if contribution counted
+- Working a weekend to protect a streak. It does nothing — weekend work is neither
+  counted nor held against you
+- Assuming a missed day costs more than that day. It does not
 
 ---
 
@@ -377,18 +378,15 @@ A streak counts consecutive **business days** (Monday-Friday) where you contribu
 **Review Points:**
 - **Complete Code Review:** 15 points
 
-**Streak Multipliers:**
+**Streak Multiplier:**
 
-Active streaks multiply your PR points! 🔥
+| Streak | Multiplier | Bonus |
+|--------|-----------|--------|
+| Every workday of the week | 1.1x | +10% |
 
-| Streak Length | Multiplier | Bonus |
-|---------------|-----------|--------|
-| 7-29 days | 1.1x | +10% |
-| 30-89 days | 1.25x | +25% |
-| 90-364 days | 1.5x | +50% |
-| 365+ days | 2.0x | +100% (Double!) |
-
-**Note:** Streak multipliers only apply to PR points, not review points.
+**Note:** The multiplier applies to PR points, not review points. There is one tier and no
+tier above it. The old 30, 90 and 365-day tiers paid up to double points for an unbroken
+chain, which amounted to paying people not to take a day off.
 
 ### Label Priority
 
@@ -421,18 +419,18 @@ Feature points: 100
 Total: 100 points
 ```
 
-**Scenario 4: Bug Fix with 30-Day Streak**
+**Scenario 4: Bug Fix on a Full Workweek**
 ```
 Bug fix points: 50
-Streak multiplier: 1.25x
-Total: 63 points (50 × 1.25, rounded)
+Streak multiplier: 1.1x
+Total: 55 points (50 × 1.1, rounded)
 ```
 
-**Scenario 5: Feature with 90-Day Streak**
+**Scenario 5: Feature on a Full Workweek**
 ```
 Feature points: 100
-Streak multiplier: 1.5x
-Total: 150 points (100 × 1.5)
+Streak multiplier: 1.1x
+Total: 110 points (100 × 1.1)
 ```
 
 **Scenario 6: Code Review**
@@ -493,7 +491,7 @@ Challenges are week-long competitions with specific goals and rewards.
 - **Goal:** Contribute on every workday of the challenge week
 - **Target:** The number of workdays in the week: 5 normally, 4 when a federal holiday falls inside it
 - **Reward:** 300 points
-- Weekends and holidays never break your streak, and they never count toward this target either. This is separate from the **Week Warrior** badge, which still needs 7 consecutive contribution days and can span multiple weeks.
+- Weekends and holidays never count toward this target, and never count against you. Your streak is this week's workday count, so the challenge target and your streak are the same number — and the **Week Warrior** badge is the same week's work.
 
 **4. Point Hunter (Points Challenge)**
 - **Goal:** Earn 500 points during the week
@@ -586,7 +584,6 @@ You receive instant notifications for:
 - New challenges available
 
 **Warning Notifications (Orange)** 🟠
-- Streak at risk (23+ hours since last contribution)
 - Challenge ending soon
 
 **Error Notifications (Red)** 🔴
@@ -690,20 +687,26 @@ A: No, contributions from bots (dependabot, github-actions, etc.) are excluded.
 
 ### Streaks
 
-**Q: What time zone is used for streaks?**
-A: UTC (Coordinated Universal Time). Contributions count for the calendar day in UTC.
+**Q: What does my streak number mean?**
+A: The workdays this week you have contributed on, out of the workdays the week holds —
+5 normally, 4 when a federal holiday lands inside it.
 
-**Q: I contributed but my streak broke?**
+**Q: I contributed but my streak did not move?**
 A: Possible reasons:
-- Contribution was on same day as previous (doesn't extend streak)
-- More than 24 hours passed between contributions (UTC time)
-- Contribution type didn't count (bot PR, draft PR)
+- The contribution was on a day you had already contributed on (a day counts once)
+- It landed on a weekend or a federal holiday, which are not counted either way
+- The contribution type didn't count (bot PR, draft PR)
 
-**Q: Can I recover a broken streak?**
-A: No, streaks reset when broken. Your longest streak is preserved for historical records.
+**Q: What happens if I take a day off?**
+A: You lose that day and nothing else. There is no chain to break and nothing to recover.
 
 **Q: Do weekends count?**
-A: Yes! Streaks require daily contributions, including weekends.
+A: No. Working a weekend adds nothing to your streak, and resting one takes nothing away.
+Nothing in Game Ops rewards more than a five-day week.
+
+**Q: Where did the Monthly Master, Quarter Champion and Year-Long Hero badges go?**
+A: Retired. They required unbroken chains of 30, 90 and 365 contribution days. Badges
+already earned stay on the profiles that hold them.
 
 ---
 
@@ -718,7 +721,7 @@ A: Add appropriate labels to your PRs:
 - `hotfix` for critical fixes (80 pts)
 - `documentation` for docs (30 pts)
 
-Maintain a streak for multiplier bonuses (up to 2x at 365+ days)!
+Contribute on every workday of the week for a 1.1x multiplier.
 
 **Q: Do points expire?**
 A: No, points are permanent and cumulative.
@@ -726,12 +729,10 @@ A: No, points are permanent and cumulative.
 **Q: Can I see why I got certain points?**
 A: Yes, your profile shows complete points history with reasons and timestamps.
 
-**Q: How do streak multipliers work?**
-A: Your current streak multiplies PR points:
-- 7+ days: 1.1x (10% bonus)
-- 30+ days: 1.25x (25% bonus)
-- 90+ days: 1.5x (50% bonus)
-- 365+ days: 2.0x (100% bonus - double points!)
+**Q: How does the streak multiplier work?**
+A: Contributing on every workday of the week multiplies your PR points by 1.1 (10% bonus).
+That is the only tier. In a week holding a federal holiday the streak caps at 4, so the
+bonus is not available that week.
 
 Streak bonuses do NOT apply to review points or challenge rewards.
 
@@ -774,7 +775,7 @@ A: Yes! Visit the Hall of Fame tab to see all past quarterly winners and top 3 c
 A: Absolutely! Your quarterly stats start tracking as soon as you contribute. While you may be behind for this quarter, every new quarter is a fresh start.
 
 **Q: Do quarterly stats affect my badges or streaks?**
-A: No. Badges and streaks are independent of quarters. Badges are earned based on all-time totals, and streaks track daily consistency regardless of quarter boundaries.
+A: No. Badges and streaks are independent of quarters. Badges are earned based on all-time totals, and a streak covers the current week regardless of quarter boundaries.
 
 **Q: Which quarter system does my organization use?**
 A: Check the "This Quarter" tab header to see the current quarter name and date range. Admins can configure the quarter system (Calendar, Fiscal Year, Academic Year, or Custom).
@@ -816,11 +817,10 @@ A: Try:
    - Hotfix for urgent fixes (80 pts)
    - Bug fixes are solid (50 pts)
 
-2. **Build and Maintain Streaks**
-   - 365+ day streak = double points on PRs!
-   - 90+ day streak = 50% bonus
-   - Streak multipliers stack with label points
-   - Example: Feature (100) × 2.0 = 200 pts!
+2. **Contribute Across the Week**
+   - Every workday of the week = 1.1x on PRs
+   - The multiplier stacks with label points
+   - Example: Feature (100) × 1.1 = 110 pts
 
 3. **Complete Challenges**
    - Join multiple challenges each week
@@ -832,19 +832,18 @@ A: Try:
    - Helps maintain streaks
    - Consistent contribution
 
-### 🔥 Maintaining Streaks
+### 🔥 Streaks
 
-1. **Set Daily Reminders**
-   - Calendar reminder at 8pm UTC
-   - "Did I contribute today?"
+1. **Contribute During Your Workday**
+   - Nothing counts a weekend, a holiday, or a late evening differently
 
 2. **Have Backup Plans**
    - Review PRs if you can't merge
    - Keep list of small tasks
 
-3. **Track Your Progress**
-   - Check streak daily
-   - Know your longest streak
+3. **Keep It In Proportion**
+   - 5 out of 5 is the ceiling, and Monday resets it
+   - A day off costs that day and nothing else
 
 ### 🏆 Winning Challenges
 
