@@ -828,6 +828,51 @@ describe('ChallengeService', () => {
                 expect(streak.description).not.toMatch(/7-day/i);
             });
         });
+
+        describe('points challenge pricing', () => {
+            // Math.random() === 0 makes the Fisher-Yates shuffle deterministic and
+            // always leaves the points template in the selected three.
+            beforeEach(() => {
+                jest.spyOn(Math, 'random').mockReturnValue(0);
+            });
+
+            afterEach(() => {
+                jest.restoreAllMocks();
+            });
+
+            const pointsOf = challenges => challenges.find(c => c.type === 'points');
+
+            it('pays the points challenge in line with the work it asks for', async () => {
+                const challenges = await generateWeeklyChallenges();
+                const points = pointsOf(challenges);
+
+                expect(points).toBeDefined();
+                // Measured against the other weekly challenges this one sits mid-field,
+                // yet it paid the least of the four and called itself easy.
+                expect(points.reward).toBe(250);
+                expect(points.difficulty).toBe('medium');
+            });
+
+            it('leaves the target where the field already reaches it', async () => {
+                const challenges = await generateWeeklyChallenges();
+                const points = pointsOf(challenges);
+
+                // Points accrue only from merged PRs and submitted reviews; nothing a
+                // challenge itself pays out feeds this bar, so the target is a pure
+                // measure of a week's work and 500 is already cleared every week.
+                expect(points.target).toBe(500);
+            });
+
+            it('names the only two things that move the bar', async () => {
+                const challenges = await generateWeeklyChallenges();
+                const points = pointsOf(challenges);
+
+                // Rewards paid by other challenges land in the same visible point
+                // total, so bare "earn 500 points" reads as though they count.
+                expect(points.description).toMatch(/PR/i);
+                expect(points.description).toMatch(/review/i);
+            });
+        });
     });
 
     describe('checkExpiredChallenges', () => {

@@ -494,9 +494,10 @@ Challenges are week-long competitions with specific goals and rewards.
 - Weekends and holidays never count toward this target, and never count against you. Your streak is this week's workday count, so the challenge target and your streak are the same number — and the **Week Warrior** badge is the same week's work.
 
 **4. Point Hunter (Points Challenge)**
-- **Goal:** Earn X points during the week
-- **Target:** 300-1000 points depending on difficulty
-- **Reward:** 100-200 points
+- **Goal:** Earn 500 points during the week
+- **Target:** 500 points
+- **Reward:** 250 points
+- Only points from merged PRs and submitted reviews count. Rewards paid out by other challenges, and points from achievements, raise your total score but do not move this bar.
 
 ### Difficulty Levels
 

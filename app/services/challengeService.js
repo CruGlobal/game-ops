@@ -1139,6 +1139,10 @@ export const generateWeeklyChallenges = async () => {
         // weekend — which the streak engine does not even credit.
         const streakTarget = countWorkingDays(startOfWeek, endOfWeek);
 
+        // The weekly challenges as they actually ship. config/challenge-templates.js
+        // holds a SEPARATE `category: 'weekly'` set for the admin template picker whose
+        // titles and numbers differ from these -- see the table in that file. Changing
+        // one list does not change the other, so change both or neither.
         const challengeTemplates = [
             {
                 title: 'Sprint Master',
@@ -1166,11 +1170,11 @@ export const generateWeeklyChallenges = async () => {
             },
             {
                 title: 'Point Hunter',
-                description: 'Earn 500 points this week',
+                description: 'Earn 500 points this week from merged PRs and reviews',
                 type: 'points',
                 target: 500,
-                reward: 150,
-                difficulty: 'easy'
+                reward: 250,
+                difficulty: 'medium'
             }
         ];
 

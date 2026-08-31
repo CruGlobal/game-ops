@@ -1,3 +1,18 @@
+// Templates for the admin "create from template" picker. Nothing here is what the
+// Monday cron generates: `generateWeeklyChallenges` in services/challengeService.js
+// carries its own list, and the two DISAGREE by more than titles --
+//
+//   type      here (picker)                  there (what actually ships)
+//   pr-merge  Weekly PR Sprint   3 / 150 easy    Sprint Master    5 / 250 medium
+//   review    Code Review Blitz  5 / 200 medium  Review Champion 10 / 200 medium
+//   streak    Streak Challenge   5 / 300 hard    Streak Builder  <workdays in the
+//                                                window> / 300 hard
+//   points    Points Race      500 / 250 medium  Point Hunter   500 / 250 medium
+//
+// Editing a number here changes what an admin gets when they pick a template, and
+// nothing about the weekly challenges everyone actually sees. Which list is canonical
+// has never been decided -- that is why the points entry sat at target 100 against a
+// shipped 500 until it was noticed.
 const templates = [
     // Weekly templates (matching existing auto-generation patterns)
     {
@@ -42,8 +57,8 @@ const templates = [
         category: 'weekly',
         type: 'points',
         title: 'Points Race',
-        description: 'Earn as many points as possible through PRs, reviews, and more!',
-        target: 100,
+        description: 'Earn 500 points this week from merged PRs and reviews',
+        target: 500,
         reward: 250,
         difficulty: 'medium',
         durationDays: 7

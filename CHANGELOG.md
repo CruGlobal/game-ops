@@ -22,6 +22,9 @@ All notable changes to Game Ops are documented in this file.
 
 ## [Unreleased] - 2026-07-28
 
+### Changed
+- **Point Hunter now pays 250 and calls itself medium** - the weekly points challenge was priced at 150 with `difficulty: 'easy'`, the smallest reward of the four weekly templates. Measured against real completions it sits mid-field: easier than the review and streak challenges, harder than the PR-merge one, which pays 250. Its target stays at 500. The description now says the points come from merged PRs and reviews, because only those two paths feed a points challenge - `completeChallenge()` writes a reward straight to the contributor's totals and never calls `updateChallengeProgress()`, as do achievements and backfill, so finishing the other weekly challenges visibly raises a contributor's score while leaving the Point Hunter bar where it was. `challenge-templates.js`, which feeds only the admin template picker, carried a third set of numbers again (target 100) and is now aligned with what actually ships.
+
 ### Fixed
 - **Completed challenges no longer shown as "Not Completed"** - `getUserChallenges()` bucketed every participation by the challenge's `status` alone and never read the participant's `completed` flag. Completing a challenge keeps the participant row (with `completed=true`) and adds a `CompletedChallenge`, so each finished participation was listed twice once its window closed: once as "Completed +N pts earned", and again as "Not Completed" under Final Progress. Because progress keeps accruing after the target is met, those phantom rows showed a final progress above target (`550 / 500`), which read as a challenge lost rather than won. Completed participations are now excluded from both the expired-incomplete and active buckets, since they are already reported in `completedChallenges`.
 
