@@ -1,3 +1,18 @@
+// Templates for the admin "create from template" picker. Nothing here is what the
+// Monday cron generates: `generateWeeklyChallenges` in services/challengeService.js
+// carries its own list, and the two DISAGREE by more than titles --
+//
+//   type      here (picker)                  there (what actually ships)
+//   pr-merge  Weekly PR Sprint   3 / 150 easy    Sprint Master    5 / 250 medium
+//   review    Code Review Blitz  5 / 200 medium  Review Champion 10 / 200 medium
+//   streak    Streak Challenge   5 / 300 hard    Streak Builder  <workdays in the
+//                                                window> / 300 hard
+//   points    Points Race      500 / 250 medium  Point Hunter   500 / 250 medium
+//
+// Editing a number here changes what an admin gets when they pick a template, and
+// nothing about the weekly challenges everyone actually sees. Which list is canonical
+// has never been decided -- that is why the points entry sat at target 100 against a
+// shipped 500 until it was noticed.
 const templates = [
     // Weekly templates (matching existing auto-generation patterns)
     {
@@ -30,7 +45,7 @@ const templates = [
         category: 'weekly',
         type: 'streak',
         title: 'Streak Challenge',
-        description: 'Maintain a contribution streak for the entire week!',
+        description: 'Contribute on all 5 workdays this week. Weekends and holidays never count!',
         target: 5,
         reward: 300,
         difficulty: 'hard',
@@ -97,19 +112,10 @@ const templates = [
         reward: 300,
         difficulty: 'medium',
         durationDays: 14
-    },
-    {
-        id: '30-day-streak',
-        name: '30-Day Streak (Hard)',
-        category: 'monthly',
-        type: 'streak',
-        title: '30-Day Streak Challenge',
-        description: 'Maintain a 30-day contribution streak. The ultimate test of consistency!',
-        target: 30,
-        reward: 500,
-        difficulty: 'hard',
-        durationDays: 45
     }
+    // A 30-day streak template used to live here. A streak now counts the workdays in
+    // the current week, so 30 is unreachable by construction — and asking for it meant
+    // asking someone to take at most two days off in six weeks.
 ];
 
 export const getTemplates = () => templates;
