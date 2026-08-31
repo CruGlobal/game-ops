@@ -1,6 +1,6 @@
 import { prisma } from '../lib/prisma.js';
 import { emitStreakUpdate } from '../utils/socketEmitter.js';
-import { isNonWorkingDay, startOfWorkWeek, countWorkingDays } from '../utils/holidays.js';
+import { isNonWorkingDay, startOfWorkWeek, countWorkingDays, FULL_WORKWEEK } from '../utils/holidays.js';
 import logger from '../utils/logger.js';
 
 /**
@@ -17,8 +17,12 @@ import logger from '../utils/logger.js';
  * writes its day row before calling in — see `updateContributor` in contributorService.
  */
 
-/** The most a normal week can hold. Holiday weeks are lower; see `weekWindow`. */
-export const FULL_WORKWEEK = 5;
+/**
+ * The most a normal week can hold. Holiday weeks are lower; see `weekWindow`.
+ * Defined in utils/holidays.js -- one number, so a reward config and the streak engine
+ * cannot drift apart -- and re-exported here for the callers that already import it.
+ */
+export { FULL_WORKWEEK };
 
 /** Collapses two Dates that fall on the same calendar day to one key. */
 const dayKey = (date) => `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
@@ -86,13 +90,28 @@ export const updateStreak = async (contributor, contributionDate) => {
             select: { id: true }
         }))?.id;
 
+        if (!contributorId) {
+            // weeklyTally filters on this id, and Prisma reads `undefined` in a where
+            // clause as "not supplied" -- which would tally every contributor's rows for
+            // the week rather than nobody's. Fail before the query, not after.
+            throw new Error(`Contributor ${contributor.username} not found`);
+        }
+
         const tally = await weeklyTally(contributorId, window);
+
+        // The tally is order-independent, but `lastContributionDate` means "most recent
+        // activity" -- it is shown on the profile and decides the winner in
+        // scripts/merge-case-duplicate-contributors.js. Backfill and late webhooks arrive
+        // out of order, so this only ever moves forward.
+        const previousDate = contributor.lastContributionDate
+            ? new Date(contributor.lastContributionDate)
+            : null;
 
         const updated = await prisma.contributor.update({
             where: { username: contributor.username },
             data: {
                 currentStreak: tally,
-                lastContributionDate: day
+                ...(!previousDate || day > previousDate ? { lastContributionDate: day } : {})
             }
         });
 

@@ -213,6 +213,34 @@ describe('StreakService', () => {
 
             expect(result.currentStreak).toBe(1);
         });
+
+        it('refuses to tally a contributor that does not exist', async () => {
+            // The tally filters on contributorId, and Prisma reads an undefined filter as
+            // "not supplied" — so a missing id would count every contributor's rows for
+            // the week instead of nobody's. Fail before the query rather than after.
+            const other = await makeContributor({ username: 'realPerson' });
+            await contributedOn(other.id, MON, TUE, WED);
+
+            await expect(updateStreak({ username: 'nobodyHere' }, MON))
+                .rejects.toThrow('Contributor nobodyHere not found');
+        });
+
+        it('does not move lastContributionDate backwards on a backdated contribution', async () => {
+            // Backfill and late webhooks arrive out of order. The tally is order-independent,
+            // but lastContributionDate is read as "most recent activity" on the profile and
+            // by the duplicate-contributor merge script, so it must not regress.
+            const c = await makeContributor({ username: 'backfilled' });
+            await contributedOn(c.id, WED);
+            await updateStreak(c, WED);
+
+            const snapshot = await prisma.contributor.findUnique({ where: { username: 'backfilled' } });
+            await contributedOn(c.id, MON);
+            const result = await updateStreak(snapshot, MON);
+
+            expect(result.currentStreak).toBe(2);
+            const after = await prisma.contributor.findUnique({ where: { username: 'backfilled' } });
+            expect(after.lastContributionDate).toEqual(dayOnly(WED));
+        });
     });
 
     describe('reconcileWeeklyStreaks', () => {

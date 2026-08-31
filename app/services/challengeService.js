@@ -122,16 +122,22 @@ const handleChallengeCreated = async (challenge, { skipNotifications = false } =
  * hand-entered target. Other challenge types are untouched.
  */
 function cappedStreakTarget({ type, target, startDate, endDate }) {
-    if (type !== 'streak' || typeof target !== 'number') return target;
+    if (type !== 'streak') return target;
+
+    // Coerced rather than type-checked: the admin UI parses its form field, but a bare
+    // API caller can send "30", and a clamp that skips a numeric string is a clamp with
+    // a hole in it.
+    const requested = Number(target);
+    if (!Number.isFinite(requested)) return target;
 
     // A window wider than a week still caps at one week's workdays, since the tally
     // resets every Monday. A narrower window caps at the workdays it actually holds.
     const windowWorkdays = startDate && endDate ? countWorkingDays(startDate, endDate) : FULL_WORKWEEK;
     const reachable = Math.min(FULL_WORKWEEK, windowWorkdays || FULL_WORKWEEK);
-    if (target <= reachable) return target;
+    if (requested <= reachable) return target;
 
     logger.info('Clamped streak challenge target to the reachable maximum', {
-        requested: target,
+        requested,
         target: reachable
     });
     return reachable;
@@ -842,15 +848,8 @@ export const updateChallenge = async (challengeId, updateData) => {
             data.type = updateData.type;
         }
 
-        // Block target reduction below max participant progress
-        if (data.target !== undefined && existing.participants.length > 0) {
-            const maxProgress = Math.max(...existing.participants.map(p => p.progress));
-            if (data.target < maxProgress) {
-                throw new Error(`Cannot reduce target below current maximum participant progress (${maxProgress})`);
-            }
-        }
-
-        // Convert date strings to Date objects
+        // Convert date strings to Date objects. Resolved before the target rules below,
+        // which need the window the edit lands on rather than the one it replaces.
         if (data.startDate) data.startDate = new Date(data.startDate);
         if (data.endDate) data.endDate = new Date(data.endDate);
 
@@ -859,6 +858,31 @@ export const updateChallenge = async (challengeId, updateData) => {
         const effectiveEnd = data.endDate || existing.endDate;
         if (effectiveEnd <= effectiveStart) {
             throw new Error('End date must be after start date');
+        }
+
+        // An edit reaches `target` by a different route than createChallenge, and
+        // updateChallengeController validates only "positive integer" -- so without this
+        // the ceiling holds at creation and nowhere afterwards.
+        const requestedTarget = data.target;
+        if (data.target !== undefined) {
+            data.target = cappedStreakTarget({
+                type: data.type ?? existing.type,
+                target: data.target,
+                startDate: effectiveStart,
+                endDate: effectiveEnd
+            });
+        }
+
+        // Block target reduction below max participant progress -- unless the clamp above
+        // is what lowered it. Pre-cap streak participants still carry progress in the
+        // dozens (reconcileWeeklyStreaks corrects contributor.currentStreak, not
+        // participant rows), so honouring the guard against a clamped value would let one
+        // legacy row hold a target above a workweek indefinitely.
+        if (data.target !== undefined && data.target === requestedTarget && existing.participants.length > 0) {
+            const maxProgress = Math.max(...existing.participants.map(p => p.progress));
+            if (data.target < maxProgress) {
+                throw new Error(`Cannot reduce target below current maximum participant progress (${maxProgress})`);
+            }
         }
 
         const updated = await prisma.challenge.update({

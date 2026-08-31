@@ -1136,6 +1136,101 @@ describe('ChallengeService', () => {
                 endDate: '2025-01-10'
             })).rejects.toThrow('End date must be after start date');
         });
+
+        // createChallenge clamps a streak target, but an edit reaches the same column by
+        // a different route: PUT /api/challenges/:id validates only "positive integer",
+        // so without a clamp here the ceiling holds at creation and not afterwards.
+        it('clamps a streak target raised by an edit', async () => {
+            const challenge = await createChallenge({
+                title: 'Week Streak',
+                description: 'Contribute every workday',
+                type: 'streak',
+                target: 5,
+                reward: 300,
+                status: 'active',
+                startDate: new Date(2026, 5, 1),
+                endDate: new Date(2026, 5, 8),
+                difficulty: 'hard',
+                category: 'individual'
+            });
+
+            const updated = await updateChallenge(challenge.id, { target: 30 });
+
+            expect(updated.target).toBe(5);
+        });
+
+        it('clamps an edited streak target to the edited window', async () => {
+            const challenge = await createChallenge({
+                title: 'Week Streak',
+                description: 'Contribute every workday',
+                type: 'streak',
+                target: 3,
+                reward: 300,
+                status: 'active',
+                startDate: new Date(2026, 5, 1),
+                endDate: new Date(2026, 5, 8),
+                difficulty: 'hard',
+                category: 'individual'
+            });
+
+            // Moving the window onto the July 4 week drops the ceiling to 4, and the new
+            // dates arrive as strings from the API the same way the controller sends them.
+            const updated = await updateChallenge(challenge.id, {
+                target: 5,
+                startDate: '2026-06-29T00:00:00',
+                endDate: '2026-07-06T00:00:00'
+            });
+
+            expect(updated.target).toBe(4);
+        });
+
+        it('leaves a non-streak target alone on an edit', async () => {
+            const challenge = await createChallenge({
+                title: 'Sprint Master',
+                description: 'Merge PRs',
+                type: 'pr-merge',
+                target: 5,
+                reward: 250,
+                status: 'active',
+                startDate: new Date(2026, 5, 1),
+                endDate: new Date(2026, 5, 8),
+                difficulty: 'medium',
+                category: 'individual'
+            });
+
+            const updated = await updateChallenge(challenge.id, { target: 30 });
+
+            expect(updated.target).toBe(30);
+        });
+
+        it('clamps a streak target even when a legacy participant sits above the ceiling', async () => {
+            // Pre-cap streak challenges recorded progress in the dozens, and reconcile
+            // only corrects contributor.currentStreak — not participant rows. The
+            // "cannot reduce target below max progress" guard must not be what keeps an
+            // over-a-week target alive.
+            const challenge = await createChallenge({
+                title: 'Legacy Streak',
+                description: 'Contribute every workday',
+                type: 'streak',
+                target: 5,
+                reward: 300,
+                status: 'active',
+                startDate: new Date(2026, 5, 1),
+                endDate: new Date(2026, 5, 8),
+                difficulty: 'hard',
+                category: 'individual'
+            });
+            const contributor = await prisma.contributor.create({
+                data: createTestContributor({ username: 'legacyStreaker' })
+            });
+            await prisma.challengeParticipant.create({
+                data: { challengeId: challenge.id, contributorId: contributor.id, progress: 12 }
+            });
+
+            const updated = await updateChallenge(challenge.id, { target: 30 });
+
+            expect(updated.target).toBe(5);
+        });
     });
 
     describe('duplicateChallenge', () => {

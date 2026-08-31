@@ -1,3 +1,5 @@
+import { FULL_WORKWEEK } from '../utils/holidays.js';
+
 export const POINT_VALUES = {
     // Label-based PR points
     'bug': 50,
@@ -18,8 +20,9 @@ export const POINT_VALUES = {
     'streak-workweek': 1.1 // 10% bonus
 };
 
-/** Workdays in a normal week — the most a streak can reach. */
-export const FULL_WORKWEEK = 5;
+// Re-exported rather than redeclared: the ceiling is one number, defined beside the
+// working-day calendar in utils/holidays.js.
+export { FULL_WORKWEEK };
 
 export const POINT_REASONS = {
     PR_MERGED: 'PR Merged',
