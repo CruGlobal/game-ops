@@ -254,8 +254,24 @@ repository**, not here.
 The `db-migrate` container runs:
 
 ```
-npx prisma db push --accept-data-loss --skip-generate
+npx prisma db push --accept-data-loss
 ```
+
+> **Prisma 7 removed `--skip-generate` from `db push`.** The command no longer
+> generates a client at all, and passing the flag is now fatal — the CLI exits 1
+> with `unknown or unexpected option: --skip-generate` without applying anything.
+> This command lives in `applications/game-ops/<env>/application.tf` in
+> **cru-terraform** (both `stage` and `prod`), so that repo has to drop the flag
+> before a Prisma 7 image is deployed, or `db-migrate` fails and `app` never
+> starts. Dropping it is safe on Prisma 6 too, so the cru-terraform change can
+> land first.
+
+> **Prisma 7 also gates `--accept-data-loss` behind an AI-agent check.** It
+> aborts when it detects `CLAUDECODE`, `CURSOR_AGENT`, `COPILOT_CLI`,
+> `GEMINI_CLI`, or a non-empty `AGENT` / `AI_AGENT` in the environment, and
+> wants `PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION` set to proceed. That
+> matters when running this by hand from an agent session, and it would fire in
+> `db-migrate` too if such a variable ever reached the task environment.
 
 **`db push` reads `schema.prisma` and nothing else.** It never reads
 `prisma/migrations/`, and the production database has no `_prisma_migrations` table.
@@ -562,14 +578,21 @@ model Contributor {
 
 Prisma handles connection pooling automatically. Configure in schema.prisma:
 
+Prisma 7 no longer accepts `url` in `schema.prisma`, and it does not read
+Prisma's `connection_limit` / `pool_timeout` URL parameters either — pooling is
+node-pg's now. The datasource is bare:
+
 ```prisma
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
-  // Connection pool settings
-  // connection_limit = 10
 }
 ```
+
+Pool sizing lives in `lib/prisma.js`, which passes an explicit `max` (default
+`cpus * 2 + 1`, overridable with `DATABASE_POOL_MAX`) and a 10s
+`connectionTimeoutMillis` to the adapter. Both are set deliberately: pg would
+otherwise default to 10 connections with no acquire timeout, so a saturated
+pool would hang requests instead of raising.
 
 **3. Caching**
 
