@@ -93,7 +93,7 @@ cru application invoke -n game-ops -e s --task cron
 
 | Environment | Mechanism | Reads |
 |---|---|---|
-| Production / stage (ECS) | `npx prisma db push --accept-data-loss --skip-generate`, run as a `db-migrate` container at task start. Configured in `applications/game-ops/<env>/application.tf` in **cru-terraform**, not here. | `schema.prisma` only |
+| Production / stage (ECS) | `npx prisma db push --accept-data-loss`, run as a `db-migrate` container at task start. Configured in `applications/game-ops/<env>/application.tf` in **cru-terraform**, not here. Prisma 7 removed `--skip-generate` and now exits 1 if it is passed, so that repo must drop the flag before a Prisma 7 image ships. | `schema.prisma` only |
 | Local docker-compose | `npx prisma migrate deploy` (see `docker-compose.yml`) | `prisma/migrations/` |
 
 Two consequences:
@@ -142,6 +142,12 @@ npx prisma generate
 # Reset database (WARNING: deletes all data)
 npx prisma migrate reset
 ```
+
+Prisma 7 blocks `migrate reset`, `db push --accept-data-loss` and
+`db push --force-reset` when it detects an AI agent in the environment
+(`CLAUDECODE`, `CURSOR_AGENT`, `COPILOT_CLI`, `GEMINI_CLI`, or a non-empty
+`AGENT` / `AI_AGENT`). Set `PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION` to run
+them from an agent session.
 
 ## ⚠️ CRITICAL SECURITY REQUIREMENTS
 

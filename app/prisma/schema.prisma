@@ -2,9 +2,11 @@ generator client {
   provider = "prisma-client-js"
 }
 
+// Prisma 7 no longer accepts `url` here. The connection string reaches the
+// CLI through prisma.config.js and the application through the driver
+// adapter constructed in lib/prisma.js.
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 model Contributor {

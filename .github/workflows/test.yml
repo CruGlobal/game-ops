@@ -65,8 +65,11 @@ jobs:
       # `prisma migrate deploy` is deliberately not used: prisma/migrations lags
       # schema.prisma (no migration creates app_settings or challenges.challenge_category),
       # so a migrated database is missing tables the suite needs.
+      # Prisma 7 removed --skip-generate from `db push`; the command no longer
+      # generates the client at all, so the explicit generate step above is
+      # what produces it.
       - name: Create test schema
-        run: npx prisma db push --skip-generate
+        run: npx prisma db push
 
       - name: Run tests
         run: npm test
