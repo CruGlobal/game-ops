@@ -4,6 +4,13 @@ All notable changes to Game Ops are documented in this file.
 
 ---
 
+## [Unreleased] - 2026-09-01
+
+### Fixed
+- **A challenge can no longer advertise a different number than it scores on** - the description and the target are rendered side by side on every challenge card, and nothing tied them together: `createChallenge` took both verbatim, and `updateChallenge` let an edit move the target while keeping the description it inherited. A live Monthly Marathon read "Merge 20 PRs over the course of a month" above a target of 50 and a progress bar of `3 / 50`, so the prose told every enrolled contributor to stop well short of the bar they were measured against. Creating or editing a challenge whose description states a count of the unit it scores in now fails with a message naming both numbers, and the guard is repeated in `createOKRChallenge`, which builds its row directly rather than through `createChallenge`. Only counts of the challenge's own unit are compared (PRs for `pr-merge` and `okr-label`, reviews, points, workdays for streaks) and one agreeing figure is enough, so copy may still mention a second number such as a bonus. The clamp added for streak targets was already the model for this: a rule that holds at the single choke point every creator passes through, rather than in one form.
+
+---
+
 ## [Unreleased] - 2026-08-21
 
 ### Changed

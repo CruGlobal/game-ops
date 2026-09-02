@@ -144,6 +144,53 @@ function cappedStreakTarget({ type, target, startDate, endDate }) {
 }
 
 /**
+ * The units each challenge type is actually scored in, as they get written in copy.
+ * `okr-label` counts labelled PRs, so it reads like pr-merge.
+ */
+const TARGET_UNIT_PATTERNS = {
+    'pr-merge': /(\d+)\s+(?:PRs?|pull requests?)\b/gi,
+    'okr-label': /(\d+)\s+(?:PRs?|pull requests?)\b/gi,
+    review: /(\d+)\s+(?:code\s+)?reviews?\b/gi,
+    points: /(\d+)\s+points?\b/gi,
+    streak: /(\d+)\s+(?:workdays?|days?)\b/gi
+};
+
+const TARGET_UNIT_LABELS = {
+    'pr-merge': 'PRs',
+    'okr-label': 'PRs',
+    review: 'reviews',
+    points: 'points',
+    streak: 'workdays'
+};
+
+/**
+ * Reject copy that contradicts the number the challenge is scored on.
+ *
+ * A card renders the description and the target side by side, and every creator — the
+ * admin form, the MCP tools, an edit — moves one without touching the other, so the
+ * prose can quietly ask for less work than the bar it is measured against. Only counts
+ * of the unit this type actually counts are compared, and one agreeing figure is enough,
+ * so copy may still mention a second number.
+ *
+ * @param {Object} challenge - type, description and the final (post-clamp) target
+ */
+function assertDescriptionMatchesTarget({ type, description, target }) {
+    const pattern = TARGET_UNIT_PATTERNS[type];
+    if (!pattern || typeof description !== 'string') return;
+
+    const scoredOn = Number(target);
+    if (!Number.isFinite(scoredOn)) return;
+
+    const stated = [...description.matchAll(pattern)].map(match => Number(match[1]));
+    if (stated.length === 0 || stated.includes(scoredOn)) return;
+
+    throw new Error(
+        `Challenge description says ${stated.join(' / ')} ${TARGET_UNIT_LABELS[type]} but the target is ${scoredOn}. ` +
+        'Participants are scored on the target and read the description, so change one until they agree.'
+    );
+}
+
+/**
  * Create a new challenge
  * @param {Object} challengeData - Challenge data
  * @param {Object} [options]
@@ -153,10 +200,17 @@ function cappedStreakTarget({ type, target, startDate, endDate }) {
  */
 export const createChallenge = async (challengeData, options = {}) => {
     try {
+        const target = cappedStreakTarget(challengeData);
+        assertDescriptionMatchesTarget({
+            type: challengeData.type,
+            description: challengeData.description,
+            target
+        });
+
         const challenge = await prisma.challenge.create({
             data: {
                 ...challengeData,
-                target: cappedStreakTarget(challengeData),
+                target,
                 challengeCategory: challengeData.challengeCategory || 'general' // Default to general
             }
         });
@@ -885,6 +939,14 @@ export const updateChallenge = async (challengeId, updateData) => {
             }
         }
 
+        // An edit that moves only the target leaves the description it inherited, which
+        // is how a live challenge came to advertise a smaller number than it scored on.
+        assertDescriptionMatchesTarget({
+            type: data.type ?? existing.type,
+            description: data.description ?? existing.description,
+            target: data.target ?? existing.target
+        });
+
         const updated = await prisma.challenge.update({
             where: { id: challengeId },
             data,
@@ -1388,6 +1450,10 @@ export const createOKRChallenge = async (okrData) => {
         if (!target || target < 1) {
             throw new Error('Target must be at least 1');
         }
+
+        // This path builds its row directly instead of going through createChallenge, so
+        // the guard has to be repeated rather than inherited.
+        assertDescriptionMatchesTarget({ type: 'okr-label', description, target });
 
         const challenge = await prisma.challenge.create({
             data: {
