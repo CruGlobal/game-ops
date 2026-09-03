@@ -144,6 +144,116 @@ describe('ChallengeService', () => {
         });
     });
 
+    describe('description and target agreement', () => {
+        const base = {
+            type: 'pr-merge',
+            reward: 500,
+            status: 'active',
+            startDate: new Date(2026, 5, 1),
+            endDate: new Date(2026, 6, 1),
+            difficulty: 'hard',
+            category: 'individual'
+        };
+
+        it('refuses to create a challenge whose copy asks for a different number of PRs', async () => {
+            await expect(createChallenge({
+                ...base,
+                title: 'Monthly Marathon',
+                description: 'Merge 20 PRs over the course of a month. Consistent effort wins the race!',
+                target: 50
+            })).rejects.toThrow(/says 20 PRs but the target is 50/);
+
+            expect(await prisma.challenge.count()).toBe(0);
+        });
+
+        it('creates a challenge whose copy states the target', async () => {
+            const challenge = await createChallenge({
+                ...base,
+                title: 'Monthly Marathon',
+                description: 'Merge 50 PRs over the course of a month.',
+                target: 50
+            });
+
+            expect(challenge.target).toBe(50);
+        });
+
+        it('creates a challenge whose copy states no count at all', async () => {
+            const challenge = await createChallenge({
+                ...base,
+                title: 'Monthly Marathon',
+                description: 'Merge PRs steadily over the course of a month.',
+                target: 50
+            });
+
+            expect(challenge.target).toBe(50);
+        });
+
+        it('accepts a second figure as long as one of them is the target', async () => {
+            const challenge = await createChallenge({
+                ...base,
+                type: 'points',
+                title: 'Point Hunter',
+                description: 'Earn 500 points this week. The top finisher takes another 100 points.',
+                target: 500
+            });
+
+            expect(challenge.target).toBe(500);
+        });
+
+        it('creates a challenge whose copy writes the target with a thousands separator', async () => {
+            const challenge = await createChallenge({
+                ...base,
+                type: 'points',
+                title: 'Point Hunter',
+                description: 'Earn 1,000 points this month from merged PRs and reviews.',
+                target: 1000
+            });
+
+            expect(challenge.target).toBe(1000);
+        });
+
+        it('names the separated figure as it was written when it does contradict the target', async () => {
+            await expect(createChallenge({
+                ...base,
+                type: 'points',
+                title: 'Point Hunter',
+                description: 'Earn 1,000 points this month.',
+                target: 2000
+            })).rejects.toThrow(/says 1000 points but the target is 2000/);
+        });
+
+        it('refuses an edit that moves the target away from the description it keeps', async () => {
+            const challenge = await createChallenge({
+                ...base,
+                title: 'Monthly Marathon',
+                description: 'Merge 20 PRs over the course of a month.',
+                target: 20
+            });
+
+            await expect(updateChallenge(challenge.id, { target: 50 }))
+                .rejects.toThrow(/says 20 PRs but the target is 50/);
+
+            const unchanged = await prisma.challenge.findUnique({ where: { id: challenge.id } });
+            expect(unchanged.target).toBe(20);
+        });
+
+        it('allows an edit that moves the target and the description together', async () => {
+            const challenge = await createChallenge({
+                ...base,
+                title: 'Monthly Marathon',
+                description: 'Merge 20 PRs over the course of a month.',
+                target: 20
+            });
+
+            const updated = await updateChallenge(challenge.id, {
+                target: 50,
+                description: 'Merge 50 PRs over the course of a month.'
+            });
+
+            expect(updated.target).toBe(50);
+        });
+    });
+
     describe('getActiveChallenges', () => {
         it('should return only active challenges with future end dates', async () => {
             const now = new Date();
