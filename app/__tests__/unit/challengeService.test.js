@@ -200,6 +200,28 @@ describe('ChallengeService', () => {
             expect(challenge.target).toBe(500);
         });
 
+        it('creates a challenge whose copy writes the target with a thousands separator', async () => {
+            const challenge = await createChallenge({
+                ...base,
+                type: 'points',
+                title: 'Point Hunter',
+                description: 'Earn 1,000 points this month from merged PRs and reviews.',
+                target: 1000
+            });
+
+            expect(challenge.target).toBe(1000);
+        });
+
+        it('names the separated figure as it was written when it does contradict the target', async () => {
+            await expect(createChallenge({
+                ...base,
+                type: 'points',
+                title: 'Point Hunter',
+                description: 'Earn 1,000 points this month.',
+                target: 2000
+            })).rejects.toThrow(/says 1000 points but the target is 2000/);
+        });
+
         it('refuses an edit that moves the target away from the description it keeps', async () => {
             const challenge = await createChallenge({
                 ...base,

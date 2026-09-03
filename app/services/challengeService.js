@@ -144,15 +144,23 @@ function cappedStreakTarget({ type, target, startDate, endDate }) {
 }
 
 /**
+ * A count the way a person writes one: a thousands separator and a decimal point belong
+ * to the figure. `\d+` alone reads "1,000 points" as 0 and "2.5 points" as 5, which
+ * rejects copy that agrees with the target and names a number the admin never typed.
+ * The lookbehind is what keeps the tail of a longer figure from counting as its own.
+ */
+const COUNT = '(?<![\\d.,])(\\d[\\d,]*(?:\\.\\d+)?)';
+
+/**
  * The units each challenge type is actually scored in, as they get written in copy.
  * `okr-label` counts labelled PRs, so it reads like pr-merge.
  */
 const TARGET_UNIT_PATTERNS = {
-    'pr-merge': /(\d+)\s+(?:PRs?|pull requests?)\b/gi,
-    'okr-label': /(\d+)\s+(?:PRs?|pull requests?)\b/gi,
-    review: /(\d+)\s+(?:code\s+)?reviews?\b/gi,
-    points: /(\d+)\s+points?\b/gi,
-    streak: /(\d+)\s+(?:workdays?|days?)\b/gi
+    'pr-merge': new RegExp(`${COUNT}\\s+(?:PRs?|pull requests?)\\b`, 'gi'),
+    'okr-label': new RegExp(`${COUNT}\\s+(?:PRs?|pull requests?)\\b`, 'gi'),
+    review: new RegExp(`${COUNT}\\s+(?:code\\s+)?reviews?\\b`, 'gi'),
+    points: new RegExp(`${COUNT}\\s+points?\\b`, 'gi'),
+    streak: new RegExp(`${COUNT}\\s+(?:workdays?|days?)\\b`, 'gi')
 };
 
 const TARGET_UNIT_LABELS = {
@@ -181,7 +189,7 @@ function assertDescriptionMatchesTarget({ type, description, target }) {
     const scoredOn = Number(target);
     if (!Number.isFinite(scoredOn)) return;
 
-    const stated = [...description.matchAll(pattern)].map(match => Number(match[1]));
+    const stated = [...description.matchAll(pattern)].map(match => Number(match[1].replace(/,/g, '')));
     if (stated.length === 0 || stated.includes(scoredOn)) return;
 
     throw new Error(
