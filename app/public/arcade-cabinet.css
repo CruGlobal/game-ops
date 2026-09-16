@@ -33,6 +33,7 @@
 }
 
 .cab-body {
+    position: relative;                 /* positioning context for .cab-close */
     background: linear-gradient(#2a2d33, #15171b);
     border-radius: 18px;
     padding: 14px 18px 20px;
@@ -67,7 +68,7 @@
 
 /*
  * 4:3, like a real cabinet. This only works because the cabinet rewraps the
- * contribution graph from the banner's 53x7 strip into a near-square 22x17 grid
+ * contribution graph from the banner's 53x7 strip into a near-square 24x16 grid
  * (see CABINET_GRID in arcade.js) -- the game fills the tube instead of floating in
  * it. arcade.js sizes the cell from BOTH this box's width and its height, and keeps
  * a band top and bottom for the HUD.
@@ -173,11 +174,12 @@
 
 /* ---- control panel ---------------------------------------------------------- */
 
-/* Desktop columns, in markup order: stick | A | START | select | coin | credits | close.
-   .cab-pad is display:none here, so it takes no grid cell. */
+/* Desktop columns, in markup order: stick | A | START | select | coin | credits.
+   .cab-pad is display:none here, so it takes no grid cell, and .cab-close is absolutely
+   positioned in the top-right corner rather than sitting in this row. */
 .cab-panel {
     display: grid;
-    grid-template-columns: 96px auto auto auto 1fr auto 40px;
+    grid-template-columns: 96px auto auto auto 1fr auto;
     gap: 14px;
     align-items: center;
     padding-top: 16px;
@@ -288,18 +290,39 @@
     white-space: nowrap;
 }
 
+/*
+ * Top-right corner, floating over the marquee. It started life in the control panel,
+ * which suited the cabinet metaphor but is not where anyone looks for a way out of a
+ * modal -- the first person to open this asked how to get back to the leaderboard.
+ * Round and translucent so it reads as a control rather than part of the artwork.
+ */
 .cab-close {
-    width: 34px;
-    height: 34px;
-    border: 1px solid #555;
-    border-radius: 6px;
-    background: #1b1e23;
-    color: #d8fff2;
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 2;
+    width: 36px;
+    height: 36px;
+    display: grid;
+    place-items: center;
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    border-radius: 50%;
+    background: rgba(12, 14, 17, 0.72);
+    color: #fff2d0;
     cursor: pointer;
-    font-size: 0.9rem;
+    font-size: 0.95rem;
+    line-height: 1;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+    transition: background 0.12s ease-out, border-color 0.12s ease-out, transform 0.12s ease-out;
 }
 
-.cab-close:hover { background: #2a2f36; }
+.cab-close:hover {
+    background: rgba(40, 46, 54, 0.92);
+    border-color: #ffd000;
+    transform: scale(1.06);
+}
+
+.cab-close:active { transform: scale(0.96); }
 
 .cab-btn:focus-visible,
 .cab-coin:focus-visible,
@@ -330,7 +353,7 @@
         grid-template-columns: 1fr auto auto;
         grid-template-areas:
             'pad fire start'
-            'sel sel close'
+            'sel sel sel'
             'coin credits credits';
         row-gap: 12px;
     }
@@ -342,7 +365,6 @@
     .cab-select { grid-area: sel; max-width: none; width: 100%; }
     .cab-coin { grid-area: coin; }
     .cab-credits { grid-area: credits; justify-self: end; }
-    .cab-close { grid-area: close; justify-self: end; }
 }
 
 @media (pointer: coarse) and (min-width: 721px) {

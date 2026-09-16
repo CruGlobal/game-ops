@@ -431,7 +431,7 @@ Four ways out, all verified in a browser:
 | Action | Notes |
 |---|---|
 | **Escape** | One press. The Engine's keydown handler stops the game but does not call `preventDefault`, so the browser still runs the dialog's `cancel` default action -- so a single press both stops play and closes the cabinet. |
-| **✕ button** | Bottom right of the control panel. |
+| **✕ button** | Top-right corner of the cabinet, floating over the marquee. |
 | **Click the backdrop** | Anywhere outside the cabinet body. Clicking *inside* it does not close. |
 | `dlg.close()` | Programmatic, for tests. |
 
@@ -443,9 +443,11 @@ implementation and the harness has to polyfill `showModal`/`close` -- the browse
 default action is exactly the missing piece. It is checked by hand instead, from both the
 INSERT COIN state and mid-game. The other three are covered by tests.
 
-Worth noting for a future pass: the ✕ sits in the control panel rather than the top-right
-corner where modal close buttons usually live. It is consistent with the cabinet metaphor,
-but it is not where people look first.
+The ✕ started out in the control panel, which suited the cabinet metaphor but is not where
+anyone looks for a way out of a modal — the first person to open this asked how to get back
+to the leaderboard, which was the answer. It is now a round translucent button in the
+top-right corner, 36px, over the marquee. The control panel lost a grid column and reads
+better balanced for it.
 
 Two things the browser forced:
 

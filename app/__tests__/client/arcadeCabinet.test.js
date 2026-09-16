@@ -85,6 +85,20 @@ describe('opening and closing the cabinet', () => {
         expect(a.doc.querySelector('#arcade-graph canvas')).not.toBeNull();
     });
 
+    // It used to live in the control panel, which fitted the cabinet metaphor but is not
+    // where anyone looks for a way out of a modal. jsdom has no layout engine, so this
+    // pins the structure rather than the pixels: a direct child of the cabinet body,
+    // absolutely positioned, and no longer part of the panel row.
+    test('the close button sits in the cabinet corner, not in the control panel', async () => {
+        const a = await mountArcade();
+        a.el('arcade-play').click();
+
+        const x = a.el('cab-close');
+        expect(x.parentElement.className).toContain('cab-body');
+        expect(x.closest('.cab-panel')).toBeNull();
+        expect(a.doc.querySelector('.cab-panel #cab-close')).toBeNull();
+    });
+
     test('clicking the backdrop closes it', async () => {
         const a = await mountArcade();
         const dlg = a.el('arcade-cabinet');
