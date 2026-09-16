@@ -75,6 +75,45 @@ describe('opening and closing the cabinet', () => {
         expect(a.doc.activeElement).toBe(opener);                        // focus handed back
     });
 
+    test('the close button gets you back to the leaderboard', async () => {
+        const a = await mountArcade();
+        await startGame(a, 'pacman');
+
+        a.el('cab-close').click();
+
+        expect(a.el('arcade-cabinet').open).toBe(false);
+        expect(a.doc.querySelector('#arcade-graph canvas')).not.toBeNull();
+    });
+
+    test('clicking the backdrop closes it', async () => {
+        const a = await mountArcade();
+        const dlg = a.el('arcade-cabinet');
+        await startGame(a, 'snake');
+
+        // The listener only fires for a click whose target IS the dialog, i.e. the
+        // backdrop area around the cabinet body.
+        dlg.dispatchEvent(new a.win.MouseEvent('click', { bubbles: true }));
+
+        expect(dlg.open).toBe(false);
+        expect(a.doc.querySelector('#arcade-graph canvas')).not.toBeNull();
+    });
+
+    test('clicking inside the cabinet does not close it', async () => {
+        const a = await mountArcade();
+        const dlg = a.el('arcade-cabinet');
+        await startGame(a, 'snake');
+
+        a.doc.querySelector('.cab-body').dispatchEvent(new a.win.MouseEvent('click', { bubbles: true }));
+
+        expect(dlg.open).toBe(true);
+        expect(a.doc.querySelector('#cab-screen canvas')).not.toBeNull();
+    });
+
+    // Escape is deliberately absent here: jsdom has no <dialog>, so the harness polyfills
+    // showModal/close and the browser's Escape-to-cancel default action does not exist to
+    // be exercised. That path is verified by hand -- see "Getting back to the leaderboard"
+    // in docs/ARCADE_REVIEW.md.
+
     test('the attract loop keeps running after the round trip', async () => {
         const a = await mountArcade();
         await startGame(a, 'snake');

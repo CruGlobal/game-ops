@@ -424,6 +424,29 @@ re-attaches the canvas to the banner and returns focus to ▶ Play.
 If `dialog.showModal` is missing, `buildCabinet` returns null and Play falls back to the
 old inline behaviour.
 
+### Getting back to the leaderboard
+
+Four ways out, all verified in a browser:
+
+| Action | Notes |
+|---|---|
+| **Escape** | One press. The Engine's keydown handler stops the game but does not call `preventDefault`, so the browser still runs the dialog's `cancel` default action -- so a single press both stops play and closes the cabinet. |
+| **✕ button** | Bottom right of the control panel. |
+| **Click the backdrop** | Anywhere outside the cabinet body. Clicking *inside* it does not close. |
+| `dlg.close()` | Programmatic, for tests. |
+
+All four land on the same `close` handler, which re-attaches the canvas to the banner, puts
+it back in attract mode and returns focus to ▶ Play.
+
+Escape is the one path the jsdom suite cannot cover, because jsdom has no `<dialog>`
+implementation and the harness has to polyfill `showModal`/`close` -- the browser's `cancel`
+default action is exactly the missing piece. It is checked by hand instead, from both the
+INSERT COIN state and mid-game. The other three are covered by tests.
+
+Worth noting for a future pass: the ✕ sits in the control panel rather than the top-right
+corner where modal close buttons usually live. It is consistent with the cabinet metaphor,
+but it is not where people look first.
+
 Two things the browser forced:
 
 - **The CRT box is not final when `showModal()` returns.** `Press Start 2P` loads async and
