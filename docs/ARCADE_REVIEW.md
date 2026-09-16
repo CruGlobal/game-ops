@@ -430,10 +430,38 @@ Two things the browser forced:
   498px tube. The fix is a `ResizeObserver` on `#cab-screen` calling `engine.resize()`, plus
   an explicit `width: min(94vw, 900px)` on `.cab` so the dialog does not size to its own
   content.
-- **The tube is 16:9, not 4:3.** The playfield is a fixed 53×7 grid, so its height follows
-  its width (about `7 * width / 53`) and cannot be stretched without lying about the data.
-  In a 4:3 tube that left a thin strip floating in a lot of black. 16:9 keeps the CRT read
-  and roughly halves the dead space.
+- **The tube is 4:3, and the playfield is reshaped to match it.** This is the part worth
+  understanding. The banner's grid is 53×7, which is about 7.6:1 — in a cabinet that is a
+  thin ribbon floating in a black tube, and no amount of scaling fixes it, because the
+  grid's height follows its width (roughly `7 * width / 53`). Stretching the cells would
+  mean lying about the data.
+
+  So the cabinet rewraps the *same* day counts into `CABINET_GRID`, 24×16. `buildLevels`
+  already derived everything from `COLS * ROWS` and wrapped with `i / ROWS` and `i % ROWS`,
+  so the data layer needed no change — only the dimensions had to become mutable.
+  `setGeometry(cols, rows)` recomputes `COLS`, `ROWS`, `GH_COL`, `GH_ROW` and the `PM_*`
+  maze bounds together, and `loadLevels` caches the raw day counts so a reshape costs no
+  second request.
+
+  24×16 is 1.5:1, which matches the tube's *usable* area — `width / (height - 2 * hudPad)`,
+  about 1.51 — rather than its raw 4:3. Measured result: every game paints 98% of the tube
+  width and 95% of its height, against 17% of the height before. Pac-Man gets a genuinely
+  tall maze out of it, which was the weakest thing about the 7-row version.
+
+  Two things this broke, both fixed:
+
+  - **A reshape invalidates whatever a game captured at construction.** `PacMan()` closes
+    over `START = { c: GH_COL, r: ROWS - 1 }`, so after narrowing to 24 columns it indexed
+    `pellets[26]` and threw. `attach()` now *rebuilds* the game object on a reshape rather
+    than re-initialising it, which covers every such capture rather than just this one.
+  - **Row bands that assumed a 7-row strip.** Breakout filled every row with bricks and
+    Galaga ran shields from row 2 to the bottom; at 16 rows the wall reached the paddle and
+    the shields reached the ship. `brickRows()` and `galagaBands()` scale them, and both
+    return the old numbers unchanged for any grid of 8 rows or fewer, so the banner is
+    untouched. The three player actors now share one `baseY(L)` helper: below the grid on
+    the banner, on the last row inside the cabinet, where the band below belongs to the HUD.
+    Breakout's draw had its own copy of that baseline and desynced from its own collision
+    line until they were unified.
 
 
 ### CRT effects, cheap against expensive
@@ -507,6 +535,8 @@ still open and is described above with the fix.
 
 | Finding | What changed |
 |---|---|
+| Cabinet fills the screen | The cabinet rewraps the graph into a 24x16 grid so the playfield fills a 4:3 tube instead of floating in it as a 7.6:1 ribbon. Measured 98% of tube width, 95% of height, all five games, against 17% of the height before. Needed mutable `COLS`/`ROWS` via `setGeometry`, cached raw day counts, a cell size limited by height as well as width, game-object rebuild on reshape, and scaled row bands for Breakout and Galaga. |
+| Cabinet game picker | A modal `<dialog>` blocks the page, so the banner's picker was unreachable once the cabinet was open — you had to close it to change game. The cabinet has its own picker now, kept in sync with the banner's, and the marquee follows the selection. |
 | 1.1 resize destroys the game | `computeLayout` measures the mount and takes options; `relayout()` only re-inits when the pixel box actually changed. Verified in a browser: shrinking 1280→760 moved the canvas 1166px→726px with no overflow, where before it stayed pinned. |
 | 1.5 play mode eats WASD | `typingInto(e)` early-return on `input, select, textarea, [contenteditable]`. Verified: `KeyD`/`KeyA`/`KeyS` dispatched at `#search-input` are no longer `preventDefault`ed, while arrows on `window` still are. |
 | 1.6 sticky `mouseX` | Cleared on `mouseleave` and on any steering keypress — last input wins. |

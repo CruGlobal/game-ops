@@ -31,7 +31,7 @@
     var CAB = {
         dialog: 'arcade-cabinet', screen: 'cab-screen', marquee: 'cab-marquee',
         coin: 'cab-coin', start: 'cab-start', close: 'cab-close', credits: 'cab-credits',
-        stick: 'cab-stick', fire: 'cab-fire'
+        stick: 'cab-stick', fire: 'cab-fire', select: 'cab-select'
     };
     var CAB_FONT = '"Press Start 2P", ui-monospace, SFMono-Regular, Menlo, monospace';
 
@@ -42,16 +42,43 @@
     function lsSet(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
     function readHi(id) { var n = parseInt(lsGet(HI_KEY + id) || '0', 10); return isFinite(n) && n > 0 ? n : 0; }
     function recordHi(id, score) { if (score > readHi(id)) lsSet(HI_KEY + id, String(score)); }
-    var COLS = 53, ROWS = 7;
-    var GH_COL = Math.floor(COLS / 2), GH_ROW = Math.floor(ROWS / 2); // ghost-house centre
-    // Pac-Man maze occupies a centred band of columns — the full 53-wide grid is
-    // too spread out. PM_COLS is the tweak knob; the band is centred on GH_COL.
-    var PM_COLS = COLS;        // maze spans the full contribution-graph width
-    var PM_LO = Math.floor((COLS - PM_COLS) / 2);
-    var PM_HI = PM_LO + PM_COLS;
+    // The playfield is the contribution graph, so its shape decides the aspect ratio.
+    // 53x7 is ~7.6:1 -- right for a banner strip, but in a cabinet it is a thin ribbon
+    // floating in a black tube. The cabinet therefore rewraps the SAME ~371 days into a
+    // near-4:3 grid so the game fills the screen. Every game loops over COLS/ROWS, so
+    // they follow the reshape; the row BANDS some of them assume are scaled below.
+    var BANNER_GRID = { cols: 53, rows: 7 };
+    // 24x16 = 384 cells (~384 days). The aspect to match is not the tube's 4:3 but its
+    // USABLE area, width / (height - 2 * hudPad), which is about 1.5 -- and 24/16 is 1.5.
+    var CABINET_GRID = { cols: 24, rows: 16 };
+
+    var COLS, ROWS, GH_COL, GH_ROW, PM_COLS, PM_LO, PM_HI, PM_WARP_ROW;
     var PM_OPEN = 0.3;          // fraction of maze walls removed — lower = denser maze
+
+    function setGeometry(cols, rows) {
+        COLS = cols; ROWS = rows;
+        GH_COL = Math.floor(COLS / 2); GH_ROW = Math.floor(ROWS / 2);  // ghost-house centre
+        PM_COLS = COLS;         // maze spans the full contribution-graph width
+        PM_LO = Math.floor((COLS - PM_COLS) / 2);
+        PM_HI = PM_LO + PM_COLS;
+        PM_WARP_ROW = GH_ROW;   // tunnel row: stepping off either edge warps to the far side
+    }
+    setGeometry(BANNER_GRID.cols, BANNER_GRID.rows);
+    function sameGrid(g) { return g.cols === COLS && g.rows === ROWS; }
+
+    // Breakout and Galaga assume a row BAND, not the whole grid. On the 7-row banner the
+    // band is the whole strip; on the tall cabinet grid it has to shrink or the wall
+    // reaches the paddle and the shields reach the ship. Short grids keep their old
+    // numbers exactly, so the banner is unchanged.
+    function brickRows() { return ROWS <= 8 ? ROWS : Math.round(ROWS * 0.45); }
+    function galagaBands() {
+        if (ROWS <= 8) return { enemy: 2, shieldFrom: 2, shieldTo: ROWS };   // banner, as before
+        var enemy = Math.max(3, Math.round(ROWS * 0.28));
+        var from = Math.round(ROWS * 0.62);
+        return { enemy: enemy, shieldFrom: from, shieldTo: Math.min(ROWS, from + 3) };
+    }
+
     function pmIn(c, r) { return c >= PM_LO && c < PM_HI && r >= 0 && r < ROWS; }
-    var PM_WARP_ROW = GH_ROW;   // tunnel row: stepping off either edge warps to the far side
     function wrapCol(c) { return c < PM_LO ? PM_HI - 1 : c >= PM_HI ? PM_LO : c; }
     var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -110,12 +137,19 @@
     })();
 
     // ---- grid data -----------------------------------------------------------
+    // Keep the raw day counts so the grid can be rebuilt at a different shape when the
+    // cabinet opens, without a second request.
+    var rawCells = null, rawMax = 0, rawOk = false;
     function loadLevels() {
         return fetch('/api/contributions/grid?weeks=53', { credentials: 'include' })
             .then(function (r) { if (!r.ok) throw new Error('grid ' + r.status); return r.json(); })
-            .then(function (j) { return buildLevels(j.cells || [], j.maxCount || 0); })
-            .catch(function () { return synthLevels(); });
+            .then(function (j) {
+                rawCells = j.cells || []; rawMax = j.maxCount || 0; rawOk = true;
+                return buildLevels(rawCells, rawMax);
+            })
+            .catch(function () { rawOk = false; return synthLevels(); });
     }
+    function rebuildLevels() { return rawOk ? buildLevels(rawCells, rawMax) : synthLevels(); }
     function buildLevels(cells, maxCount) {
         var map = {};
         cells.forEach(function (c) { map[c.date] = c.count; });
@@ -155,13 +189,23 @@
         var mount = canvas.parentElement;
         var cssW = opts.width || (mount && mount.clientWidth) || 800;
         var gap = Math.max(1, Math.round(cssW / (COLS * 9)));
-        var cell = Math.max(4, Math.min(Math.floor((cssW - (COLS - 1) * gap) / COLS), opts.maxCell || 18));
+        var boxH0 = opts.height || (opts.fill && mount && mount.clientHeight) || 0;
+        // Cap the HUD band as a share of the tube: 34px is a quarter of a phone-sized CRT.
+        var pad = opts.hudPad ? Math.max(16, Math.min(opts.hudPad, Math.round(boxH0 * 0.07))) : 0;
+        var byW = Math.floor((cssW - (COLS - 1) * gap) / COLS);
+        // In a fixed box the cell has to satisfy the height as well, or a near-square grid
+        // overflows the tube.
+        var byH = boxH0 ? Math.floor((boxH0 - 2 * pad - (ROWS - 1) * gap) / ROWS) : byW;
+        var cell = Math.max(4, Math.min(byW, byH, opts.maxCell || 18));
         var gw = COLS * cell + (COLS - 1) * gap;
         var gh = ROWS * cell + (ROWS - 1) * gap;
         var boxed = !!(opts.height || opts.fill);
         var cssH = opts.height || (opts.fill && mount && mount.clientHeight) || gh + 20;  // else: room for the Breakout paddle
         var ox = Math.floor((cssW - gw) / 2);
-        var oy = boxed ? Math.floor((cssH - gh) / 2) : 5;        // centre inside the cabinet CRT
+        // Banner: the strip is short, so 5px of top padding is all it needs. Cabinet: the
+        // grid is nearly square and must also fit the tube's HEIGHT, with a reserved band
+        // top and bottom for the canvas HUD.
+        var oy = boxed ? pad + Math.floor((cssH - 2 * pad - gh) / 2) : 5;
         canvas.style.width = cssW + 'px'; canvas.style.height = cssH + 'px';
         canvas.width = Math.round(cssW * dpr); canvas.height = Math.round(cssH * dpr);
         var ctx = canvas.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -201,6 +245,12 @@
         ctx.globalAlpha = 1;
     }
     function inBounds(c, r) { return c >= 0 && c < COLS && r >= 0 && r < ROWS; }
+
+    // Where the player's paddle / ship / shooter sits. The banner leaves a 20px apron
+    // below the grid (cssH = gh + 20) and the actor lives in it. The cabinet grid fills
+    // the tube and the band below it belongs to the HUD, so there the actor sits on the
+    // last row of the playfield instead of underneath it.
+    function baseY(L) { return L.hud ? L.oy + L.gh - L.step * 0.6 : L.oy + L.gh + 2; }
 
     // ---- maze (for Pac-Man) --------------------------------------------------
     // Walls live on cell edges: vW[c][r] = wall between (c,r) and (c+1,r);
@@ -721,10 +771,14 @@
         function reset(full) {
             var L = env.L;
             bricks = fullMask(); remaining = 0;
-            for (var c = 0; c < COLS; c++) for (var r = 0; r < ROWS; r++) { if (env.levels[c][r] === 0 && Math.random() < 0.4) bricks[c][r] = false; if (bricks[c][r]) remaining++; }
+            var br = brickRows();
+            for (var c = 0; c < COLS; c++) for (var r = 0; r < ROWS; r++) {
+                if (r >= br || (env.levels[c][r] === 0 && Math.random() < 0.4)) bricks[c][r] = false;
+                if (bricks[c][r]) remaining++;
+            }
             pw = L.cell * 6;
             paddle = L.ox + L.gw / 2;
-            ball = { x: paddle, y: L.oy + L.gh + 2 };
+            ball = { x: paddle, y: baseY(L) - L.cell * 0.6 };
             var sp = Math.max(70, L.cssW * 0.2);
             vel = { x: sp * 0.6 * (Math.random() < 0.5 ? 1 : -1), y: -sp };
             if (full) { score = 0; lives = 3; status = 'running'; }
@@ -746,7 +800,7 @@
                 if (ball.x < L.ox) { ball.x = L.ox; vel.x = Math.abs(vel.x); }
                 if (ball.x > L.ox + L.gw) { ball.x = L.ox + L.gw; vel.x = -Math.abs(vel.x); }
                 if (ball.y < L.oy) { ball.y = L.oy; vel.y = Math.abs(vel.y); }
-                var py = L.oy + L.gh + 2;
+                var py = baseY(L);
                 if (ball.y >= py) {
                     if (mode === 'attract' || Math.abs(ball.x - paddle) <= pw / 2) {
                         ball.y = py; vel.y = -Math.abs(vel.y);
@@ -763,7 +817,7 @@
                 drawGrid(L, colors, env.levels, function (c, r) { return bricks[c][r] ? 1 : 0.1; });
                 var ph = Math.max(3, L.cell * 0.45);
                 ctx.fillStyle = colors.ink;
-                roundRect(ctx, paddle - pw / 2, L.oy + L.gh + 4, pw, ph, ph / 2); ctx.fill();
+                roundRect(ctx, paddle - pw / 2, baseY(L) + 2, pw, ph, ph / 2); ctx.fill();   // same line the collision uses
                 ctx.fillStyle = colors.ink;
                 ctx.beginPath(); ctx.arc(ball.x, ball.y, Math.max(2, L.cell * 0.3), 0, 7); ctx.fill();
             },
@@ -790,27 +844,27 @@
         function tune() {
             var L = env.L;
             pw = L.cell * 1.2;
-            shipY = L.oy + L.gh + 2;
+            shipY = baseY(L);
             swayAmp = 0;            // static formation — the contribution graph itself
             pSpd = L.step * 13;
             eSpd = L.step * (6 + (level - 1) * 0.6);
             diveSpd = L.step * (4.5 + (level - 1) * 0.5);
             swaySpd = L.step * (1.4 + (level - 1) * 0.25);
         }
-        var ENEMY_ROWS = 2;         // swarm occupies the top rows; the rest is shields
         function buildSwarm() {
             var L = env.L;
             swarm = [];
             // Top rows of the contribution graph become the enemy swarm, ranked by
             // contribution level. The remaining lit cells become shields (below).
-            for (var c = 0; c < COLS; c++) for (var r = 0; r < ENEMY_ROWS; r++) {
+            var ER = galagaBands().enemy;
+            for (var c = 0; c < COLS; c++) for (var r = 0; r < ER; r++) {
                 var lvl = env.levels[c][r];
                 if (lvl > 0) { var p = cellXY(L, c, r); swarm.push(mkEnemy(p.x + L.cell / 2, p.y + L.cell / 2, lvl)); }
             }
             // fallback only if the top rows are entirely empty
             if (!swarm.length) for (var g = 0; g < 12; g++) {
                 var cc = 3 + g * 4; if (cc >= COLS) break;
-                var q = cellXY(L, cc, g % ENEMY_ROWS); swarm.push(mkEnemy(q.x + L.cell / 2, q.y + L.cell / 2, 1 + (g % 4)));
+                var q = cellXY(L, cc, g % ER); swarm.push(mkEnemy(q.x + L.cell / 2, q.y + L.cell / 2, 1 + (g % 4)));
             }
         }
         // Rank by contribution level: brighter cells are higher-value enemies.
@@ -823,14 +877,15 @@
         // lit cell is one block; a single laser hit (player or enemy) destroys it.
         function buildShields() {
             shields = [];
+            var b = galagaBands();
             for (var c = 0; c < COLS; c++) {
                 shields[c] = new Array(ROWS).fill(0);
-                for (var r = ENEMY_ROWS; r < ROWS; r++) if (env.levels[c][r] > 0) shields[c][r] = env.levels[c][r];
+                for (var r = b.shieldFrom; r < b.shieldTo; r++) if (env.levels[c][r] > 0) shields[c][r] = env.levels[c][r];
             }
         }
         function shieldHit(x, y) {
             var L = env.L, c = Math.floor((x - L.ox) / L.step), r = Math.floor((y - L.oy) / L.step);
-            if (r >= ENEMY_ROWS && c >= 0 && c < COLS && r < ROWS && shields[c] && shields[c][r] > 0) { shields[c][r] = 0; return true; }
+            if (c >= 0 && c < COLS && r >= 0 && r < ROWS && shields[c] && shields[c][r] > 0) { shields[c][r] = 0; return true; }
             return false;
         }
         function newWave() {
@@ -956,7 +1011,7 @@
                 for (var lc = 0; lc < COLS; lc++) for (var lr = 0; lr < ROWS; lr++) { var lp = cellXY(L, lc, lr); roundRect(ctx, lp.x, lp.y, L.cell, L.cell, grad); ctx.fill(); }
                 ctx.globalAlpha = 1;
                 // shields — the remaining contribution blocks (one laser hit destroys)
-                for (var shc = 0; shc < COLS; shc++) for (var shr = ENEMY_ROWS; shr < ROWS; shr++) {
+                for (var shc = 0; shc < COLS; shc++) for (var shr = 0; shr < ROWS; shr++) {
                     if (!shields[shc] || shields[shc][shr] <= 0) continue;
                     var shp = cellXY(L, shc, shr);
                     ctx.fillStyle = colors.ramp[shields[shc][shr]];
@@ -1080,7 +1135,7 @@
             rad = Math.max(3, L.cell * 0.4);
             rowH = rad * 1.7;
             originX = L.ox; originY = L.oy;
-            shooterX = L.ox + L.gw / 2; shooterY = L.oy + L.gh + 2;
+            shooterX = L.ox + L.gw / 2; shooterY = baseY(L);
             dangerY = shooterY - rad * 1.6;
             bcols = Math.max(6, Math.floor((L.gw - rad) / (2 * rad)));
         }
@@ -1329,9 +1384,11 @@
         // Cabinet only: the CRT is 4:3 but the playfield is a 7.6:1 strip, so score and
         // lives go in the black bands above and below it. The banner keeps its DOM HUD.
         function drawHud() {
-            var ctx = L.ctx, lives = game.getLives(), top = Math.max(4, L.oy - 26);
+            var ctx = L.ctx, lives = game.getLives();
+            var fs = Math.max(7, Math.min(12, Math.round(L.cssW / 60)));
+            var top = Math.max(3, L.oy - fs - 10);
             ctx.save();
-            ctx.font = '700 12px ' + CAB_FONT;
+            ctx.font = '700 ' + fs + 'px ' + CAB_FONT;
             ctx.textBaseline = 'top';
             ctx.textAlign = 'left';
             ctx.fillStyle = '#7fffd4';
@@ -1346,7 +1403,7 @@
                 (lives == null ? '' : 'LIVES ' + Math.max(0, lives)), L.ox + L.gw, top);
             if (mode === 'play' && game.getStatus() === 'running') {
                 ctx.textAlign = 'center'; ctx.fillStyle = 'rgba(127,255,212,0.55)';
-                ctx.fillText('ESC TO EXIT', L.cssW / 2, Math.min(L.cssH - 16, L.oy + L.gh + 14));
+                ctx.fillText('ESC TO EXIT', L.cssW / 2, Math.min(L.cssH - fs - 4, L.oy + L.gh + 8));
             }
             ctx.restore();
         }
@@ -1369,7 +1426,9 @@
             ctx.globalAlpha = L.hud ? 0.86 : 0.78; ctx.fillStyle = L.hud ? '#04070a' : colors.surface;
             ctx.fillRect(0, 0, L.cssW, L.cssH);
             ctx.globalAlpha = 1; ctx.fillStyle = L.hud ? '#ffd000' : colors.ink;
-            ctx.font = L.hud ? ('700 14px ' + CAB_FONT) : ('700 16px ' + (getComputedStyle(document.body).fontFamily || 'sans-serif'));
+            ctx.font = L.hud
+                ? ('700 ' + Math.max(8, Math.min(14, Math.round(L.cssW / 55))) + 'px ' + CAB_FONT)
+                : ('700 16px ' + (getComputedStyle(document.body).fontFamily || 'sans-serif'));
             ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
             ctx.fillText(st === 'won' ? '🏆  You win — Space to replay' : '💀  Game over — Space to replay', L.cssW / 2, L.cssH / 2);
             ctx.restore();
@@ -1402,10 +1461,19 @@
             if (obs) obs.observe(mount);
             layoutOpts = opts || {};
             onScreen = true;
+            // Reshaping the playfield re-wraps the same day data; the games read COLS/ROWS
+            // so they pick up the new shape on the init below.
+            var g = layoutOpts.grid || BANNER_GRID;
+            var reshaped = !sameGrid(g);
+            if (reshaped) { setGeometry(g.cols, g.rows); levels = rebuildLevels(); }
             colors = layoutOpts.hud ? cabinetPalette() : readPalette();
             L = computeLayout(canvas, layoutOpts);
             applyA11y();
-            if (game && levels) game.init(env(), { mode: mode });
+            // A reshape invalidates whatever a game captured when it was CONSTRUCTED --
+            // Pac-Man closes over START = { c: GH_COL, r: ROWS - 1 }, which indexes past
+            // a narrower grid. Rebuild the game object; re-initialising is not enough.
+            if (reshaped) newGame(gameId, mode);
+            else if (game && levels) game.init(env(), { mode: mode });
             resume();
         };
         this.resize = function () { relayout(); };   // relayout() re-inits only if the box really changed
@@ -1485,16 +1553,21 @@
         var s = lsGet(STORAGE_KEY);
         return (s && s !== 'random' && GAME_IDS.indexOf(s) !== -1) ? s : pickRandom();
     }
+    function fillGameOptions(sel, withRandom) {
+        sel.textContent = '';
+        var opts = GAME_IDS.map(function (id) { return { v: id, t: LABELS[id] }; });
+        if (withRandom) opts.unshift({ v: 'random', t: '🎲 Random' });
+        opts.forEach(function (o) {
+            var el = document.createElement('option');
+            el.value = o.v; el.textContent = o.t;              // textContent, never innerHTML
+            sel.appendChild(el);
+        });
+    }
+
     function buildControls(engine) {
         var sel = document.getElementById(SELECT);
         if (sel) {
-            sel.textContent = '';
-            [{ v: 'random', t: '🎲 Random' }].concat(GAME_IDS.map(function (id) { return { v: id, t: LABELS[id] }; }))
-                .forEach(function (o) {
-                    var el = document.createElement('option');
-                    el.value = o.v; el.textContent = o.t;      // textContent, never innerHTML
-                    sel.appendChild(el);
-                });
+            fillGameOptions(sel, true);
             var saved = lsGet(STORAGE_KEY);
             sel.value = (saved === 'random' || GAME_IDS.indexOf(saved) !== -1) ? saved : 'random';
             sel.addEventListener('change', function () {
@@ -1535,7 +1608,24 @@
         var creditsEl = document.getElementById(CAB.credits);
         var marquee = document.getElementById(CAB.marquee);
         var stick = document.getElementById(CAB.stick);
+        var cabSel = document.getElementById(CAB.select);
+        var bannerSel = document.getElementById(SELECT);
         var credits = 0, opener = null, powerTimer = null;
+
+        function syncMarquee() { if (marquee) marquee.textContent = engine.label(); }
+
+        // A modal <dialog> blocks the page, so the banner's picker is unreachable while
+        // the cabinet is open. Without one in here you would have to close the cabinet to
+        // change game.
+        if (cabSel) {
+            fillGameOptions(cabSel, false);
+            cabSel.addEventListener('change', function () {
+                engine.selectGame(cabSel.value);
+                syncMarquee();
+                screenState(engine.isPlaying() ? null : 'cab-screen--off');
+                if (bannerSel) { bannerSel.value = cabSel.value; lsSet(STORAGE_KEY, cabSel.value); }
+            });
+        }
 
         function setCredits(n) {
             credits = n;
@@ -1549,9 +1639,12 @@
         function open() {
             opener = document.activeElement;
             dlg.showModal();
-            if (marquee) marquee.textContent = engine.label();
+            syncMarquee();
+            if (cabSel) cabSel.value = engine.currentId();
             // showModal() must land before we measure: the dialog is display:none until then.
-            engine.attach(screen, { fill: true, maxCell: 26, hud: true });
+            engine.attach(screen, {
+                fill: true, hud: true, hudPad: 34, maxCell: 40, grid: CABINET_GRID
+            });
             engine.stop();                     // attract plays on the CRT until a coin drops
             screenState('cab-screen--off');
             setCredits(0);

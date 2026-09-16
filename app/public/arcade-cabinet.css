@@ -66,15 +66,15 @@
 }
 
 /*
- * 16:9, not the 4:3 of a real cabinet. The playfield is a fixed 53x7 grid, so its
- * height is set by its width (~7 * width/53) and cannot be stretched without lying
- * about the data. In a 4:3 tube that left a thin strip floating in a lot of black;
- * 16:9 keeps the CRT read and roughly halves the dead space. The HUD lives in what
- * is left of the bands.
+ * 4:3, like a real cabinet. This only works because the cabinet rewraps the
+ * contribution graph from the banner's 53x7 strip into a near-square 22x17 grid
+ * (see CABINET_GRID in arcade.js) -- the game fills the tube instead of floating in
+ * it. arcade.js sizes the cell from BOTH this box's width and its height, and keeps
+ * a band top and bottom for the HUD.
  */
 .cab-screen {
     position: relative;
-    aspect-ratio: 16 / 9;
+    aspect-ratio: 4 / 3;
     background: #04070a;
     overflow: hidden;
     border-radius: 4% / 6%;
@@ -173,17 +173,30 @@
 
 /* ---- control panel ---------------------------------------------------------- */
 
-/* Desktop columns, in markup order: stick | A | START | coin | credits | close.
+/* Desktop columns, in markup order: stick | A | START | select | coin | credits | close.
    .cab-pad is display:none here, so it takes no grid cell. */
 .cab-panel {
     display: grid;
-    grid-template-columns: 96px auto auto 1fr auto 40px;
+    grid-template-columns: 96px auto auto auto 1fr auto 40px;
     gap: 14px;
     align-items: center;
     padding-top: 16px;
 }
 
 .cab-coin { justify-self: start; }
+
+.cab-select {
+    border: 2px solid #555;
+    border-radius: 6px;
+    background: #111;
+    color: #7fffd4;
+    cursor: pointer;
+    padding: 9px 8px;
+    max-width: 190px;
+    font: 0.55rem 'Press Start 2P', ui-monospace, monospace;
+}
+
+.cab-select:hover { border-color: #7fffd4; }
 
 .cab-stick {
     width: 66px;
@@ -317,7 +330,8 @@
         grid-template-columns: 1fr auto auto;
         grid-template-areas:
             'pad fire start'
-            'coin credits close';
+            'sel sel close'
+            'coin credits credits';
         row-gap: 12px;
     }
 
@@ -325,9 +339,10 @@
     .cab-pad { display: grid; grid-area: pad; }
     .cab-btn { grid-area: fire; }
     .cab-btn--start { grid-area: start; }
+    .cab-select { grid-area: sel; max-width: none; width: 100%; }
     .cab-coin { grid-area: coin; }
     .cab-credits { grid-area: credits; justify-self: end; }
-    .cab-close { grid-area: close; }
+    .cab-close { grid-area: close; justify-self: end; }
 }
 
 @media (pointer: coarse) and (min-width: 721px) {
