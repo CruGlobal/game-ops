@@ -1,0 +1,388 @@
+/*
+ * Arcade cabinet modal for the leaderboard header.
+ *
+ * A native <dialog> dressed as a cabinet: marquee, bezel, CRT, control panel, coin
+ * slot. The live <canvas> from the banner is moved into .cab-screen and moved back on
+ * close, so there is only ever one canvas and one requestAnimationFrame loop.
+ *
+ * CRT treatment is deliberately compositor-only -- scanline gradient, radial vignette,
+ * drop-shadow glow, opacity flicker. True barrel distortion needs an SVG
+ * feDisplacementMap or a WebGL pass, both of which re-rasterise the whole canvas every
+ * frame (and Safari's SVG filter support is patchy). The rounded screen corners plus
+ * the vignette carry most of the curved-tube read for none of the cost.
+ */
+
+/*
+ * An explicit width, not fit-content. A <dialog> sizes to its content by default, which
+ * made the cabinet as wide as whatever the control panel happened to measure -- and that
+ * changed once 'Press Start 2P' finished loading, so the CRT reflowed after arcade.js had
+ * already measured it. A fixed box makes the canvas size deterministic.
+ */
+.cab {
+    border: 0;
+    padding: 0;
+    background: transparent;
+    width: min(94vw, 900px);
+    max-height: 96vh;
+    color: #d8fff2;
+}
+
+.cab::backdrop {
+    background: rgba(0, 0, 0, 0.78);
+    backdrop-filter: blur(3px);
+}
+
+.cab-body {
+    position: relative;                 /* positioning context for .cab-close */
+    background: linear-gradient(#2a2d33, #15171b);
+    border-radius: 18px;
+    padding: 14px 18px 20px;
+    box-shadow:
+        0 30px 80px rgba(0, 0, 0, 0.6),
+        inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+/* ---- marquee ---------------------------------------------------------------- */
+
+.cab-marquee {
+    font-family: 'Press Start 2P', ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.85rem;
+    line-height: 1.5;
+    text-align: center;
+    padding: 16px 12px;
+    letter-spacing: 0.08em;
+    color: #fff2a8;
+    background: radial-gradient(ellipse at 50% 120%, #ffb400 0%, #6a2e00 60%, #2a1200 100%);
+    text-shadow: 0 0 6px #ffd000, 0 0 18px #ff8a00;
+    border-radius: 10px 10px 0 0;
+}
+
+/* ---- bezel + CRT ------------------------------------------------------------ */
+
+.cab-bezel {
+    position: relative;
+    background: #0b0b0d;
+    padding: 4% 5%;
+    border-radius: 0 0 6px 6px;
+}
+
+/*
+ * 4:3, like a real cabinet. This only works because the cabinet rewraps the
+ * contribution graph from the banner's 53x7 strip into a near-square 24x16 grid
+ * (see CABINET_GRID in arcade.js) -- the game fills the tube instead of floating in
+ * it. arcade.js sizes the cell from BOTH this box's width and its height, and keeps
+ * a band top and bottom for the HUD.
+ */
+.cab-screen {
+    position: relative;
+    aspect-ratio: 4 / 3;
+    background: #04070a;
+    overflow: hidden;
+    border-radius: 4% / 6%;
+    box-shadow:
+        inset 0 0 60px rgba(0, 0, 0, 0.9),
+        0 0 24px rgba(43, 182, 207, 0.25);
+}
+
+/*
+ * Take the canvas out of flow. .cab-screen sizes itself from aspect-ratio, and the
+ * canvas reads clientHeight back off it -- in flow that is a feedback loop.
+ */
+.cab-screen .arcade-canvas {
+    position: absolute;
+    left: 0;
+    top: 0;
+    filter: drop-shadow(0 0 4px rgba(120, 255, 220, 0.55)) saturate(1.15);
+}
+
+/*
+ * Matched to .cab-bezel's padding with margins, not inset. `inset`'s top/bottom resolve
+ * against the containing block's HEIGHT while `padding` resolves against its WIDTH, so
+ * `inset: 4% 5%` overhung the screen onto the bezel by ~8.5px top and bottom at desktop
+ * width, and left ~7px of unfiltered strip down each side at phone width. Margin
+ * percentages resolve against width on all four sides, so these track the padding exactly.
+ */
+.cab-scanlines,
+.cab-glass {
+    position: absolute;
+    inset: 0;
+    margin: 4% 5%;
+    pointer-events: none;
+    border-radius: 4% / 6%;
+}
+
+.cab-scanlines {
+    mix-blend-mode: multiply;
+    background: repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.35) 0 1px, transparent 1px 3px);
+}
+
+.cab-glass {
+    background:
+        radial-gradient(ellipse at 50% 35%, rgba(255, 255, 255, 0.08), transparent 55%),
+        radial-gradient(ellipse at 50% 50%, transparent 60%, rgba(0, 0, 0, 0.55) 100%);
+}
+
+/* ---- attract / power-on states ---------------------------------------------- */
+
+.cab-screen--off .arcade-canvas {
+    visibility: hidden;
+}
+
+.cab-screen--off::after {
+    content: 'INSERT COIN';
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    font-family: 'Press Start 2P', ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.8rem;
+    color: #ffd000;
+    text-shadow: 0 0 10px rgba(255, 208, 0, 0.6);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .cab-screen--off::after {
+        animation: cab-blink 1.1s steps(1) infinite;
+    }
+
+    .cab-glass {
+        animation: cab-flicker 4s steps(2) infinite;
+    }
+
+    .cab-screen--poweron .arcade-canvas {
+        animation: cab-power 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    }
+
+    .cab-screen--nag {
+        animation: cab-nag 0.4s ease-in-out;
+    }
+}
+
+@keyframes cab-blink {
+    0%, 49% { opacity: 1; }
+    50%, 100% { opacity: 0; }
+}
+
+@keyframes cab-flicker {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.96; }
+}
+
+@keyframes cab-power {
+    0% { transform: scale(1, 0.004); filter: brightness(8); }
+    60% { transform: scale(1, 1.02); }
+    100% { transform: none; }
+}
+
+@keyframes cab-nag {
+    0%, 100% { transform: none; }
+    25% { transform: translateX(-6px); }
+    75% { transform: translateX(6px); }
+}
+
+/* ---- control panel ---------------------------------------------------------- */
+
+/* Desktop columns, in markup order: stick | A | START | select | coin | credits.
+   .cab-pad is display:none here, so it takes no grid cell, and .cab-close is absolutely
+   positioned in the top-right corner rather than sitting in this row. */
+.cab-panel {
+    display: grid;
+    grid-template-columns: 96px auto auto auto 1fr auto;
+    gap: 14px;
+    align-items: center;
+    padding-top: 16px;
+}
+
+.cab-coin { justify-self: start; }
+
+.cab-select {
+    border: 2px solid #555;
+    border-radius: 6px;
+    background: #111;
+    color: #7fffd4;
+    cursor: pointer;
+    padding: 9px 8px;
+    max-width: 190px;
+    font: 0.55rem 'Press Start 2P', ui-monospace, monospace;
+}
+
+.cab-select:hover { border-color: #7fffd4; }
+
+.cab-stick {
+    width: 66px;
+    height: 66px;
+    border-radius: 50%;
+    justify-self: center;
+    transition: transform 0.06s ease-out;
+    background: radial-gradient(circle at 40% 35%, #ff5a5a, #7a0d0d 70%);
+    box-shadow:
+        0 8px 0 #333,
+        0 12px 14px rgba(0, 0, 0, 0.6);
+}
+
+.cab-stick[data-dir='left'] { transform: translateX(-9px) rotate(-8deg); }
+.cab-stick[data-dir='right'] { transform: translateX(9px) rotate(8deg); }
+.cab-stick[data-dir='up'] { transform: translateY(-9px); }
+.cab-stick[data-dir='down'] { transform: translateY(9px); }
+
+/* Touch d-pad. Hidden on pointer-precise devices, where the keyboard is better. */
+.cab-pad {
+    display: none;
+    grid-template-columns: repeat(3, 40px);
+    grid-template-rows: repeat(2, 40px);
+    gap: 4px;
+    justify-self: center;
+}
+
+.cab-pad button {
+    border: 0;
+    border-radius: 8px;
+    background: #2f343c;
+    color: #d8fff2;
+    font-size: 1rem;
+}
+
+.cab-pad button.is-down { background: #4b525d; }
+.cab-pad [data-slot='left'] { grid-area: 1 / 1 / 3 / 2; }
+.cab-pad [data-slot='up'] { grid-area: 1 / 2; }
+.cab-pad [data-slot='down'] { grid-area: 2 / 2; }
+.cab-pad [data-slot='right'] { grid-area: 1 / 3 / 3 / 4; }
+
+.cab-btn {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    border: 0;
+    cursor: pointer;
+    font: 700 0.6rem 'Press Start 2P', ui-monospace, monospace;
+    color: #2a1200;
+    background: radial-gradient(circle at 40% 35%, #ffd000, #a86e00 75%);
+    box-shadow: 0 6px 0 #4a3200;
+    transition: transform 0.06s ease-out, box-shadow 0.06s ease-out;
+}
+
+.cab-btn.is-down,
+.cab-btn:active {
+    transform: translateY(5px);
+    box-shadow: 0 1px 0 #4a3200;
+}
+
+.cab-btn--start {
+    width: auto;
+    height: 40px;
+    border-radius: 20px;
+    padding: 0 18px;
+    color: #06231a;
+    background: radial-gradient(circle at 40% 30%, #7fffd4, #128a66 78%);
+    box-shadow: 0 5px 0 #06412f;
+}
+
+.cab-btn--start:active { box-shadow: 0 1px 0 #06412f; }
+
+.cab-coin {
+    border: 2px solid #777;
+    border-radius: 6px;
+    background: #111;
+    color: #ffd000;
+    cursor: pointer;
+    padding: 10px 12px;
+    font: 0.55rem 'Press Start 2P', ui-monospace, monospace;
+    letter-spacing: 0.04em;
+}
+
+.cab-coin:hover { border-color: #ffd000; }
+
+.cab-credits {
+    font: 0.55rem 'Press Start 2P', ui-monospace, monospace;
+    color: #7fffd4;
+    white-space: nowrap;
+}
+
+/*
+ * Top-right corner, floating over the marquee. It started life in the control panel,
+ * which suited the cabinet metaphor but is not where anyone looks for a way out of a
+ * modal -- the first person to open this asked how to get back to the leaderboard.
+ * Round and translucent so it reads as a control rather than part of the artwork.
+ */
+.cab-close {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 2;
+    width: 36px;
+    height: 36px;
+    display: grid;
+    place-items: center;
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    border-radius: 50%;
+    background: rgba(12, 14, 17, 0.72);
+    color: #fff2d0;
+    cursor: pointer;
+    font-size: 0.95rem;
+    line-height: 1;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+    transition: background 0.12s ease-out, border-color 0.12s ease-out, transform 0.12s ease-out;
+}
+
+.cab-close:hover {
+    background: rgba(40, 46, 54, 0.92);
+    border-color: #ffd000;
+    transform: scale(1.06);
+}
+
+.cab-close:active { transform: scale(0.96); }
+
+.cab-btn:focus-visible,
+.cab-coin:focus-visible,
+.cab-close:focus-visible,
+.cab-pad button:focus-visible {
+    outline: 2px solid #7fffd4;
+    outline-offset: 2px;
+}
+
+/* ---- small screens ---------------------------------------------------------- */
+
+@media (max-width: 720px) {
+    .cab { max-width: 100vw; }
+
+    .cab-body {
+        border-radius: 0;
+        padding: 8px 10px 14px;
+    }
+
+    .cab-marquee {
+        font-size: 0.62rem;
+        padding: 10px 8px;
+    }
+
+    .cab-bezel { padding: 3%; }
+
+    .cab-scanlines,
+    .cab-glass { margin: 3%; }
+
+    .cab-panel {
+        grid-template-columns: 1fr auto auto;
+        grid-template-areas:
+            'pad fire start'
+            'sel sel sel'
+            'coin credits credits';
+        row-gap: 12px;
+    }
+
+    .cab-stick { display: none; }
+    .cab-pad { display: grid; grid-area: pad; }
+    .cab-btn { grid-area: fire; }
+    .cab-btn--start { grid-area: start; }
+    .cab-select { grid-area: sel; max-width: none; width: 100%; }
+    .cab-coin { grid-area: coin; }
+    .cab-credits { grid-area: credits; justify-self: end; }
+}
+
+@media (pointer: coarse) and (min-width: 721px) {
+    .cab-pad { display: grid; }
+    .cab-stick { display: none; }
+
+    /* The pad is wider than the stick it replaces, so the first track cannot stay at the
+       96px that was sized for the stick. */
+    .cab-panel { grid-template-columns: auto auto auto auto 1fr auto; }
+}

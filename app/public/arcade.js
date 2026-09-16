@@ -27,18 +27,64 @@
     var PLAY_BTN = 'arcade-play';
     var SCORE_EL = 'arcade-score';
     var STORAGE_KEY = 'arcade-game';
-    var COLS = 53, ROWS = 7;
-    var GH_COL = Math.floor(COLS / 2), GH_ROW = Math.floor(ROWS / 2); // ghost-house centre
-    // Pac-Man maze occupies a centred band of columns — the full 53-wide grid is
-    // too spread out. PM_COLS is the tweak knob; the band is centred on GH_COL.
-    var PM_COLS = COLS;        // maze spans the full contribution-graph width
-    var PM_LO = Math.floor((COLS - PM_COLS) / 2);
-    var PM_HI = PM_LO + PM_COLS;
+    var HI_KEY = 'arcade-hi:';
+    var CAB = {
+        dialog: 'arcade-cabinet', screen: 'cab-screen', marquee: 'cab-marquee',
+        coin: 'cab-coin', start: 'cab-start', close: 'cab-close', credits: 'cab-credits',
+        stick: 'cab-stick', fire: 'cab-fire', select: 'cab-select'
+    };
+    var CAB_FONT = '"Press Start 2P", ui-monospace, SFMono-Regular, Menlo, monospace';
+
+    // localStorage throws outright in a storage-blocked browser (Safari private mode with
+    // cookies blocked, some enterprise policies). Swallow it: a missing high score is not
+    // a reason to lose the whole arcade.
+    function lsGet(k) { try { return localStorage.getItem(k); } catch { return null; } }
+    function lsSet(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+    function readHi(id) { var n = parseInt(lsGet(HI_KEY + id) || '0', 10); return isFinite(n) && n > 0 ? n : 0; }
+    function recordHi(id, score) { if (score > readHi(id)) lsSet(HI_KEY + id, String(score)); }
+    // The playfield is the contribution graph, so its shape decides the aspect ratio.
+    // 53x7 is ~7.6:1 -- right for a banner strip, but in a cabinet it is a thin ribbon
+    // floating in a black tube. The cabinet therefore rewraps the SAME ~371 days into a
+    // near-4:3 grid so the game fills the screen. Every game loops over COLS/ROWS, so
+    // they follow the reshape; the row BANDS some of them assume are scaled below.
+    var BANNER_GRID = { cols: 53, rows: 7 };
+    // 24x16 = 384 cells (~384 days). The aspect to match is not the tube's 4:3 but its
+    // USABLE area, width / (height - 2 * hudPad), which is about 1.5 -- and 24/16 is 1.5.
+    var CABINET_GRID = { cols: 24, rows: 16 };
+
+    var COLS, ROWS, GH_COL, GH_ROW, PM_COLS, PM_LO, PM_HI, PM_WARP_ROW;
     var PM_OPEN = 0.3;          // fraction of maze walls removed — lower = denser maze
+
+    function setGeometry(cols, rows) {
+        COLS = cols; ROWS = rows;
+        GH_COL = Math.floor(COLS / 2); GH_ROW = Math.floor(ROWS / 2);  // ghost-house centre
+        PM_COLS = COLS;         // maze spans the full contribution-graph width
+        PM_LO = Math.floor((COLS - PM_COLS) / 2);
+        PM_HI = PM_LO + PM_COLS;
+        PM_WARP_ROW = GH_ROW;   // tunnel row: stepping off either edge warps to the far side
+    }
+    setGeometry(BANNER_GRID.cols, BANNER_GRID.rows);
+    function sameGrid(g) { return g.cols === COLS && g.rows === ROWS; }
+
+    // Breakout and Galaga assume a row BAND, not the whole grid. On the 7-row banner the
+    // band is the whole strip; on the tall cabinet grid it has to shrink or the wall
+    // reaches the paddle and the shields reach the ship. Short grids keep their old
+    // numbers exactly, so the banner is unchanged.
+    function brickRows() { return ROWS <= 8 ? ROWS : Math.round(ROWS * 0.45); }
+    function galagaBands() {
+        if (ROWS <= 8) return { enemy: 2, shieldFrom: 2, shieldTo: ROWS };   // banner, as before
+        var enemy = Math.max(3, Math.round(ROWS * 0.28));
+        var from = Math.round(ROWS * 0.62);
+        return { enemy: enemy, shieldFrom: from, shieldTo: Math.min(ROWS, from + 3) };
+    }
+
     function pmIn(c, r) { return c >= PM_LO && c < PM_HI && r >= 0 && r < ROWS; }
-    var PM_WARP_ROW = GH_ROW;   // tunnel row: stepping off either edge warps to the far side
     function wrapCol(c) { return c < PM_LO ? PM_HI - 1 : c >= PM_HI ? PM_LO : c; }
-    var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+    var reduceMotion = motionQuery.matches;
+    if (motionQuery.addEventListener) {
+        motionQuery.addEventListener('change', function (e) { reduceMotion = !!e.matches; });
+    }
 
     // ---- palette (from the page's Cru/Cornerstone CSS variables) -------------
     function readPalette() {
@@ -88,17 +134,26 @@
             fruit: function () { tone(700, 0.09, 'square', 0.06); tone(1050, 0.11, 'square', 0.05, 0.09); },
             death: function () { for (var i = 0; i < 6; i++) tone(620 - i * 80, 0.12, 'triangle', 0.07, i * 0.1); },
             level: function () { tone(523, 0.1, 'square', 0.06); tone(659, 0.1, 'square', 0.06, 0.1); tone(784, 0.16, 'square', 0.06, 0.2); },
-            fright: function () { tone(280, 0.05, 'square', 0.025); }
+            fright: function () { tone(280, 0.05, 'square', 0.025); },
+            coin: function () { tone(1200, 0.05, 'square', 0.07); tone(1800, 0.07, 'square', 0.06, 0.05); },
+            cabStart: function () { tone(523, 0.08, 'square', 0.07); tone(659, 0.08, 'square', 0.07, 0.08); tone(784, 0.08, 'square', 0.07, 0.16); tone(1047, 0.18, 'square', 0.07, 0.24); }
         };
     })();
 
     // ---- grid data -----------------------------------------------------------
+    // Keep the raw day counts so the grid can be rebuilt at a different shape when the
+    // cabinet opens, without a second request.
+    var rawCells = null, rawMax = 0, rawOk = false;
     function loadLevels() {
         return fetch('/api/contributions/grid?weeks=53', { credentials: 'include' })
             .then(function (r) { if (!r.ok) throw new Error('grid ' + r.status); return r.json(); })
-            .then(function (j) { return buildLevels(j.cells || [], j.maxCount || 0); })
-            .catch(function () { return synthLevels(); });
+            .then(function (j) {
+                rawCells = j.cells || []; rawMax = j.maxCount || 0; rawOk = true;
+                return buildLevels(rawCells, rawMax);
+            })
+            .catch(function () { rawOk = false; return synthLevels(); });
     }
+    function rebuildLevels() { return rawOk ? buildLevels(rawCells, rawMax) : synthLevels(); }
     function buildLevels(cells, maxCount) {
         var map = {};
         cells.forEach(function (c) { map[c.date] = c.count; });
@@ -128,18 +183,46 @@
     }
 
     // ---- layout / drawing ----------------------------------------------------
-    function computeLayout(canvas) {
+    // opts: { width, height, maxCell, hud }. The cabinet passes a fixed box and
+    // letterboxes the 53x7 strip inside it; the banner passes nothing and stays fluid.
+    // Measure the MOUNT, never the canvas: we pin canvas.style.width below, so reading
+    // canvas.clientWidth back would only ever return the previous pin.
+    function computeLayout(canvas, opts) {
+        opts = opts || {};
         var dpr = Math.min(window.devicePixelRatio || 1, 2);
-        var cssW = canvas.clientWidth || (canvas.parentElement && canvas.parentElement.clientWidth) || 800;
+        var mount = canvas.parentElement;
+        var cssW = opts.width || (mount && mount.clientWidth) || 800;
         var gap = Math.max(1, Math.round(cssW / (COLS * 9)));
-        var cell = Math.max(4, Math.min(Math.floor((cssW - (COLS - 1) * gap) / COLS), 18));
+        var boxH0 = opts.height || (opts.fill && mount && mount.clientHeight) || 0;
+        // Cap the HUD band as a share of the tube: 34px is a quarter of a phone-sized CRT.
+        var pad = opts.hudPad ? Math.max(16, Math.min(opts.hudPad, Math.round(boxH0 * 0.07))) : 0;
+        var byW = Math.floor((cssW - (COLS - 1) * gap) / COLS);
+        // In a fixed box the cell has to satisfy the height as well, or a near-square grid
+        // overflows the tube.
+        var byH = boxH0 ? Math.floor((boxH0 - 2 * pad - (ROWS - 1) * gap) / ROWS) : byW;
+        var cell = Math.max(4, Math.min(byW, byH, opts.maxCell || 18));
         var gw = COLS * cell + (COLS - 1) * gap;
         var gh = ROWS * cell + (ROWS - 1) * gap;
-        var ox = Math.floor((cssW - gw) / 2), oy = 5, cssH = gh + 20; // bottom room for the Breakout paddle
+        var boxed = !!(opts.height || opts.fill);
+        var cssH = opts.height || (opts.fill && mount && mount.clientHeight) || gh + 20;  // else: room for the Breakout paddle
+        var ox = Math.floor((cssW - gw) / 2);
+        // Banner: the strip is short, so 5px of top padding is all it needs. Cabinet: the
+        // grid is nearly square and must also fit the tube's HEIGHT, with a reserved band
+        // top and bottom for the canvas HUD.
+        var oy = boxed ? pad + Math.floor((cssH - 2 * pad - gh) / 2) : 5;
         canvas.style.width = cssW + 'px'; canvas.style.height = cssH + 'px';
         canvas.width = Math.round(cssW * dpr); canvas.height = Math.round(cssH * dpr);
         var ctx = canvas.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        return { ctx: ctx, cell: cell, gap: gap, ox: ox, oy: oy, gw: gw, gh: gh, cssW: cssW, cssH: cssH, step: cell + gap };
+        return { ctx: ctx, cell: cell, gap: gap, ox: ox, oy: oy, gw: gw, gh: gh, cssW: cssW, cssH: cssH, step: cell + gap, hud: !!opts.hud };
+    }
+
+    // Phosphor palette for the cabinet CRT. The page palette is built for a white
+    // card and would paint a white overlay over a black tube.
+    function cabinetPalette() {
+        return {
+            accent: '#2ba6bd', highlight: '#ffd000', ink: '#d8fff2', surface: '#04070a', danger: '#ff5a5a',
+            ramp: ['#0c1a1f', '#14464f', '#1d7f8f', '#2ba6bd', '#7fffd4']
+        };
     }
     function cellXY(L, c, r) { return { x: L.ox + c * L.step, y: L.oy + r * L.step }; }
     function roundRect(ctx, x, y, w, h, r) {
@@ -166,6 +249,12 @@
         ctx.globalAlpha = 1;
     }
     function inBounds(c, r) { return c >= 0 && c < COLS && r >= 0 && r < ROWS; }
+
+    // Where the player's paddle / ship / shooter sits. The banner leaves a 20px apron
+    // below the grid (cssH = gh + 20) and the actor lives in it. The cabinet grid fills
+    // the tube and the band below it belongs to the HUD, so there the actor sits on the
+    // last row of the playfield instead of underneath it.
+    function baseY(L) { return L.hud ? L.oy + L.gh - L.step * 0.6 : L.oy + L.gh + 2; }
 
     // ---- maze (for Pac-Man) --------------------------------------------------
     // Walls live on cell edges: vW[c][r] = wall between (c,r) and (c+1,r);
@@ -686,10 +775,14 @@
         function reset(full) {
             var L = env.L;
             bricks = fullMask(); remaining = 0;
-            for (var c = 0; c < COLS; c++) for (var r = 0; r < ROWS; r++) { if (env.levels[c][r] === 0 && Math.random() < 0.4) bricks[c][r] = false; if (bricks[c][r]) remaining++; }
+            var br = brickRows();
+            for (var c = 0; c < COLS; c++) for (var r = 0; r < ROWS; r++) {
+                if (r >= br || (env.levels[c][r] === 0 && Math.random() < 0.4)) bricks[c][r] = false;
+                if (bricks[c][r]) remaining++;
+            }
             pw = L.cell * 6;
             paddle = L.ox + L.gw / 2;
-            ball = { x: paddle, y: L.oy + L.gh + 2 };
+            ball = { x: paddle, y: baseY(L) - L.cell * 0.6 };
             var sp = Math.max(70, L.cssW * 0.2);
             vel = { x: sp * 0.6 * (Math.random() < 0.5 ? 1 : -1), y: -sp };
             if (full) { score = 0; lives = 3; status = 'running'; }
@@ -711,7 +804,7 @@
                 if (ball.x < L.ox) { ball.x = L.ox; vel.x = Math.abs(vel.x); }
                 if (ball.x > L.ox + L.gw) { ball.x = L.ox + L.gw; vel.x = -Math.abs(vel.x); }
                 if (ball.y < L.oy) { ball.y = L.oy; vel.y = Math.abs(vel.y); }
-                var py = L.oy + L.gh + 2;
+                var py = baseY(L);
                 if (ball.y >= py) {
                     if (mode === 'attract' || Math.abs(ball.x - paddle) <= pw / 2) {
                         ball.y = py; vel.y = -Math.abs(vel.y);
@@ -728,7 +821,7 @@
                 drawGrid(L, colors, env.levels, function (c, r) { return bricks[c][r] ? 1 : 0.1; });
                 var ph = Math.max(3, L.cell * 0.45);
                 ctx.fillStyle = colors.ink;
-                roundRect(ctx, paddle - pw / 2, L.oy + L.gh + 4, pw, ph, ph / 2); ctx.fill();
+                roundRect(ctx, paddle - pw / 2, baseY(L) + 2, pw, ph, ph / 2); ctx.fill();   // same line the collision uses
                 ctx.fillStyle = colors.ink;
                 ctx.beginPath(); ctx.arc(ball.x, ball.y, Math.max(2, L.cell * 0.3), 0, 7); ctx.fill();
             },
@@ -755,27 +848,27 @@
         function tune() {
             var L = env.L;
             pw = L.cell * 1.2;
-            shipY = L.oy + L.gh + 2;
+            shipY = baseY(L);
             swayAmp = 0;            // static formation — the contribution graph itself
             pSpd = L.step * 13;
             eSpd = L.step * (6 + (level - 1) * 0.6);
             diveSpd = L.step * (4.5 + (level - 1) * 0.5);
             swaySpd = L.step * (1.4 + (level - 1) * 0.25);
         }
-        var ENEMY_ROWS = 2;         // swarm occupies the top rows; the rest is shields
         function buildSwarm() {
             var L = env.L;
             swarm = [];
             // Top rows of the contribution graph become the enemy swarm, ranked by
             // contribution level. The remaining lit cells become shields (below).
-            for (var c = 0; c < COLS; c++) for (var r = 0; r < ENEMY_ROWS; r++) {
+            var ER = galagaBands().enemy;
+            for (var c = 0; c < COLS; c++) for (var r = 0; r < ER; r++) {
                 var lvl = env.levels[c][r];
                 if (lvl > 0) { var p = cellXY(L, c, r); swarm.push(mkEnemy(p.x + L.cell / 2, p.y + L.cell / 2, lvl)); }
             }
             // fallback only if the top rows are entirely empty
             if (!swarm.length) for (var g = 0; g < 12; g++) {
                 var cc = 3 + g * 4; if (cc >= COLS) break;
-                var q = cellXY(L, cc, g % ENEMY_ROWS); swarm.push(mkEnemy(q.x + L.cell / 2, q.y + L.cell / 2, 1 + (g % 4)));
+                var q = cellXY(L, cc, g % ER); swarm.push(mkEnemy(q.x + L.cell / 2, q.y + L.cell / 2, 1 + (g % 4)));
             }
         }
         // Rank by contribution level: brighter cells are higher-value enemies.
@@ -788,14 +881,15 @@
         // lit cell is one block; a single laser hit (player or enemy) destroys it.
         function buildShields() {
             shields = [];
+            var b = galagaBands();
             for (var c = 0; c < COLS; c++) {
                 shields[c] = new Array(ROWS).fill(0);
-                for (var r = ENEMY_ROWS; r < ROWS; r++) if (env.levels[c][r] > 0) shields[c][r] = env.levels[c][r];
+                for (var r = b.shieldFrom; r < b.shieldTo; r++) if (env.levels[c][r] > 0) shields[c][r] = env.levels[c][r];
             }
         }
         function shieldHit(x, y) {
             var L = env.L, c = Math.floor((x - L.ox) / L.step), r = Math.floor((y - L.oy) / L.step);
-            if (r >= ENEMY_ROWS && c >= 0 && c < COLS && r < ROWS && shields[c] && shields[c][r] > 0) { shields[c][r] = 0; return true; }
+            if (c >= 0 && c < COLS && r >= 0 && r < ROWS && shields[c] && shields[c][r] > 0) { shields[c][r] = 0; return true; }
             return false;
         }
         function newWave() {
@@ -867,7 +961,7 @@
                 else if (sway < -swayAmp) { sway = -swayAmp; swayDir = 1; }
 
                 // auto-fire
-                fireCd -= dt;
+                fireCd -= dt * (mode === 'play' && ctrl.held.fire ? 2.6 : 1);
                 if (fireCd <= 0 && pb.length < 4) { pb.push({ x: player, y: shipY }); fireCd = 0.42; if (mode === 'play') Sfx.waka(true); }
 
                 // dives + enemy fire
@@ -921,7 +1015,7 @@
                 for (var lc = 0; lc < COLS; lc++) for (var lr = 0; lr < ROWS; lr++) { var lp = cellXY(L, lc, lr); roundRect(ctx, lp.x, lp.y, L.cell, L.cell, grad); ctx.fill(); }
                 ctx.globalAlpha = 1;
                 // shields — the remaining contribution blocks (one laser hit destroys)
-                for (var shc = 0; shc < COLS; shc++) for (var shr = ENEMY_ROWS; shr < ROWS; shr++) {
+                for (var shc = 0; shc < COLS; shc++) for (var shr = 0; shr < ROWS; shr++) {
                     if (!shields[shc] || shields[shc][shr] <= 0) continue;
                     var shp = cellXY(L, shc, shr);
                     ctx.fillStyle = colors.ramp[shields[shc][shr]];
@@ -1045,7 +1139,7 @@
             rad = Math.max(3, L.cell * 0.4);
             rowH = rad * 1.7;
             originX = L.ox; originY = L.oy;
-            shooterX = L.ox + L.gw / 2; shooterY = L.oy + L.gh + 2;
+            shooterX = L.ox + L.gw / 2; shooterY = baseY(L);
             dangerY = shooterY - rad * 1.6;
             bcols = Math.max(6, Math.floor((L.gw - rad) / (2 * rad)));
         }
@@ -1170,7 +1264,7 @@
                     if (hit) settle();
                 } else {
                     if (mode === 'attract') aiAim();
-                    shotCd -= dt;
+                    shotCd -= dt * (mode === 'play' && ctrl.held.fire ? 2.6 : 1);
                     if (shotCd <= 0) { launch(); shotCd = mode === 'play' ? 0.7 : 1.1; }
                 }
             },
@@ -1218,6 +1312,10 @@
 
     var REGISTRY = { pacman: PacMan, snake: Snake, breakout: Breakout, galaga: Galaga, puzzlebobble: PuzzleBobble };
     var GAME_IDS = ['pacman', 'snake', 'breakout', 'galaga', 'puzzlebobble'];
+    var LABELS = {
+        pacman: '\uD83D\uDC7B Pac-Man', snake: '\uD83D\uDC0D Snake', breakout: '\uD83E\uDDF1 Breakout',
+        galaga: '\uD83D\uDE80 Galaga', puzzlebobble: '\uD83E\uDEE7 Puzzle Bobble'
+    };
 
     // ===========================================================================
     // Engine
@@ -1230,6 +1328,8 @@
         mount.appendChild(canvas);
 
         var L = null, colors = readPalette(), levels = null, game = null, gameId = 'pacman';
+        var layoutOpts = {};                 // {} = fluid banner; the cabinet passes a fixed box
+        var obs = null;                      // IntersectionObserver, re-pointed by attach()
         var rafId = null, lastTs = 0, visible = true, onScreen = true;
         var mode = 'attract';
         var dir = { x: 0, y: 0 };
@@ -1238,18 +1338,90 @@
         var self = this;
 
         function env() { return { L: L, colors: colors, levels: levels }; }
-        function relayout() { L = computeLayout(canvas); if (game && levels) game.init(env(), { mode: mode }); }
 
+        // In attract mode the canvas is decoration: keep it out of the tab order and out
+        // of the accessibility tree, so a keyboard user does not land on a nameless stop
+        // inside the wrapper's role="img". In play mode it is the game, so it gets a role
+        // and a real name.
+        function applyA11y() {
+            if (mode === 'play') {
+                canvas.tabIndex = 0;
+                canvas.removeAttribute('aria-hidden');
+                canvas.setAttribute('role', 'application');
+                canvas.setAttribute('aria-label', (LABELS[gameId] || gameId) +
+                    ' \u2014 arrow keys or WASD to play, Escape to exit');
+            } else {
+                canvas.tabIndex = -1;
+                canvas.setAttribute('aria-hidden', 'true');
+                canvas.removeAttribute('role');
+                canvas.removeAttribute('aria-label');
+            }
+        }
+        // game.init() is a full state wipe, so only re-init when the pixel geometry
+        // actually changed. A resize event that changed nothing used to cost the player
+        // their score, lives and level.
+        function relayout() {
+            var pw = L && L.cssW, ph = L && L.cssH;
+            L = computeLayout(canvas, layoutOpts);
+            if (!game || !levels) return;
+            if (L.cssW !== pw || L.cssH !== ph) game.init(env(), { mode: mode });
+        }
+
+        var scoreEl = null, scoreTxt = null;
+        var hiCache = null, hiRecorded = false;      // avoid touching storage every frame
+        function hiFor(id) {
+            if (hiCache === null) hiCache = readHi(id);
+            return hiCache;
+        }
+        function bankHi() {
+            if (hiRecorded || !game) return;
+            hiRecorded = true;                       // once per round, on the transition
+            var sc = game.getScore();
+            recordHi(gameId, sc);
+            if (sc > (hiCache || 0)) hiCache = sc;
+        }
         function setScore() {
-            var el = document.getElementById(SCORE_EL);
-            if (!el) return;
-            if (mode !== 'play' || !game) { el.textContent = ''; return; }
-            var st = game.getStatus(), lives = game.getLives();
-            var hearts = lives == null ? '' : '   ' + new Array(Math.max(0, lives) + 1).join('♥');
-            var lvl = game.getLevel ? ('   Lv ' + game.getLevel()) : '';
-            if (st === 'won') el.textContent = '🏆 You win!  ' + game.getScore() + '   ·  Space to replay, Esc to exit';
-            else if (st === 'lost') el.textContent = '💀 Game over  ' + game.getScore() + '   ·  Space to replay, Esc to exit';
-            else el.textContent = 'Score ' + game.getScore() + hearts + lvl + '   ·  Esc to exit';
+            if (!scoreEl) scoreEl = document.getElementById(SCORE_EL);
+            if (!scoreEl) return;
+            var txt = '';
+            // The cabinet draws its own HUD on the canvas, so the DOM score stays empty.
+            if (mode === 'play' && game && !(L && L.hud)) {
+                var st = game.getStatus(), lives = game.getLives();
+                var lifeTxt = lives == null ? '' : '   ' + Math.max(0, lives) + ' lives';
+                var lvl = game.getLevel ? ('   Lv ' + game.getLevel()) : '';
+                if (st === 'won') txt = '🏆 You win!  ' + game.getScore() + '   ·  Space to replay, Esc to exit';
+                else if (st === 'lost') txt = '💀 Game over  ' + game.getScore() + '   ·  Space to replay, Esc to exit';
+                else txt = 'Score ' + game.getScore() + lifeTxt + lvl + '   ·  Esc to exit';
+            }
+            // aria-live announces every write, so only write when the string changed.
+            if (txt !== scoreTxt) { scoreTxt = txt; scoreEl.textContent = txt; }
+        }
+
+        // Cabinet only: the CRT is 4:3 but the playfield is a 7.6:1 strip, so score and
+        // lives go in the black bands above and below it. The banner keeps its DOM HUD.
+        function drawHud() {
+            var ctx = L.ctx, lives = game.getLives();
+            var fs = Math.max(7, Math.min(12, Math.round(L.cssW / 60)));
+            var top = Math.max(3, L.oy - fs - 10);
+            ctx.save();
+            ctx.font = '700 ' + fs + 'px ' + CAB_FONT;
+            ctx.textBaseline = 'top';
+            ctx.textAlign = 'left';
+            ctx.fillStyle = '#7fffd4';
+            ctx.fillText('SCORE ' + game.getScore(), L.ox, top);
+            var hi = hiFor(gameId);
+            if (hi) {
+                ctx.textAlign = 'center'; ctx.fillStyle = '#ffd000';
+                ctx.fillText('HI ' + hi, L.cssW / 2, top);
+            }
+            ctx.textAlign = 'right'; ctx.fillStyle = '#7fffd4';
+            ctx.fillText((game.getLevel ? 'LV ' + game.getLevel() + '   ' : '') +
+                (lives == null ? '' : 'LIVES ' + Math.max(0, lives)), L.ox + L.gw, top);
+            if (mode === 'play' && game.getStatus() === 'running') {
+                ctx.textAlign = 'center'; ctx.fillStyle = 'rgba(127,255,212,0.55)';
+                ctx.fillText('ESC TO EXIT', L.cssW / 2, Math.min(L.cssH - fs - 4, L.oy + L.gh + 8));
+            }
+            ctx.restore();
         }
 
         function frame(ts) {
@@ -1259,36 +1431,75 @@
             lastTs = ts;
             game.update(dt, { mode: mode, dir: dir, held: held, mouseX: mode === 'play' ? mouseX : null });
             game.draw();
-            if (mode === 'play' && game.getStatus() !== 'running') drawOverlay(game.getStatus());
+            if (L.hud) drawHud();
+            if (mode === 'play' && game.getStatus() !== 'running') { bankHi(); drawOverlay(game.getStatus()); }
             setScore();
             schedule();
         }
         function drawOverlay(st) {
             var ctx = L.ctx;
             ctx.save();
-            ctx.globalAlpha = 0.78; ctx.fillStyle = colors.surface;
+            ctx.globalAlpha = L.hud ? 0.86 : 0.78; ctx.fillStyle = L.hud ? '#04070a' : colors.surface;
             ctx.fillRect(0, 0, L.cssW, L.cssH);
-            ctx.globalAlpha = 1; ctx.fillStyle = colors.ink;
-            ctx.font = '700 16px ' + (getComputedStyle(document.body).fontFamily || 'sans-serif');
+            ctx.globalAlpha = 1; ctx.fillStyle = L.hud ? '#ffd000' : colors.ink;
+            ctx.font = L.hud
+                ? ('700 ' + Math.max(8, Math.min(14, Math.round(L.cssW / 55))) + 'px ' + CAB_FONT)
+                : ('700 16px ' + (getComputedStyle(document.body).fontFamily || 'sans-serif'));
             ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
             ctx.fillText(st === 'won' ? '🏆  You win — Space to replay' : '💀  Game over — Space to replay', L.cssW / 2, L.cssH / 2);
             ctx.restore();
         }
 
-        function schedule() { if (rafId == null && visible && onScreen && !reduceMotion) rafId = window.requestAnimationFrame(frame); }
+        // Attract mode honours prefers-reduced-motion by drawing a single static frame.
+        // Play mode does not: the player asked for a game, and in the cabinet they spent a
+        // credit to get here. Refusing to animate would hand them a frozen screen.
+        function motionAllowed() { return !reduceMotion || mode === 'play'; }
+        function schedule() { if (rafId == null && visible && onScreen && motionAllowed()) rafId = window.requestAnimationFrame(frame); }
         function pause() { if (rafId != null) { window.cancelAnimationFrame(rafId); rafId = null; } }
         function resume() { lastTs = 0; schedule(); }
 
         function newGame(id, m) {
             gameId = id; mode = m;
-            colors = readPalette();
+            colors = layoutOpts.hud ? cabinetPalette() : readPalette();
             game = (REGISTRY[id] || REGISTRY.pacman)();
             dir = { x: 0, y: 0 }; mouseX = null;
+            hiCache = null; hiRecorded = false;
+            applyA11y();
             if (L && levels) game.init(env(), { mode: mode });
-            if (reduceMotion && game) { game.draw(); setScore(); } else { pause(); resume(); }
+            if (reduceMotion && mode !== 'play' && game) { game.draw(); setScore(); } else { pause(); resume(); }
         }
 
         this.start = function (id) { return loadLevels().then(function (lv) { levels = lv; relayout(); newGame(id, 'attract'); }); };
+
+        // Move the live canvas to another mount (banner <-> cabinet CRT) without losing
+        // the rAF loop or the cached level data: pause, move, re-measure, resume.
+        this.attach = function (newMount, opts) {
+            if (!newMount || newMount === mount) return;
+            pause();
+            if (obs) obs.unobserve(mount);
+            mount = newMount;
+            mount.appendChild(canvas);
+            if (obs) obs.observe(mount);
+            layoutOpts = opts || {};
+            onScreen = true;
+            // Reshaping the playfield re-wraps the same day data; the games read COLS/ROWS
+            // so they pick up the new shape on the init below.
+            var g = layoutOpts.grid || BANNER_GRID;
+            var reshaped = !sameGrid(g);
+            if (reshaped) { setGeometry(g.cols, g.rows); levels = rebuildLevels(); }
+            colors = layoutOpts.hud ? cabinetPalette() : readPalette();
+            L = computeLayout(canvas, layoutOpts);
+            applyA11y();
+            // A reshape invalidates whatever a game captured when it was CONSTRUCTED --
+            // Pac-Man closes over START = { c: GH_COL, r: ROWS - 1 }, which indexes past
+            // a narrower grid. Rebuild the game object; re-initialising is not enough.
+            if (reshaped) newGame(gameId, mode);
+            else if (game && levels) game.init(env(), { mode: mode });
+            resume();
+        };
+        this.resize = function () { relayout(); };   // relayout() re-inits only if the box really changed
+        this.label = function () { return LABELS[gameId] || gameId; };
+        this.inCabinet = function () { return !!layoutOpts.hud; };
         this.selectGame = function (id) { newGame(id, mode); };
         this.play = function () { Sfx.enable(); newGame(gameId, 'play'); canvas.focus(); updateBtn(); };
         this.stop = function () { Sfx.disable(); newGame(gameId, 'attract'); updateBtn(); };
@@ -1297,8 +1508,8 @@
 
         function updateBtn() {
             var b = document.getElementById(PLAY_BTN);
-            if (b) { b.textContent = mode === 'play' ? '⏹ Stop' : '▶ Play'; b.setAttribute('aria-pressed', mode === 'play'); }
-            var el = document.getElementById(SCORE_EL); if (el && mode !== 'play') el.textContent = '';
+            if (b && !b.hasAttribute('aria-haspopup')) { b.textContent = mode === 'play' ? '⏹ Stop' : '▶ Play'; b.setAttribute('aria-pressed', mode === 'play'); }
+            if (mode !== 'play') setScore();
         }
 
         // ---- input -----------------------------------------------------------
@@ -1308,23 +1519,50 @@
             ArrowLeft: { x: -1, y: 0 }, KeyA: { x: -1, y: 0 },
             ArrowRight: { x: 1, y: 0 }, KeyD: { x: 1, y: 0 }
         };
+        // The listener is on window so the canvas need not hold focus, but WASD and the
+        // arrows are also ordinary typing: never swallow a key aimed at a form control.
+        function typingInto(e) {
+            var t = e.target;
+            return !!(t && t.closest && t.closest('input, select, textarea, [contenteditable=""], [contenteditable="true"]'));
+        }
         window.addEventListener('keydown', function (e) {
-            if (mode !== 'play') return;
+            if (mode !== 'play' || typingInto(e)) return;
             if (e.code === 'Escape') { self.stop(); return; }
-            if ((e.code === 'Space' || e.code === 'Enter') && game.getStatus() !== 'running') { e.preventDefault(); newGame(gameId, 'play'); return; }
+            if (e.code === 'Space' || e.code === 'Enter') {
+                e.preventDefault();
+                if (game.getStatus() !== 'running') { newGame(gameId, 'play'); return; }
+                held.fire = true;                       // fire while a round is running
+                return;
+            }
             var d = DIRS[e.code];
-            if (d) { e.preventDefault(); dir = d; held.left = d.x < 0; held.right = d.x > 0; held.up = d.y < 0; held.down = d.y > 0; }
+            if (d) { e.preventDefault(); mouseX = null; dir = d; held.left = d.x < 0; held.right = d.x > 0; held.up = d.y < 0; held.down = d.y > 0; }
         });
         window.addEventListener('keyup', function (e) {
-            if (mode !== 'play') return;
+            if (mode !== 'play' || typingInto(e)) return;
+            if (e.code === 'Space' || e.code === 'Enter') { held.fire = false; return; }
             var d = DIRS[e.code];
             if (d) { if (d.x < 0) held.left = false; if (d.x > 0) held.right = false; if (d.y < 0) held.up = false; if (d.y > 0) held.down = false; }
         });
         canvas.addEventListener('mousemove', function (e) { if (mode === 'play') { var rect = canvas.getBoundingClientRect(); mouseX = e.clientX - rect.left; } });
+        canvas.addEventListener('mouseleave', function () { mouseX = null; });
+
+        // Touch / cabinet-panel steering. The panel buttons drive the same `held` and
+        // `dir` the keyboard does, so there is no second input code path.
+        this.setHeld = function (k, down) {
+            if (mode !== 'play') return;
+            if (k === 'left' || k === 'right' || k === 'up' || k === 'down') {
+                held[k] = !!down;
+                if (down) { mouseX = null; dir = DIRS[k === 'left' ? 'ArrowLeft' : k === 'right' ? 'ArrowRight' : k === 'up' ? 'ArrowUp' : 'ArrowDown']; }
+            } else if (k === 'fire') {
+                held.fire = !!down;
+                if (down && game && game.getStatus() !== 'running') newGame(gameId, 'play');
+            }
+        };
 
         document.addEventListener('visibilitychange', function () { visible = !document.hidden; if (visible) resume(); else pause(); });
         if ('IntersectionObserver' in window) {
-            new IntersectionObserver(function (en) { onScreen = en[0].isIntersecting; if (onScreen) resume(); else pause(); }, { threshold: 0 }).observe(mount);
+            obs = new IntersectionObserver(function (en) { onScreen = en[0].isIntersecting; if (onScreen) resume(); else pause(); }, { threshold: 0 });
+            obs.observe(mount);
         }
         var rt = null;
         window.addEventListener('resize', function () { clearTimeout(rt); rt = setTimeout(function () { pause(); relayout(); resume(); }, 200); });
@@ -1339,29 +1577,169 @@
             var q = new URLSearchParams(window.location.search).get('arcade');
             if (q && GAME_IDS.indexOf(q) !== -1) return q; // deep-link / test override
         } catch (e) { /* ignore */ }
-        var s = localStorage.getItem(STORAGE_KEY);
+        var s = lsGet(STORAGE_KEY);
         return (s && s !== 'random' && GAME_IDS.indexOf(s) !== -1) ? s : pickRandom();
     }
+    function fillGameOptions(sel, withRandom) {
+        sel.textContent = '';
+        var opts = GAME_IDS.map(function (id) { return { v: id, t: LABELS[id] }; });
+        if (withRandom) opts.unshift({ v: 'random', t: '🎲 Random' });
+        opts.forEach(function (o) {
+            var el = document.createElement('option');
+            el.value = o.v; el.textContent = o.t;              // textContent, never innerHTML
+            sel.appendChild(el);
+        });
+    }
+
     function buildControls(engine) {
         var sel = document.getElementById(SELECT);
         if (sel) {
-            var opts = ['<option value="random">🎲 Random</option>'];
-            GAME_IDS.forEach(function (id) { opts.push('<option value="' + id + '">' + REGISTRY[id]().label + '</option>'); });
-            sel.innerHTML = opts.join('');
-            sel.value = localStorage.getItem(STORAGE_KEY) || 'random';
+            fillGameOptions(sel, true);
+            var saved = lsGet(STORAGE_KEY);
+            sel.value = (saved === 'random' || GAME_IDS.indexOf(saved) !== -1) ? saved : 'random';
             sel.addEventListener('change', function () {
-                localStorage.setItem(STORAGE_KEY, sel.value);
+                lsSet(STORAGE_KEY, sel.value);
                 engine.selectGame(sel.value === 'random' ? pickRandom() : sel.value);
             });
         }
+        var cabinet = buildCabinet(engine);
         var btn = document.getElementById(PLAY_BTN);
-        if (btn) btn.addEventListener('click', function () { engine.isPlaying() ? engine.stop() : engine.play(); });
+        if (btn) {
+            btn.addEventListener('click', function () {
+                if (cabinet) { cabinet.open(); return; }          // no <dialog> support: play inline
+                engine.isPlaying() ? engine.stop() : engine.play();
+            });
+            if (cabinet) { btn.removeAttribute('aria-pressed'); btn.setAttribute('aria-haspopup', 'dialog'); }
+        }
         // Wake the audio context on the first user interaction anywhere, so it's
         // already running by the time Play unmutes it (autoplay policy).
         function wake() { Sfx.unlock(); window.removeEventListener('pointerdown', wake); window.removeEventListener('keydown', wake); }
         window.addEventListener('pointerdown', wake);
         window.addEventListener('keydown', wake);
     }
+    // ===========================================================================
+    // Arcade cabinet
+    //
+    // Play moves the LIVE canvas out of the banner and into a <dialog> styled as a
+    // cabinet: marquee, bezel, CRT, control panel, coin slot. Native <dialog> gives us
+    // the focus trap, Escape, top-layer stacking and ::backdrop for free. Closing moves
+    // the same canvas back to the banner and returns it to attract mode -- the rAF loop
+    // and the fetched level data are never torn down.
+    // ===========================================================================
+    function buildCabinet(engine) {
+        var dlg = document.getElementById(CAB.dialog);
+        var screen = document.getElementById(CAB.screen);
+        var banner = document.getElementById(MOUNT);
+        if (!dlg || !screen || !banner || typeof dlg.showModal !== 'function') return null;
+
+        var creditsEl = document.getElementById(CAB.credits);
+        var marquee = document.getElementById(CAB.marquee);
+        var stick = document.getElementById(CAB.stick);
+        var cabSel = document.getElementById(CAB.select);
+        var bannerSel = document.getElementById(SELECT);
+        var credits = 0, opener = null, powerTimer = null;
+
+        function syncMarquee() { if (marquee) marquee.textContent = engine.label(); }
+
+        // A modal <dialog> blocks the page, so the banner's picker is unreachable while
+        // the cabinet is open. Without one in here you would have to close the cabinet to
+        // change game.
+        if (cabSel) {
+            fillGameOptions(cabSel, false);
+            cabSel.addEventListener('change', function () {
+                engine.selectGame(cabSel.value);
+                syncMarquee();
+                screenState(engine.isPlaying() ? null : 'cab-screen--off');
+                if (bannerSel) { bannerSel.value = cabSel.value; lsSet(STORAGE_KEY, cabSel.value); }
+            });
+        }
+
+        function setCredits(n) {
+            credits = n;
+            if (creditsEl) creditsEl.textContent = 'CREDITS ' + credits;
+        }
+        function screenState(cls) {
+            screen.classList.remove('cab-screen--off', 'cab-screen--poweron');
+            if (cls) screen.classList.add(cls);
+        }
+
+        function open() {
+            opener = document.activeElement;
+            dlg.showModal();
+            syncMarquee();
+            if (cabSel) cabSel.value = engine.currentId();
+            // showModal() must land before we measure: the dialog is display:none until then.
+            engine.attach(screen, {
+                fill: true, hud: true, hudPad: 34, maxCell: 40, grid: CABINET_GRID
+            });
+            engine.stop();                     // attract plays on the CRT until a coin drops
+            screenState('cab-screen--off');
+            setCredits(0);
+        }
+
+        function close() {
+            clearTimeout(powerTimer);
+            screenState(null);
+            engine.stop();
+            engine.attach(banner, {});         // back to the fluid banner, still in attract
+            if (opener && opener.focus) opener.focus();
+        }
+
+        function insertCoin() {
+            setCredits(credits + 1);
+            Sfx.unlock(); Sfx.enable(); Sfx.coin();
+        }
+
+        function pressStart() {
+            if (credits <= 0) { screen.classList.add('cab-screen--nag'); setTimeout(function () { screen.classList.remove('cab-screen--nag'); }, 400); return; }
+            setCredits(credits - 1);
+            Sfx.cabStart();
+            screenState(reduceMotion ? null : 'cab-screen--poweron');
+            clearTimeout(powerTimer);
+            powerTimer = setTimeout(function () { screenState(null); engine.play(); }, reduceMotion ? 0 : 350);
+        }
+
+        // The CRT's size is not final when showModal() returns: 'Press Start 2P' loads
+        // async and reflows the panel, which reflows the screen. Measuring once produced a
+        // canvas smaller than the tube. Observe the box and re-measure instead.
+        if ('ResizeObserver' in window) {
+            new ResizeObserver(function () {
+                if (dlg.open && screen.clientWidth > 0) engine.resize();
+            }).observe(screen);
+        }
+
+        function on(id, ev, fn) { var el = document.getElementById(id); if (el) el.addEventListener(ev, fn); }
+        on(CAB.coin, 'click', insertCoin);
+        on(CAB.start, 'click', pressStart);
+        on(CAB.close, 'click', function () { dlg.close(); });
+        dlg.addEventListener('close', close);
+        dlg.addEventListener('click', function (e) { if (e.target === dlg) dlg.close(); });
+
+        // The panel is real input, not decoration -- same `held` flags the keyboard sets,
+        // which is also the touch control scheme on a phone.
+        function hold(id, key) {
+            var el = document.getElementById(id);
+            if (!el) return;
+            var down = function (e) { e.preventDefault(); el.classList.add('is-down'); if (stick && key !== 'fire') stick.setAttribute('data-dir', key); engine.setHeld(key, true); };
+            var up = function () { el.classList.remove('is-down'); if (stick && key !== 'fire') stick.removeAttribute('data-dir'); engine.setHeld(key, false); };
+            el.addEventListener('pointerdown', down);
+            el.addEventListener('pointerup', up);
+            el.addEventListener('pointerleave', up);
+            el.addEventListener('pointercancel', up);
+            // Enter/Space on a focused panel button: a click with detail 0 and no pointer
+            // sequence around it. Pulse the control so the press registers.
+            el.addEventListener('click', function (e) {
+                if (e.detail !== 0) return;             // a real pointer click already ran
+                down(e);
+                setTimeout(up, 140);
+            });
+        }
+        hold(CAB.fire, 'fire');
+        ['left', 'right', 'up', 'down'].forEach(function (k) { hold('cab-pad-' + k, k); });
+
+        return { open: open };
+    }
+
     function boot() {
         var mount = document.getElementById(MOUNT);
         if (!mount) return;
