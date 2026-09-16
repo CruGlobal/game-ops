@@ -6,11 +6,12 @@
     <title>Leaderboard - Game Ops</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700;800&family=Roboto+Mono:wght@400;500&display=swap">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700;800&family=Press+Start+2P&family=Roboto+Mono:wght@400;500&display=swap">
     <link rel="stylesheet" href="/modern-design-system.css">
     <link rel="stylesheet" href="/styles.css">
     <link rel="stylesheet" href="/leaderboard.css">
     <link rel="stylesheet" href="/animations.css">
+    <link rel="stylesheet" href="/arcade-cabinet.css">
     <!-- Ops Terminal theme — loaded last to override -->
     <link rel="stylesheet" href="/game-ops-theme.css">
 </head>
@@ -35,6 +36,37 @@
             <select id="arcade-select" aria-label="Choose which arcade game to play"></select>
         </div>
     </section>
+
+    <!--
+      Arcade cabinet. ▶ Play moves the live banner canvas into #cab-screen and moves it
+      back on close, so there is only ever one canvas and one rAF loop. Native <dialog>
+      supplies the focus trap, Escape and ::backdrop; if showModal is missing, arcade.js
+      falls back to playing inline in the banner and this markup stays hidden.
+    -->
+    <dialog id="arcade-cabinet" class="cab" aria-labelledby="cab-marquee">
+        <div class="cab-body">
+            <div class="cab-marquee" id="cab-marquee">GAME OPS</div>
+            <div class="cab-bezel">
+                <div class="cab-screen" id="cab-screen"></div>
+                <div class="cab-scanlines" aria-hidden="true"></div>
+                <div class="cab-glass" aria-hidden="true"></div>
+            </div>
+            <div class="cab-panel">
+                <div class="cab-stick" id="cab-stick" aria-hidden="true"></div>
+                <div class="cab-pad" role="group" aria-label="Direction pad">
+                    <button type="button" id="cab-pad-left" data-slot="left" aria-label="Move left">◀</button>
+                    <button type="button" id="cab-pad-up" data-slot="up" aria-label="Move up">▲</button>
+                    <button type="button" id="cab-pad-down" data-slot="down" aria-label="Move down">▼</button>
+                    <button type="button" id="cab-pad-right" data-slot="right" aria-label="Move right">▶</button>
+                </div>
+                <button type="button" class="cab-btn" id="cab-fire" aria-label="Fire, or restart after game over">A</button>
+                <button type="button" class="cab-btn cab-btn--start" id="cab-start">START</button>
+                <button type="button" class="cab-coin" id="cab-coin" autofocus>INSERT COIN</button>
+                <span class="cab-credits" id="cab-credits" aria-live="polite">CREDITS 0</span>
+                <button type="button" class="cab-close" id="cab-close" aria-label="Close cabinet">✕</button>
+            </div>
+        </div>
+    </dialog>
 
     <!-- Search and Filter Bar -->
     <div class="controls-section" role="search" aria-label="Leaderboard controls">

@@ -27,6 +27,21 @@
     var PLAY_BTN = 'arcade-play';
     var SCORE_EL = 'arcade-score';
     var STORAGE_KEY = 'arcade-game';
+    var HI_KEY = 'arcade-hi:';
+    var CAB = {
+        dialog: 'arcade-cabinet', screen: 'cab-screen', marquee: 'cab-marquee',
+        coin: 'cab-coin', start: 'cab-start', close: 'cab-close', credits: 'cab-credits',
+        stick: 'cab-stick', fire: 'cab-fire'
+    };
+    var CAB_FONT = '"Press Start 2P", ui-monospace, SFMono-Regular, Menlo, monospace';
+
+    // localStorage throws outright in a storage-blocked browser (Safari private mode with
+    // cookies blocked, some enterprise policies). Swallow it: a missing high score is not
+    // a reason to lose the whole arcade.
+    function lsGet(k) { try { return localStorage.getItem(k); } catch { return null; } }
+    function lsSet(k, v) { try { localStorage.setItem(k, v); } catch { /* ignore */ } }
+    function readHi(id) { var n = parseInt(lsGet(HI_KEY + id) || '0', 10); return isFinite(n) && n > 0 ? n : 0; }
+    function recordHi(id, score) { if (score > readHi(id)) lsSet(HI_KEY + id, String(score)); }
     var COLS = 53, ROWS = 7;
     var GH_COL = Math.floor(COLS / 2), GH_ROW = Math.floor(ROWS / 2); // ghost-house centre
     // Pac-Man maze occupies a centred band of columns — the full 53-wide grid is
@@ -88,7 +103,9 @@
             fruit: function () { tone(700, 0.09, 'square', 0.06); tone(1050, 0.11, 'square', 0.05, 0.09); },
             death: function () { for (var i = 0; i < 6; i++) tone(620 - i * 80, 0.12, 'triangle', 0.07, i * 0.1); },
             level: function () { tone(523, 0.1, 'square', 0.06); tone(659, 0.1, 'square', 0.06, 0.1); tone(784, 0.16, 'square', 0.06, 0.2); },
-            fright: function () { tone(280, 0.05, 'square', 0.025); }
+            fright: function () { tone(280, 0.05, 'square', 0.025); },
+            coin: function () { tone(1200, 0.05, 'square', 0.07); tone(1800, 0.07, 'square', 0.06, 0.05); },
+            cabStart: function () { tone(523, 0.08, 'square', 0.07); tone(659, 0.08, 'square', 0.07, 0.08); tone(784, 0.08, 'square', 0.07, 0.16); tone(1047, 0.18, 'square', 0.07, 0.24); }
         };
     })();
 
@@ -128,18 +145,36 @@
     }
 
     // ---- layout / drawing ----------------------------------------------------
-    function computeLayout(canvas) {
+    // opts: { width, height, maxCell, hud }. The cabinet passes a fixed box and
+    // letterboxes the 53x7 strip inside it; the banner passes nothing and stays fluid.
+    // Measure the MOUNT, never the canvas: we pin canvas.style.width below, so reading
+    // canvas.clientWidth back would only ever return the previous pin.
+    function computeLayout(canvas, opts) {
+        opts = opts || {};
         var dpr = Math.min(window.devicePixelRatio || 1, 2);
-        var cssW = canvas.clientWidth || (canvas.parentElement && canvas.parentElement.clientWidth) || 800;
+        var mount = canvas.parentElement;
+        var cssW = opts.width || (mount && mount.clientWidth) || 800;
         var gap = Math.max(1, Math.round(cssW / (COLS * 9)));
-        var cell = Math.max(4, Math.min(Math.floor((cssW - (COLS - 1) * gap) / COLS), 18));
+        var cell = Math.max(4, Math.min(Math.floor((cssW - (COLS - 1) * gap) / COLS), opts.maxCell || 18));
         var gw = COLS * cell + (COLS - 1) * gap;
         var gh = ROWS * cell + (ROWS - 1) * gap;
-        var ox = Math.floor((cssW - gw) / 2), oy = 5, cssH = gh + 20; // bottom room for the Breakout paddle
+        var boxed = !!(opts.height || opts.fill);
+        var cssH = opts.height || (opts.fill && mount && mount.clientHeight) || gh + 20;  // else: room for the Breakout paddle
+        var ox = Math.floor((cssW - gw) / 2);
+        var oy = boxed ? Math.floor((cssH - gh) / 2) : 5;        // centre inside the cabinet CRT
         canvas.style.width = cssW + 'px'; canvas.style.height = cssH + 'px';
         canvas.width = Math.round(cssW * dpr); canvas.height = Math.round(cssH * dpr);
         var ctx = canvas.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        return { ctx: ctx, cell: cell, gap: gap, ox: ox, oy: oy, gw: gw, gh: gh, cssW: cssW, cssH: cssH, step: cell + gap };
+        return { ctx: ctx, cell: cell, gap: gap, ox: ox, oy: oy, gw: gw, gh: gh, cssW: cssW, cssH: cssH, step: cell + gap, hud: !!opts.hud };
+    }
+
+    // Phosphor palette for the cabinet CRT. The page palette is built for a white
+    // card and would paint a white overlay over a black tube.
+    function cabinetPalette() {
+        return {
+            accent: '#2ba6bd', highlight: '#ffd000', ink: '#d8fff2', surface: '#04070a', danger: '#ff5a5a',
+            ramp: ['#0c1a1f', '#14464f', '#1d7f8f', '#2ba6bd', '#7fffd4']
+        };
     }
     function cellXY(L, c, r) { return { x: L.ox + c * L.step, y: L.oy + r * L.step }; }
     function roundRect(ctx, x, y, w, h, r) {
@@ -1218,6 +1253,10 @@
 
     var REGISTRY = { pacman: PacMan, snake: Snake, breakout: Breakout, galaga: Galaga, puzzlebobble: PuzzleBobble };
     var GAME_IDS = ['pacman', 'snake', 'breakout', 'galaga', 'puzzlebobble'];
+    var LABELS = {
+        pacman: '\uD83D\uDC7B Pac-Man', snake: '\uD83D\uDC0D Snake', breakout: '\uD83E\uDDF1 Breakout',
+        galaga: '\uD83D\uDE80 Galaga', puzzlebobble: '\uD83E\uDEE7 Puzzle Bobble'
+    };
 
     // ===========================================================================
     // Engine
@@ -1230,6 +1269,8 @@
         mount.appendChild(canvas);
 
         var L = null, colors = readPalette(), levels = null, game = null, gameId = 'pacman';
+        var layoutOpts = {};                 // {} = fluid banner; the cabinet passes a fixed box
+        var obs = null;                      // IntersectionObserver, re-pointed by attach()
         var rafId = null, lastTs = 0, visible = true, onScreen = true;
         var mode = 'attract';
         var dir = { x: 0, y: 0 };
@@ -1238,18 +1279,76 @@
         var self = this;
 
         function env() { return { L: L, colors: colors, levels: levels }; }
-        function relayout() { L = computeLayout(canvas); if (game && levels) game.init(env(), { mode: mode }); }
 
+        // In attract mode the canvas is decoration: keep it out of the tab order and out
+        // of the accessibility tree, so a keyboard user does not land on a nameless stop
+        // inside the wrapper's role="img". In play mode it is the game, so it gets a role
+        // and a real name.
+        function applyA11y() {
+            if (mode === 'play') {
+                canvas.tabIndex = 0;
+                canvas.removeAttribute('aria-hidden');
+                canvas.setAttribute('role', 'application');
+                canvas.setAttribute('aria-label', (LABELS[gameId] || gameId) +
+                    ' \u2014 arrow keys or WASD to play, Escape to exit');
+            } else {
+                canvas.tabIndex = -1;
+                canvas.setAttribute('aria-hidden', 'true');
+                canvas.removeAttribute('role');
+                canvas.removeAttribute('aria-label');
+            }
+        }
+        // game.init() is a full state wipe, so only re-init when the pixel geometry
+        // actually changed. A resize event that changed nothing used to cost the player
+        // their score, lives and level.
+        function relayout() {
+            var pw = L && L.cssW, ph = L && L.cssH;
+            L = computeLayout(canvas, layoutOpts);
+            if (!game || !levels) return;
+            if (L.cssW !== pw || L.cssH !== ph) game.init(env(), { mode: mode });
+        }
+
+        var scoreEl = null, scoreTxt = null;
         function setScore() {
-            var el = document.getElementById(SCORE_EL);
-            if (!el) return;
-            if (mode !== 'play' || !game) { el.textContent = ''; return; }
-            var st = game.getStatus(), lives = game.getLives();
-            var hearts = lives == null ? '' : '   ' + new Array(Math.max(0, lives) + 1).join('♥');
-            var lvl = game.getLevel ? ('   Lv ' + game.getLevel()) : '';
-            if (st === 'won') el.textContent = '🏆 You win!  ' + game.getScore() + '   ·  Space to replay, Esc to exit';
-            else if (st === 'lost') el.textContent = '💀 Game over  ' + game.getScore() + '   ·  Space to replay, Esc to exit';
-            else el.textContent = 'Score ' + game.getScore() + hearts + lvl + '   ·  Esc to exit';
+            if (!scoreEl) scoreEl = document.getElementById(SCORE_EL);
+            if (!scoreEl) return;
+            var txt = '';
+            // The cabinet draws its own HUD on the canvas, so the DOM score stays empty.
+            if (mode === 'play' && game && !(L && L.hud)) {
+                var st = game.getStatus(), lives = game.getLives();
+                var lifeTxt = lives == null ? '' : '   ' + Math.max(0, lives) + ' lives';
+                var lvl = game.getLevel ? ('   Lv ' + game.getLevel()) : '';
+                if (st === 'won') txt = '🏆 You win!  ' + game.getScore() + '   ·  Space to replay, Esc to exit';
+                else if (st === 'lost') txt = '💀 Game over  ' + game.getScore() + '   ·  Space to replay, Esc to exit';
+                else txt = 'Score ' + game.getScore() + lifeTxt + lvl + '   ·  Esc to exit';
+            }
+            // aria-live announces every write, so only write when the string changed.
+            if (txt !== scoreTxt) { scoreTxt = txt; scoreEl.textContent = txt; }
+        }
+
+        // Cabinet only: the CRT is 4:3 but the playfield is a 7.6:1 strip, so score and
+        // lives go in the black bands above and below it. The banner keeps its DOM HUD.
+        function drawHud() {
+            var ctx = L.ctx, lives = game.getLives(), top = Math.max(4, L.oy - 26);
+            ctx.save();
+            ctx.font = '700 12px ' + CAB_FONT;
+            ctx.textBaseline = 'top';
+            ctx.textAlign = 'left';
+            ctx.fillStyle = '#7fffd4';
+            ctx.fillText('SCORE ' + game.getScore(), L.ox, top);
+            var hi = readHi(gameId);
+            if (hi) {
+                ctx.textAlign = 'center'; ctx.fillStyle = '#ffd000';
+                ctx.fillText('HI ' + hi, L.cssW / 2, top);
+            }
+            ctx.textAlign = 'right'; ctx.fillStyle = '#7fffd4';
+            ctx.fillText((game.getLevel ? 'LV ' + game.getLevel() + '   ' : '') +
+                (lives == null ? '' : 'LIVES ' + Math.max(0, lives)), L.ox + L.gw, top);
+            if (mode === 'play' && game.getStatus() === 'running') {
+                ctx.textAlign = 'center'; ctx.fillStyle = 'rgba(127,255,212,0.55)';
+                ctx.fillText('ESC TO EXIT', L.cssW / 2, Math.min(L.cssH - 16, L.oy + L.gh + 14));
+            }
+            ctx.restore();
         }
 
         function frame(ts) {
@@ -1259,17 +1358,18 @@
             lastTs = ts;
             game.update(dt, { mode: mode, dir: dir, held: held, mouseX: mode === 'play' ? mouseX : null });
             game.draw();
-            if (mode === 'play' && game.getStatus() !== 'running') drawOverlay(game.getStatus());
+            if (L.hud) drawHud();
+            if (mode === 'play' && game.getStatus() !== 'running') { recordHi(gameId, game.getScore()); drawOverlay(game.getStatus()); }
             setScore();
             schedule();
         }
         function drawOverlay(st) {
             var ctx = L.ctx;
             ctx.save();
-            ctx.globalAlpha = 0.78; ctx.fillStyle = colors.surface;
+            ctx.globalAlpha = L.hud ? 0.86 : 0.78; ctx.fillStyle = L.hud ? '#04070a' : colors.surface;
             ctx.fillRect(0, 0, L.cssW, L.cssH);
-            ctx.globalAlpha = 1; ctx.fillStyle = colors.ink;
-            ctx.font = '700 16px ' + (getComputedStyle(document.body).fontFamily || 'sans-serif');
+            ctx.globalAlpha = 1; ctx.fillStyle = L.hud ? '#ffd000' : colors.ink;
+            ctx.font = L.hud ? ('700 14px ' + CAB_FONT) : ('700 16px ' + (getComputedStyle(document.body).fontFamily || 'sans-serif'));
             ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
             ctx.fillText(st === 'won' ? '🏆  You win — Space to replay' : '💀  Game over — Space to replay', L.cssW / 2, L.cssH / 2);
             ctx.restore();
@@ -1281,14 +1381,36 @@
 
         function newGame(id, m) {
             gameId = id; mode = m;
-            colors = readPalette();
+            colors = layoutOpts.hud ? cabinetPalette() : readPalette();
             game = (REGISTRY[id] || REGISTRY.pacman)();
             dir = { x: 0, y: 0 }; mouseX = null;
+            applyA11y();
             if (L && levels) game.init(env(), { mode: mode });
             if (reduceMotion && game) { game.draw(); setScore(); } else { pause(); resume(); }
         }
 
         this.start = function (id) { return loadLevels().then(function (lv) { levels = lv; relayout(); newGame(id, 'attract'); }); };
+
+        // Move the live canvas to another mount (banner <-> cabinet CRT) without losing
+        // the rAF loop or the cached level data: pause, move, re-measure, resume.
+        this.attach = function (newMount, opts) {
+            if (!newMount || newMount === mount) return;
+            pause();
+            if (obs) obs.unobserve(mount);
+            mount = newMount;
+            mount.appendChild(canvas);
+            if (obs) obs.observe(mount);
+            layoutOpts = opts || {};
+            onScreen = true;
+            colors = layoutOpts.hud ? cabinetPalette() : readPalette();
+            L = computeLayout(canvas, layoutOpts);
+            applyA11y();
+            if (game && levels) game.init(env(), { mode: mode });
+            resume();
+        };
+        this.resize = function () { relayout(); };   // relayout() re-inits only if the box really changed
+        this.label = function () { return LABELS[gameId] || gameId; };
+        this.inCabinet = function () { return !!layoutOpts.hud; };
         this.selectGame = function (id) { newGame(id, mode); };
         this.play = function () { Sfx.enable(); newGame(gameId, 'play'); canvas.focus(); updateBtn(); };
         this.stop = function () { Sfx.disable(); newGame(gameId, 'attract'); updateBtn(); };
@@ -1297,8 +1419,8 @@
 
         function updateBtn() {
             var b = document.getElementById(PLAY_BTN);
-            if (b) { b.textContent = mode === 'play' ? '⏹ Stop' : '▶ Play'; b.setAttribute('aria-pressed', mode === 'play'); }
-            var el = document.getElementById(SCORE_EL); if (el && mode !== 'play') el.textContent = '';
+            if (b && !b.hasAttribute('aria-haspopup')) { b.textContent = mode === 'play' ? '⏹ Stop' : '▶ Play'; b.setAttribute('aria-pressed', mode === 'play'); }
+            if (mode !== 'play') setScore();
         }
 
         // ---- input -----------------------------------------------------------
@@ -1308,23 +1430,44 @@
             ArrowLeft: { x: -1, y: 0 }, KeyA: { x: -1, y: 0 },
             ArrowRight: { x: 1, y: 0 }, KeyD: { x: 1, y: 0 }
         };
+        // The listener is on window so the canvas need not hold focus, but WASD and the
+        // arrows are also ordinary typing: never swallow a key aimed at a form control.
+        function typingInto(e) {
+            var t = e.target;
+            return !!(t && t.closest && t.closest('input, select, textarea, [contenteditable=""], [contenteditable="true"]'));
+        }
         window.addEventListener('keydown', function (e) {
-            if (mode !== 'play') return;
+            if (mode !== 'play' || typingInto(e)) return;
             if (e.code === 'Escape') { self.stop(); return; }
             if ((e.code === 'Space' || e.code === 'Enter') && game.getStatus() !== 'running') { e.preventDefault(); newGame(gameId, 'play'); return; }
             var d = DIRS[e.code];
-            if (d) { e.preventDefault(); dir = d; held.left = d.x < 0; held.right = d.x > 0; held.up = d.y < 0; held.down = d.y > 0; }
+            if (d) { e.preventDefault(); mouseX = null; dir = d; held.left = d.x < 0; held.right = d.x > 0; held.up = d.y < 0; held.down = d.y > 0; }
         });
         window.addEventListener('keyup', function (e) {
-            if (mode !== 'play') return;
+            if (mode !== 'play' || typingInto(e)) return;
             var d = DIRS[e.code];
             if (d) { if (d.x < 0) held.left = false; if (d.x > 0) held.right = false; if (d.y < 0) held.up = false; if (d.y > 0) held.down = false; }
         });
         canvas.addEventListener('mousemove', function (e) { if (mode === 'play') { var rect = canvas.getBoundingClientRect(); mouseX = e.clientX - rect.left; } });
+        canvas.addEventListener('mouseleave', function () { mouseX = null; });
+
+        // Touch / cabinet-panel steering. The panel buttons drive the same `held` and
+        // `dir` the keyboard does, so there is no second input code path.
+        this.setHeld = function (k, down) {
+            if (mode !== 'play') return;
+            if (k === 'left' || k === 'right' || k === 'up' || k === 'down') {
+                held[k] = !!down;
+                if (down) { mouseX = null; dir = DIRS[k === 'left' ? 'ArrowLeft' : k === 'right' ? 'ArrowRight' : k === 'up' ? 'ArrowUp' : 'ArrowDown']; }
+            } else if (k === 'fire') {
+                held.fire = !!down;
+                if (down && game && game.getStatus() !== 'running') newGame(gameId, 'play');
+            }
+        };
 
         document.addEventListener('visibilitychange', function () { visible = !document.hidden; if (visible) resume(); else pause(); });
         if ('IntersectionObserver' in window) {
-            new IntersectionObserver(function (en) { onScreen = en[0].isIntersecting; if (onScreen) resume(); else pause(); }, { threshold: 0 }).observe(mount);
+            obs = new IntersectionObserver(function (en) { onScreen = en[0].isIntersecting; if (onScreen) resume(); else pause(); }, { threshold: 0 });
+            obs.observe(mount);
         }
         var rt = null;
         window.addEventListener('resize', function () { clearTimeout(rt); rt = setTimeout(function () { pause(); relayout(); resume(); }, 200); });
@@ -1339,29 +1482,137 @@
             var q = new URLSearchParams(window.location.search).get('arcade');
             if (q && GAME_IDS.indexOf(q) !== -1) return q; // deep-link / test override
         } catch (e) { /* ignore */ }
-        var s = localStorage.getItem(STORAGE_KEY);
+        var s = lsGet(STORAGE_KEY);
         return (s && s !== 'random' && GAME_IDS.indexOf(s) !== -1) ? s : pickRandom();
     }
     function buildControls(engine) {
         var sel = document.getElementById(SELECT);
         if (sel) {
-            var opts = ['<option value="random">🎲 Random</option>'];
-            GAME_IDS.forEach(function (id) { opts.push('<option value="' + id + '">' + REGISTRY[id]().label + '</option>'); });
-            sel.innerHTML = opts.join('');
-            sel.value = localStorage.getItem(STORAGE_KEY) || 'random';
+            sel.textContent = '';
+            [{ v: 'random', t: '🎲 Random' }].concat(GAME_IDS.map(function (id) { return { v: id, t: LABELS[id] }; }))
+                .forEach(function (o) {
+                    var el = document.createElement('option');
+                    el.value = o.v; el.textContent = o.t;      // textContent, never innerHTML
+                    sel.appendChild(el);
+                });
+            var saved = lsGet(STORAGE_KEY);
+            sel.value = (saved === 'random' || GAME_IDS.indexOf(saved) !== -1) ? saved : 'random';
             sel.addEventListener('change', function () {
-                localStorage.setItem(STORAGE_KEY, sel.value);
+                lsSet(STORAGE_KEY, sel.value);
                 engine.selectGame(sel.value === 'random' ? pickRandom() : sel.value);
             });
         }
+        var cabinet = buildCabinet(engine);
         var btn = document.getElementById(PLAY_BTN);
-        if (btn) btn.addEventListener('click', function () { engine.isPlaying() ? engine.stop() : engine.play(); });
+        if (btn) {
+            btn.addEventListener('click', function () {
+                if (cabinet) { cabinet.open(); return; }          // no <dialog> support: play inline
+                engine.isPlaying() ? engine.stop() : engine.play();
+            });
+            if (cabinet) { btn.removeAttribute('aria-pressed'); btn.setAttribute('aria-haspopup', 'dialog'); }
+        }
         // Wake the audio context on the first user interaction anywhere, so it's
         // already running by the time Play unmutes it (autoplay policy).
         function wake() { Sfx.unlock(); window.removeEventListener('pointerdown', wake); window.removeEventListener('keydown', wake); }
         window.addEventListener('pointerdown', wake);
         window.addEventListener('keydown', wake);
     }
+    // ===========================================================================
+    // Arcade cabinet
+    //
+    // Play moves the LIVE canvas out of the banner and into a <dialog> styled as a
+    // cabinet: marquee, bezel, CRT, control panel, coin slot. Native <dialog> gives us
+    // the focus trap, Escape, top-layer stacking and ::backdrop for free. Closing moves
+    // the same canvas back to the banner and returns it to attract mode -- the rAF loop
+    // and the fetched level data are never torn down.
+    // ===========================================================================
+    function buildCabinet(engine) {
+        var dlg = document.getElementById(CAB.dialog);
+        var screen = document.getElementById(CAB.screen);
+        var banner = document.getElementById(MOUNT);
+        if (!dlg || !screen || !banner || typeof dlg.showModal !== 'function') return null;
+
+        var creditsEl = document.getElementById(CAB.credits);
+        var marquee = document.getElementById(CAB.marquee);
+        var stick = document.getElementById(CAB.stick);
+        var credits = 0, opener = null, powerTimer = null;
+
+        function setCredits(n) {
+            credits = n;
+            if (creditsEl) creditsEl.textContent = 'CREDITS ' + credits;
+        }
+        function screenState(cls) {
+            screen.classList.remove('cab-screen--off', 'cab-screen--poweron');
+            if (cls) screen.classList.add(cls);
+        }
+
+        function open() {
+            opener = document.activeElement;
+            dlg.showModal();
+            if (marquee) marquee.textContent = engine.label();
+            // showModal() must land before we measure: the dialog is display:none until then.
+            engine.attach(screen, { fill: true, maxCell: 26, hud: true });
+            engine.stop();                     // attract plays on the CRT until a coin drops
+            screenState('cab-screen--off');
+            setCredits(0);
+        }
+
+        function close() {
+            clearTimeout(powerTimer);
+            screenState(null);
+            engine.stop();
+            engine.attach(banner, {});         // back to the fluid banner, still in attract
+            if (opener && opener.focus) opener.focus();
+        }
+
+        function insertCoin() {
+            setCredits(credits + 1);
+            Sfx.unlock(); Sfx.enable(); Sfx.coin();
+        }
+
+        function pressStart() {
+            if (credits <= 0) { screen.classList.add('cab-screen--nag'); setTimeout(function () { screen.classList.remove('cab-screen--nag'); }, 400); return; }
+            setCredits(credits - 1);
+            Sfx.cabStart();
+            screenState(reduceMotion ? null : 'cab-screen--poweron');
+            clearTimeout(powerTimer);
+            powerTimer = setTimeout(function () { screenState(null); engine.play(); }, reduceMotion ? 0 : 350);
+        }
+
+        // The CRT's size is not final when showModal() returns: 'Press Start 2P' loads
+        // async and reflows the panel, which reflows the screen. Measuring once produced a
+        // canvas smaller than the tube. Observe the box and re-measure instead.
+        if ('ResizeObserver' in window) {
+            new ResizeObserver(function () {
+                if (dlg.open && screen.clientWidth > 0) engine.resize();
+            }).observe(screen);
+        }
+
+        function on(id, ev, fn) { var el = document.getElementById(id); if (el) el.addEventListener(ev, fn); }
+        on(CAB.coin, 'click', insertCoin);
+        on(CAB.start, 'click', pressStart);
+        on(CAB.close, 'click', function () { dlg.close(); });
+        dlg.addEventListener('close', close);
+        dlg.addEventListener('click', function (e) { if (e.target === dlg) dlg.close(); });
+
+        // The panel is real input, not decoration -- same `held` flags the keyboard sets,
+        // which is also the touch control scheme on a phone.
+        function hold(id, key) {
+            var el = document.getElementById(id);
+            if (!el) return;
+            var down = function (e) { e.preventDefault(); el.classList.add('is-down'); if (stick && key !== 'fire') stick.setAttribute('data-dir', key); engine.setHeld(key, true); };
+            var up = function () { el.classList.remove('is-down'); if (stick && key !== 'fire') stick.removeAttribute('data-dir'); engine.setHeld(key, false); };
+            el.addEventListener('pointerdown', down);
+            el.addEventListener('pointerup', up);
+            el.addEventListener('pointerleave', up);
+            el.addEventListener('pointercancel', up);
+        }
+        hold(CAB.fire, 'fire');
+        ['left', 'right', 'up', 'down'].forEach(function (k) { hold('cab-pad-' + k, k); });
+
+        return { open: open };
+    }
+
     function boot() {
         var mount = document.getElementById(MOUNT);
         if (!mount) return;
