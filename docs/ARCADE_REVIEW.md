@@ -25,9 +25,10 @@ is correct for a team-wide banner.
 Five games are registered at `arcade.js:1219`: `pacman`, `snake`, `breakout`,
 `galaga`, `puzzlebobble`.
 
-No tests cover `arcade.js`. The Jest suite is backend only. `npx eslint public/arcade.js`
-already reports 10 errors on `main` — four indentation, five unused `e` in catch
-blocks, one useless assignment at `1084`. Those predate this review.
+`arcade.js` had no test coverage when this review was written; the Jest suite was backend
+only. It does now — see **Testing** below. `npx eslint public/arcade.js` already reports 10
+errors on `main` — four indentation, five unused `e` in catch blocks, one useless assignment
+at `1084`. Those predate this review.
 
 ## 1. Defects
 
@@ -563,11 +564,86 @@ still open and is described above with the fix.
 **Verification**
 
 - `npx eslint public/arcade.js` — 10 errors, unchanged from `main`. All ten predate this work.
-- `npm test` — 25 suites, 313 passed, 1 skipped. No test covers `arcade.js`; the suite is
-  backend only, so this only proves nothing else broke.
+- `npm test` — 27 suites, 383 passed, 1 skipped, including 70 tests over `arcade.js`
+  itself (see **Testing**).
 - Browser: `/leaderboard` is behind GitHub OAuth, so the cabinet was driven through a local
   harness that served the real `arcade.js` and `arcade-cabinet.css` and the `<section>` and
   `<dialog>` extracted verbatim from `leaderboard.ejs`, with the grid endpoint stubbed.
   Checked on desktop and at 390px: open, coin, START, power-on, play, HUD, Escape and ✕ both
   closing, canvas returning to the banner and resuming attract, focus returning to ▶ Play,
   the touch d-pad driving the game, and no horizontal page scroll. Zero console errors.
+
+## Testing
+
+`arcade.js` is a browser IIFE with no exports and no build step, so `__tests__/client/`
+loads it the way the page does: it evaluates the real file against a jsdom window. Nothing
+is stubbed out of the module. Only the browser services around it are supplied, and the
+markup is lifted out of `views/leaderboard.ejs` by regex rather than retyped, so the suite
+fails if the view and the script ever disagree about an element id.
+
+Jest now runs two projects (`app/jest.config.js`):
+
+- **server** — the original suite, unchanged: node environment, `__tests__/setup.js`
+  connecting Prisma and truncating tables between tests.
+- **client** — `__tests__/client/`, jsdom environment, and deliberately *no*
+  `setupFilesAfterEnv`. These tests must not need a database.
+
+`npm test` runs both. `--selectProjects client` runs just the arcade ones, in about five
+seconds with no database.
+
+### What the harness has to fake, and why
+
+Only two things, both documented at the top of `arcadeHarness.js`:
+
+- **Layout.** jsdom has no layout engine, so every element measures 0 and the cabinet could
+  not be measured at all. The harness defines `clientWidth`/`clientHeight` on the two
+  mounts. It also makes a canvas report its own inline style width, because that is exactly
+  the browser behaviour the pinned-width bug (1.1) fed on — without it that regression is
+  unreproducible.
+- **Canvas.** There is no 2D context, so `getContext` returns a recorder that captures every
+  coordinate drawn. That is what lets the tests assert how much of the screen the playfield
+  covers, and read the canvas HUD back, without reaching into module internals.
+
+`requestAnimationFrame` is queued rather than scheduled, so `step(ms)` advances exactly one
+frame with an exact `dt` and game timing is deterministic.
+
+### Coverage
+
+70 tests. Most are regressions for defects that actually shipped, each pointing back at its
+entry in section 1:
+
+| Area | Cases |
+|---|---|
+| Boot | canvas mounts and is sized, grid fetched, synthetic fallback on a 500, picker populated without `innerHTML` |
+| Layout (1.1) | canvas follows a resize; a no-op resize changes nothing and does not reset a running score |
+| Storage (1.10) | the banner survives a browser where `localStorage` throws |
+| Accessibility (1.8) | attract canvas is out of the tab order and the a11y tree; playing canvas gets `role="application"` and a real label; the `aria-live` score region is not rewritten per frame |
+| Input (1.5, 1.6) | WASD and arrows typed into an `input` or `select` reach the control, while the same keys still steer when nothing is focused |
+| Cabinet | canvas moves into the CRT and back, one canvas in the document throughout, focus returns to ▶ Play, attract resumes, coin/START/no-credit behaviour, marquee and picker sync |
+| Reshape | all five games cover >85% of the tube width and >75% of its height; the banner still draws its wide short strip; no second grid request; all five survive banner → cabinet → banner twice without throwing |
+| HUD | score, level and lives drawn inside the tube; lives as a number rather than heart glyphs; the DOM score stays empty in the cabinet; the player actor never overlaps the exit hint |
+| View contract | every id `arcade.js` looks up still exists in `leaderboard.ejs` |
+
+### These tests were checked against the broken code
+
+A regression test that also passes against the bug is worth nothing, so each fix was
+reintroduced one at a time and the suite re-run to confirm the matching test fails. All
+eight caught their bug:
+
+| Reintroduced | Detected by |
+|---|---|
+| `computeLayout` measuring the canvas again | canvas follows a resize |
+| dropping the `typingInto` target check | 6 input tests |
+| re-initialising instead of rebuilding on reshape | games survive the reshape |
+| cabinet keeping the 53×7 banner grid | 5 fill tests |
+| writing the score every frame | `aria-live` write count |
+| reading `localStorage` unguarded | survives blocked storage |
+| leaving the attract canvas in the tab order | attract canvas is decoration |
+| the old below-the-grid actor baseline | actor clear of the exit hint |
+
+### Known gap
+
+jsdom is not a renderer. These tests assert geometry, state, DOM and event wiring; they
+cannot tell you the CRT *looks* right. The fill assertions are the closest proxy, and they
+are deliberately loose bounds rather than pixel values. Anything about the visual treatment
+— scanlines, glow, the power-on sweep — still needs a browser.
