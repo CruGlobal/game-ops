@@ -202,16 +202,49 @@ describe('play-mode input (regression: WASD was stolen from the page)', () => {
 });
 
 describe('grid data', () => {
-    test('a day with no contributions is an unlit cell, and a busy day is a bright one', async () => {
-    // One deliberately empty week and one saturated week, so the level ramp is observable
-    // through what gets drawn rather than through internals.
-        const cells = defaultCells().map((c, i) => ({ ...c, count: i % 14 < 7 ? 0 : 6 }));
-        const a = await mountArcade({ cells });
+    /*
+     * Breakout is pinned because it paints the contribution grid plainly -- ramp colour by
+     * level, with the brick mask only changing alpha -- so the cell colours are the only
+     * ones on screen besides the paddle and ball. Pac-Man draws a maze instead and never
+     * shows the ramp at all, and the others mix in sprite palettes.
+     *
+     * jsdom sets none of the CSS custom properties, so readPalette() falls back to its
+     * hard-coded defaults and the ramp is these five values.
+     */
+    const RAMP = ['#f0efef', '#bfe3ea', '#79c9d6', '#2ba6bd', '#007890'];
+    const UNLIT = RAMP[0];
+    const FULL = RAMP[4];
 
+    async function fillsFor(counts) {
+        const a = await mountArcade({
+            game: 'breakout',
+            cells: defaultCells().map((c, i) => ({ ...c, count: counts(i) }))
+        });
         a.clearOps();
-        a.run(2);
-        const styles = new Set(a.ops.map(() => null));   // touch, keep shape stable
-        expect(styles.size).toBeGreaterThanOrEqual(1);
-        expect(a.ops.length).toBeGreaterThan(50);
+        a.run(1);
+        return new Set(a.ops.map((o) => o.fillStyle).filter(Boolean));
+    }
+
+    test('a grid of empty days paints only the unlit end of the ramp', async () => {
+        const quiet = await fillsFor(() => 0);
+
+        expect(quiet.has(UNLIT)).toBe(true);
+        expect(quiet.has(FULL)).toBe(false);
+    });
+
+    test('a grid of busy days paints the full end, and never the unlit colour', async () => {
+        const busy = await fillsFor(() => 6);
+
+        expect(busy.has(FULL)).toBe(true);
+        expect(busy.has(UNLIT)).toBe(false);
+    });
+
+    test('a spread of counts reaches the middle of the ramp', async () => {
+        const varied = await fillsFor((i) => i % 5);
+
+        // Neither all-zero nor all-six can produce these, so their presence is the data
+        // being read rather than a constant.
+        const middle = RAMP.slice(1, 4).filter((c) => varied.has(c));
+        expect(middle.length).toBeGreaterThanOrEqual(2);
     });
 });

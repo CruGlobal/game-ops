@@ -589,7 +589,7 @@ still open and is described above with the fix.
 **Verification**
 
 - `npx eslint public/arcade.js` — 10 errors, unchanged from `main`. All ten predate this work.
-- `npm test` — 27 suites, 383 passed, 1 skipped, including 70 tests over `arcade.js`
+- `npm test` — 27 suites, 398 passed, 1 skipped, including 85 tests over `arcade.js`
   itself (see **Testing**).
 - Browser: `/leaderboard` is behind GitHub OAuth, so the cabinet was driven through a local
   harness that served the real `arcade.js` and `arcade-cabinet.css` and the `<section>` and
@@ -634,7 +634,7 @@ frame with an exact `dt` and game timing is deterministic.
 
 ### Coverage
 
-70 tests. Most are regressions for defects that actually shipped, each pointing back at its
+85 tests. Most are regressions for defects that actually shipped, each pointing back at its
 entry in section 1:
 
 | Area | Cases |
@@ -666,7 +666,35 @@ eight caught their bug:
 | leaving the attract canvas in the tab order | attract canvas is decoration |
 | the old below-the-grid actor baseline | actor clear of the exit hint |
 
-### Known gap
+### Fixed after review
+
+A review of the PR found three blocking issues and three smaller ones. All are fixed:
+
+| Finding | Fix |
+|---|---|
+| The `projects` split silently dropped `clearMocks`/`restoreMocks` for **both** suites, including the pre-existing server one — they are project-level options in Jest 29 and were left at the root. `--showConfig` resolved both to `false`. | Moved into each project. `--showConfig` now resolves both to `true` for `server` and `client`; `testTimeout`, `maxWorkers`, `forceExit` and `globalTeardown` are genuinely global and stayed put. |
+| Under `prefers-reduced-motion: reduce` the cabinet took a credit, cleared the INSERT COIN prompt and then refused to animate — a dead end with no affordance left, on the headline feature, reached by anyone with the OS setting on. | Attract mode still holds a single static frame, but play mode runs: choosing to play, and spending a credit to do it, is consent to motion. This is §1.9's own proposed fix. The query is read live now, so toggling the setting mid-session is honoured. |
+| The `grid data` test could not fail. `new Set(ops.map(() => null))` is always `Set{null}`, and the recorder captured geometry only, so brightness was structurally unobservable and the fixture fed neither assertion. | The recorder snapshots `fillStyle`/`globalAlpha` with every op, and the tests pin Breakout (it paints the ramp plainly; Pac-Man draws a maze and never shows it) and assert real ramp colours: an empty grid paints only the unlit end, a saturated grid never paints it, and a spread of counts reaches the middle. |
+| The scanline and vignette overlays did not line up with the CRT: `inset`'s block components resolve against the containing block's **height** while the bezel's `padding` resolves against its **width**, so `inset: 4% 5%` overhung by ~8.5px top and bottom at desktop width and left ~7px of unfiltered strip down each side at phone width. | `inset: 0` plus `margin: 4% 5%` — margin percentages resolve against width on all four sides. Measured 0px on every side at 1512px and 390px. The mobile bezel's own 3% padding is matched too. |
+| `held.fire` was written by the A button and the keyboard and read by nobody, so the button's "Fire" half was inert while its label promised otherwise. The panel also bound pointer events only, so keyboard activation did nothing. | Holding fire winds the shot cooldown down 2.6× in Galaga and Puzzle Bobble, so doing nothing still plays and the button visibly does something. Space and Enter fire during a round now, rather than only restarting after a loss. Panel buttons handle a keyboard activation (a click with `detail === 0`, which distinguishes it from the click trailing a pointer press). |
+| The touch d-pad overflowed its grid track on coarse-pointer screens ≥721px: that media query swaps the 128px pad in for the 66px stick but kept the 96px first column, spilling 32px over the A button. | The first track is `auto` in that query. Measured: a 128px pad in a 128px track, no overlap. |
+
+Nits from the same review: the test counts above were stale and are corrected; the stylesheet
+comment that still said "22x17" was fixed in an earlier commit; and `drawHud()` no longer
+calls `localStorage.getItem` every frame — the high score is cached per round and written
+once on the transition out of `running`.
+
+Each behavioural fix was mutation-checked by reintroducing the bug and confirming the
+matching test fails. The `localStorage` caching is the one change with no test behind it: it
+is a performance nit with no observable behaviour, and a test asserting call counts through
+the harness would pin the implementation rather than anything a user sees.
+
+### Known gaps
+
+jsdom has no `<dialog>` implementation, so the harness polyfills `showModal` and `close`.
+The ✕ button, the backdrop click and `dlg.close()` are covered, but **Escape-to-close is
+not** — the browser's `cancel` default action is the missing piece. That path is verified by
+hand, from both the INSERT COIN state and mid-game.
 
 jsdom is not a renderer. These tests assert geometry, state, DOM and event wiring; they
 cannot tell you the CRT *looks* right. The fill assertions are the closest proxy, and they

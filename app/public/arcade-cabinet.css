@@ -95,10 +95,18 @@
     filter: drop-shadow(0 0 4px rgba(120, 255, 220, 0.55)) saturate(1.15);
 }
 
+/*
+ * Matched to .cab-bezel's padding with margins, not inset. `inset`'s top/bottom resolve
+ * against the containing block's HEIGHT while `padding` resolves against its WIDTH, so
+ * `inset: 4% 5%` overhung the screen onto the bezel by ~8.5px top and bottom at desktop
+ * width, and left ~7px of unfiltered strip down each side at phone width. Margin
+ * percentages resolve against width on all four sides, so these track the padding exactly.
+ */
 .cab-scanlines,
 .cab-glass {
     position: absolute;
-    inset: 4% 5%;
+    inset: 0;
+    margin: 4% 5%;
     pointer-events: none;
     border-radius: 4% / 6%;
 }
@@ -349,6 +357,9 @@
 
     .cab-bezel { padding: 3%; }
 
+    .cab-scanlines,
+    .cab-glass { margin: 3%; }
+
     .cab-panel {
         grid-template-columns: 1fr auto auto;
         grid-template-areas:
@@ -370,4 +381,8 @@
 @media (pointer: coarse) and (min-width: 721px) {
     .cab-pad { display: grid; }
     .cab-stick { display: none; }
+
+    /* The pad is wider than the stick it replaces, so the first track cannot stay at the
+       96px that was sized for the stick. */
+    .cab-panel { grid-template-columns: auto auto auto auto 1fr auto; }
 }

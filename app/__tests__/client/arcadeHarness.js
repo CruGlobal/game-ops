@@ -41,6 +41,17 @@ export function arcadeMarkup() {
     return section[0] + '\n' + dialog[0];
 }
 
+/**
+ * Snapshot the paint state alongside the geometry. Without this, brightness is
+ * structurally unobservable and any test about the contribution ramp is a tautology.
+ */
+function paint(rec, op) {
+    op.fillStyle = rec.fillStyle;
+    op.strokeStyle = rec.strokeStyle;
+    op.globalAlpha = rec.globalAlpha;
+    return op;
+}
+
 /** A 2D context that records what was drawn instead of rasterising it. */
 function makeRecorder(ops) {
     const noop = () => {};
@@ -54,12 +65,12 @@ function makeRecorder(ops) {
         stroke: noop, setLineDash: noop, setTransform: noop, clearRect: noop,
         drawImage: noop,
         // geometry we care about
-        fillRect(x, y, w, h) { ops.push({ op: 'fillRect', x, y, w, h }); },
-        arc(x, y, r) { ops.push({ op: 'arc', x: x - r, y: y - r, w: r * 2, h: r * 2 }); },
-        arcTo(x1, y1, x2, y2) { ops.push({ op: 'arcTo', x: Math.min(x1, x2), y: Math.min(y1, y2), w: 0, h: 0 }); },
-        moveTo(x, y) { ops.push({ op: 'moveTo', x, y, w: 0, h: 0 }); },
-        lineTo(x, y) { ops.push({ op: 'lineTo', x, y, w: 0, h: 0 }); },
-        fillText(text, x, y) { ops.push({ op: 'fillText', text: String(text), x, y, w: 0, h: 0 }); }
+        fillRect(x, y, w, h) { ops.push(paint(rec, { op: 'fillRect', x, y, w, h })); },
+        arc(x, y, r) { ops.push(paint(rec, { op: 'arc', x: x - r, y: y - r, w: r * 2, h: r * 2 })); },
+        arcTo(x1, y1, x2, y2) { ops.push(paint(rec, { op: 'arcTo', x: Math.min(x1, x2), y: Math.min(y1, y2), w: 0, h: 0 })); },
+        moveTo(x, y) { ops.push(paint(rec, { op: 'moveTo', x, y, w: 0, h: 0 })); },
+        lineTo(x, y) { ops.push(paint(rec, { op: 'lineTo', x, y, w: 0, h: 0 })); },
+        fillText(text, x, y) { ops.push(paint(rec, { op: 'fillText', text: String(text), x, y, w: 0, h: 0 })); }
     };
     return rec;
 }
@@ -78,6 +89,8 @@ function sizeStub(el, width, height) {
  * @param {Array}  [opts.cells]             grid API payload, or null to force the fallback
  * @param {number} [opts.gridStatus=200]    HTTP status the grid endpoint returns
  * @param {boolean}[opts.breakStorage=false] make every localStorage access throw
+ * @param {string} [opts.game]               pin the game instead of picking at random
+ * @param {boolean}[opts.reducedMotion=false] report prefers-reduced-motion: reduce
  */
 export async function mountArcade(opts = {}) {
     const bannerWidth = opts.bannerWidth ?? 1000;
@@ -88,7 +101,13 @@ export async function mountArcade(opts = {}) {
     const doc = win.document;
 
     // --- browser services arcade.js expects -----------------------------------
-    win.matchMedia = () => ({ matches: false, addEventListener() {}, removeEventListener() {} });
+    const motionListeners = [];
+    win.matchMedia = (q) => ({
+        media: String(q),
+        matches: String(q).includes('prefers-reduced-motion') ? !!opts.reducedMotion : false,
+        addEventListener: (_t, fn) => { motionListeners.push(fn); },
+        removeEventListener() {}
+    });
 
     const ops = [];
     win.HTMLCanvasElement.prototype.getContext = function () {
@@ -166,6 +185,10 @@ export async function mountArcade(opts = {}) {
     // throwing property getter also breaks jsdom's own teardown, which is not what we are
     // testing.
     const store = new Map();
+    // boot() calls pickRandom() unless a game id is stored, so without this every mount
+    // draws a different game. Harmless for most assertions, but it makes anything that
+    // reads colour non-deterministic.
+    if (opts.game) store.set('arcade-game', opts.game);
     const blocked = () => { throw new Error('SecurityError: storage is blocked'); };
     Object.defineProperty(win, 'localStorage', {
         configurable: true,
@@ -211,6 +234,8 @@ export async function mountArcade(opts = {}) {
 
     return {
         win, doc, ops, flush, step, run, fetchCalls, resizeCbs,
+        /** Fire a prefers-reduced-motion change, as the OS setting being toggled would. */
+        setReducedMotion: (v) => motionListeners.forEach((fn) => fn({ matches: !!v })),
         get frameCount() { return frames.size; },
         el: (id) => doc.getElementById(id),
         canvas: () => doc.querySelector('canvas'),

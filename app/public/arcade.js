@@ -80,7 +80,11 @@
 
     function pmIn(c, r) { return c >= PM_LO && c < PM_HI && r >= 0 && r < ROWS; }
     function wrapCol(c) { return c < PM_LO ? PM_HI - 1 : c >= PM_HI ? PM_LO : c; }
-    var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+    var reduceMotion = motionQuery.matches;
+    if (motionQuery.addEventListener) {
+        motionQuery.addEventListener('change', function (e) { reduceMotion = !!e.matches; });
+    }
 
     // ---- palette (from the page's Cru/Cornerstone CSS variables) -------------
     function readPalette() {
@@ -957,7 +961,7 @@
                 else if (sway < -swayAmp) { sway = -swayAmp; swayDir = 1; }
 
                 // auto-fire
-                fireCd -= dt;
+                fireCd -= dt * (mode === 'play' && ctrl.held.fire ? 2.6 : 1);
                 if (fireCd <= 0 && pb.length < 4) { pb.push({ x: player, y: shipY }); fireCd = 0.42; if (mode === 'play') Sfx.waka(true); }
 
                 // dives + enemy fire
@@ -1260,7 +1264,7 @@
                     if (hit) settle();
                 } else {
                     if (mode === 'attract') aiAim();
-                    shotCd -= dt;
+                    shotCd -= dt * (mode === 'play' && ctrl.held.fire ? 2.6 : 1);
                     if (shotCd <= 0) { launch(); shotCd = mode === 'play' ? 0.7 : 1.1; }
                 }
             },
@@ -1364,6 +1368,18 @@
         }
 
         var scoreEl = null, scoreTxt = null;
+        var hiCache = null, hiRecorded = false;      // avoid touching storage every frame
+        function hiFor(id) {
+            if (hiCache === null) hiCache = readHi(id);
+            return hiCache;
+        }
+        function bankHi() {
+            if (hiRecorded || !game) return;
+            hiRecorded = true;                       // once per round, on the transition
+            var sc = game.getScore();
+            recordHi(gameId, sc);
+            if (sc > (hiCache || 0)) hiCache = sc;
+        }
         function setScore() {
             if (!scoreEl) scoreEl = document.getElementById(SCORE_EL);
             if (!scoreEl) return;
@@ -1393,7 +1409,7 @@
             ctx.textAlign = 'left';
             ctx.fillStyle = '#7fffd4';
             ctx.fillText('SCORE ' + game.getScore(), L.ox, top);
-            var hi = readHi(gameId);
+            var hi = hiFor(gameId);
             if (hi) {
                 ctx.textAlign = 'center'; ctx.fillStyle = '#ffd000';
                 ctx.fillText('HI ' + hi, L.cssW / 2, top);
@@ -1416,7 +1432,7 @@
             game.update(dt, { mode: mode, dir: dir, held: held, mouseX: mode === 'play' ? mouseX : null });
             game.draw();
             if (L.hud) drawHud();
-            if (mode === 'play' && game.getStatus() !== 'running') { recordHi(gameId, game.getScore()); drawOverlay(game.getStatus()); }
+            if (mode === 'play' && game.getStatus() !== 'running') { bankHi(); drawOverlay(game.getStatus()); }
             setScore();
             schedule();
         }
@@ -1434,7 +1450,11 @@
             ctx.restore();
         }
 
-        function schedule() { if (rafId == null && visible && onScreen && !reduceMotion) rafId = window.requestAnimationFrame(frame); }
+        // Attract mode honours prefers-reduced-motion by drawing a single static frame.
+        // Play mode does not: the player asked for a game, and in the cabinet they spent a
+        // credit to get here. Refusing to animate would hand them a frozen screen.
+        function motionAllowed() { return !reduceMotion || mode === 'play'; }
+        function schedule() { if (rafId == null && visible && onScreen && motionAllowed()) rafId = window.requestAnimationFrame(frame); }
         function pause() { if (rafId != null) { window.cancelAnimationFrame(rafId); rafId = null; } }
         function resume() { lastTs = 0; schedule(); }
 
@@ -1443,9 +1463,10 @@
             colors = layoutOpts.hud ? cabinetPalette() : readPalette();
             game = (REGISTRY[id] || REGISTRY.pacman)();
             dir = { x: 0, y: 0 }; mouseX = null;
+            hiCache = null; hiRecorded = false;
             applyA11y();
             if (L && levels) game.init(env(), { mode: mode });
-            if (reduceMotion && game) { game.draw(); setScore(); } else { pause(); resume(); }
+            if (reduceMotion && mode !== 'play' && game) { game.draw(); setScore(); } else { pause(); resume(); }
         }
 
         this.start = function (id) { return loadLevels().then(function (lv) { levels = lv; relayout(); newGame(id, 'attract'); }); };
@@ -1507,12 +1528,18 @@
         window.addEventListener('keydown', function (e) {
             if (mode !== 'play' || typingInto(e)) return;
             if (e.code === 'Escape') { self.stop(); return; }
-            if ((e.code === 'Space' || e.code === 'Enter') && game.getStatus() !== 'running') { e.preventDefault(); newGame(gameId, 'play'); return; }
+            if (e.code === 'Space' || e.code === 'Enter') {
+                e.preventDefault();
+                if (game.getStatus() !== 'running') { newGame(gameId, 'play'); return; }
+                held.fire = true;                       // fire while a round is running
+                return;
+            }
             var d = DIRS[e.code];
             if (d) { e.preventDefault(); mouseX = null; dir = d; held.left = d.x < 0; held.right = d.x > 0; held.up = d.y < 0; held.down = d.y > 0; }
         });
         window.addEventListener('keyup', function (e) {
             if (mode !== 'play' || typingInto(e)) return;
+            if (e.code === 'Space' || e.code === 'Enter') { held.fire = false; return; }
             var d = DIRS[e.code];
             if (d) { if (d.x < 0) held.left = false; if (d.x > 0) held.right = false; if (d.y < 0) held.up = false; if (d.y > 0) held.down = false; }
         });
@@ -1699,6 +1726,13 @@
             el.addEventListener('pointerup', up);
             el.addEventListener('pointerleave', up);
             el.addEventListener('pointercancel', up);
+            // Enter/Space on a focused panel button: a click with detail 0 and no pointer
+            // sequence around it. Pulse the control so the press registers.
+            el.addEventListener('click', function (e) {
+                if (e.detail !== 0) return;             // a real pointer click already ran
+                down(e);
+                setTimeout(up, 140);
+            });
         }
         hold(CAB.fire, 'fire');
         ['left', 'right', 'up', 'down'].forEach(function (k) { hold('cab-pad-' + k, k); });

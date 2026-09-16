@@ -402,6 +402,91 @@ describe('the cabinet HUD', () => {
     });
 });
 
+describe('prefers-reduced-motion', () => {
+    /*
+     * START spends a credit and clears the INSERT COIN prompt. If the loop then refuses to
+     * run, the player is left looking at a frozen screen with no instruction on it and
+     * nothing to press -- a dead end reached by anyone with the OS accessibility setting
+     * on. Attract mode still holds a single static frame; choosing to play is consent.
+     */
+    test('the banner holds a still frame and queues no work', async () => {
+        const a = await mountArcade({ reducedMotion: true, game: 'breakout' });
+
+        expect(a.frameCount).toBe(0);
+        a.clearOps();
+        a.run(5);
+        expect(a.ops.length).toBe(0);            // nothing queued, so nothing to advance
+    });
+
+    test('but a coin and START actually start the game', async () => {
+        const a = await mountArcade({ reducedMotion: true, game: 'breakout' });
+        a.el('arcade-play').click();
+        a.el('cab-coin').click();
+        a.el('cab-start').click();
+        await new Promise((r) => a.win.setTimeout(r, 400));
+
+        // A frame is waiting, the screen is no longer showing INSERT COIN, and the canvas
+        // believes it is playable -- all three have to agree or the player is stuck.
+        expect(a.frameCount).toBeGreaterThan(0);
+        expect(a.el('cab-screen').className).not.toContain('cab-screen--off');
+        expect(a.doc.querySelector('canvas').getAttribute('role')).toBe('application');
+
+        a.clearOps();
+        a.run(4);
+        expect(a.ops.length).toBeGreaterThan(50);
+    });
+
+    test('and the picture actually moves', async () => {
+        const a = await mountArcade({ reducedMotion: true, game: 'breakout' });
+        a.el('arcade-play').click();
+        a.el('cab-coin').click();
+        a.el('cab-start').click();
+        await new Promise((r) => a.win.setTimeout(r, 400));
+
+        // The ball has to be somewhere different a few frames later.
+        const ballAt = () => {
+            a.clearOps();
+            a.run(1);
+            const arcs = a.ops.filter((o) => o.op === 'arc');
+            return arcs.length ? arcs[arcs.length - 1].y : null;
+        };
+        const before = ballAt();
+        a.run(20, 16);
+        const after = ballAt();
+
+        expect(before).not.toBeNull();
+        expect(after).not.toBe(before);
+    });
+
+    test('closing the cabinet puts the banner back to a still frame', async () => {
+        const a = await mountArcade({ reducedMotion: true, game: 'breakout' });
+        a.el('arcade-play').click();
+        a.el('cab-coin').click();
+        a.el('cab-start').click();
+        await new Promise((r) => a.win.setTimeout(r, 400));
+        a.run(5);
+
+        a.el('arcade-cabinet').close();
+        await new Promise((r) => a.win.setTimeout(r, 50));
+
+        a.clearOps();
+        a.run(5);
+        expect(a.ops.length).toBe(0);            // attract is static again
+    });
+
+    test('turning the setting on mid-session is picked up', async () => {
+        const a = await mountArcade({ game: 'breakout' });
+        expect(a.frameCount).toBeGreaterThan(0);   // motion allowed to begin with
+
+        a.setReducedMotion(true);
+        a.run(1);                                  // consume the already-queued frame
+
+        a.clearOps();
+        a.run(5);
+        expect(a.ops.length).toBe(0);
+    });
+});
+
 describe('the control panel is real input', () => {
     test('a d-pad press steers, and releasing clears it', async () => {
         const a = await mountArcade();
@@ -427,6 +512,53 @@ describe('the control panel is real input', () => {
         expect(fire.className).toContain('is-down');
         fire.dispatchEvent(new a.win.Event('pointerup', { bubbles: true }));
         expect(fire.className).not.toContain('is-down');
+    });
+});
+
+describe('the panel responds to the keyboard, not only to pointers', () => {
+    // The panel bound pointerdown/pointerup only, so a focused button activated with
+    // Enter or Space did nothing at all. A keyboard activation arrives as a click with
+    // detail 0, which is how it is told apart from the click that trails a pointer press.
+    test.each(['cab-fire', 'cab-pad-left'])('%s reacts to a keyboard activation', async (id) => {
+        const a = await mountArcade({ game: 'galaga' });
+        await startGame(a, 'galaga');
+
+        const btn = a.el(id);
+        btn.dispatchEvent(new a.win.MouseEvent('click', { bubbles: true, detail: 0 }));
+
+        expect(btn.className).toContain('is-down');
+
+        await new Promise((r) => a.win.setTimeout(r, 200));   // the pulse releases itself
+        expect(btn.className).not.toContain('is-down');
+    });
+
+    test('a pointer click does not fire the keyboard path as well', async () => {
+        const a = await mountArcade({ game: 'galaga' });
+        await startGame(a, 'galaga');
+
+        const btn = a.el('cab-fire');
+        btn.dispatchEvent(new a.win.Event('pointerdown', { bubbles: true, cancelable: true }));
+        btn.dispatchEvent(new a.win.Event('pointerup', { bubbles: true }));
+        // The browser sends this straight after a real pointer press, with detail 1.
+        btn.dispatchEvent(new a.win.MouseEvent('click', { bubbles: true, detail: 1 }));
+
+        expect(btn.className).not.toContain('is-down');
+    });
+
+    test('Space fires during a round instead of restarting it', async () => {
+        const a = await mountArcade({ game: 'galaga' });
+        await startGame(a, 'galaga');
+        a.run(20);
+
+        const ev = new a.win.KeyboardEvent('keydown', { code: 'Space', bubbles: true, cancelable: true });
+        a.win.dispatchEvent(ev);
+
+        // Claimed by the game, so the page does not scroll.
+        expect(ev.defaultPrevented).toBe(true);
+        // And the round carries on rather than being torn down and rebuilt.
+        expect(a.doc.querySelector('canvas').getAttribute('role')).toBe('application');
+        a.run(5);
+        expect(a.el('arcade-cabinet').open).toBe(true);
     });
 });
 

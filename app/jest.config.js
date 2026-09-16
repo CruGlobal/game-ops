@@ -26,7 +26,10 @@ const serverProject = {
         '/__tests__/client/'            // owned by the client project below
     ],
     setupFilesAfterEnv: ['<rootDir>/__tests__/setup.js'],
-    transformIgnorePatterns: ['node_modules/(?!(supertest|nock)/)']
+    transformIgnorePatterns: ['node_modules/(?!(supertest|nock)/)'],
+    // Project-level in Jest 29: at the root, next to `projects`, these are dropped.
+    clearMocks: true,
+    restoreMocks: true
 };
 
 const clientProject = {
@@ -37,7 +40,9 @@ const clientProject = {
     moduleFileExtensions: ['js', 'json'],
     testMatch: ['**/__tests__/client/**/*.test.js'],
     testPathIgnorePatterns: ['/node_modules/'],
-    transformIgnorePatterns: ['node_modules/(?!(supertest|nock)/)']
+    transformIgnorePatterns: ['node_modules/(?!(supertest|nock)/)'],
+    clearMocks: true,
+    restoreMocks: true
 };
 
 export default {
@@ -67,12 +72,6 @@ export default {
 
     // Verbose output
     verbose: true,
-
-    // Clear mocks between tests
-    clearMocks: true,
-
-    // Restore mocks after each test
-    restoreMocks: true,
 
     // Force exit after tests complete
     // Note: Required due to Prisma's connection pool not closing immediately in test mode
