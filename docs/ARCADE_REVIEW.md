@@ -589,7 +589,7 @@ still open and is described above with the fix.
 **Verification**
 
 - `npx eslint public/arcade.js` — 10 errors, unchanged from `main`. All ten predate this work.
-- `npm test` — 27 suites, 398 passed, 1 skipped, including 85 tests over `arcade.js`
+- `npm test` — 27 suites, 401 passed, 1 skipped, including 88 tests over `arcade.js`
   itself (see **Testing**).
 - Browser: `/leaderboard` is behind GitHub OAuth, so the cabinet was driven through a local
   harness that served the real `arcade.js` and `arcade-cabinet.css` and the `<section>` and
@@ -634,7 +634,7 @@ frame with an exact `dt` and game timing is deterministic.
 
 ### Coverage
 
-85 tests. Most are regressions for defects that actually shipped, each pointing back at its
+88 tests. Most are regressions for defects that actually shipped, each pointing back at its
 entry in section 1:
 
 | Area | Cases |
@@ -688,6 +688,40 @@ Each behavioural fix was mutation-checked by reintroducing the bug and confirmin
 matching test fails. The `localStorage` caching is the one change with no test behind it: it
 is a performance nit with no observable behaviour, and a test asserting call counts through
 the harness would pin the implementation rather than anything a user sees.
+
+### Fixed after shipping
+
+Two defects that only surfaced once the cabinet was in production:
+
+**The cabinet opened pinned to the top-left corner, not centred.** A modal `<dialog>`
+centres itself with `margin: auto` resolved against its `inset: 0`, and
+`modern-design-system.css:161` has a `* { margin: 0; padding: 0 }` reset that outranks the
+UA rule. So the dialog collapsed onto its inset origin. `.cab` now declares
+`position: fixed; inset: 0; margin: auto; height: fit-content` itself — `.cab` beats `*`,
+and it no longer depends on the UA stylesheet or on load order. Verified centred to within
+2px on both axes at 1512x950, 1280x800, 1280x600 and 390x844, with `overflow: auto` so a
+short window scrolls instead of clipping.
+
+*Why the tests and every screenshot missed it:* the browser harness loaded only
+`game-ops-theme.css` and `arcade-cabinet.css`. The real page loads **seven** stylesheets,
+and the reset lives in one of the five the harness skipped. Any harness used for visual
+work on this page has to pull the whole `<link rel="stylesheet">` list out of
+`leaderboard.ejs`, exactly as it already lifts the markup — otherwise it is testing a page
+that does not exist. The jsdom suite cannot catch this class of bug at all: no layout
+engine, no CSS.
+
+**The test fixture decayed overnight.** `defaultCells()` was pinned to an end date of
+`2026-09-16`, while `buildLevels()` walks back `COLS * ROWS` days from `new Date()`. The
+morning the clock passed the pin, the newest cells found no entry, fell back to a count of
+0, and the "every day is busy" ramp test started seeing the unlit colour. It is now
+anchored to today and runs two days past it, to absorb the local-vs-UTC skew in §1.12.
+Three tests guard the fixture itself: it covers today, it extends past today, and it is at
+least 384 days long (the cabinet's 24x16).
+
+Worth noting: the review listed this decay under "did not reproduce", having re-run the
+suite with the *fixture* shifted forward. That is not the same experiment as the *clock*
+advancing past a fixed fixture, which is what actually happens, and it broke within 24
+hours.
 
 ### Known gaps
 

@@ -259,10 +259,25 @@ export function bboxOf(ops) {
     return { minX, minY, maxX, maxY, width: maxX - minX, height: maxY - minY };
 }
 
-/** A year of plausible daily counts: busy weekdays, quiet weekends, some zero days. */
+/**
+ * A year of plausible daily counts: busy weekdays, quiet weekends, some zero days.
+ *
+ * Anchored to TODAY, never to a fixed date. buildLevels() walks back COLS * ROWS days
+ * from `new Date()`, so a hard-coded end date stops covering the grid the moment the
+ * clock passes it -- the most recent cells find no entry, fall back to a count of 0, and
+ * an "every day is busy" fixture starts painting the unlit colour. That is not
+ * hypothetical: this file shipped pinned to 2026-09-16 and the ramp tests failed the next
+ * morning.
+ *
+ * The range runs two days past today because buildLevels builds local-midnight dates and
+ * then keys them with toISOString() (see ARCADE_REVIEW 1.12), so east of UTC its last
+ * cell can be tomorrow's UTC date. The slack absorbs that either way.
+ */
 export function defaultCells(days = 420) {
     const out = [];
-    const end = new Date('2026-09-16T00:00:00Z');
+    const end = new Date();
+    end.setUTCHours(0, 0, 0, 0);
+    end.setUTCDate(end.getUTCDate() + 2);
     for (let i = days - 1; i >= 0; i--) {
         const d = new Date(end);
         d.setUTCDate(d.getUTCDate() - i);
