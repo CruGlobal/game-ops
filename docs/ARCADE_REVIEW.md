@@ -85,9 +85,28 @@ write past the end of a row that is now the wrong declared width.
 Attract mode pushes a row every six shots (lines 1093-1094), so the banner shows the wall
 jolting sideways continuously.
 
-**Fix:** keep a `par` flag, toggle it in `pushRow`, define `odd(r)` as `(r + par) % 2`,
-and use that in `colsForRow`, `center`, `neighbors` and `settle`. Build the new row after
-toggling.
+**Fix (shipped):** a `par` flag, toggled in `pushRow`, with `odd(r)` as `(r + par) & 1`
+used by `colsForRow`, `center`, `neighbors` and `settle`. `pushRow` toggles *before*
+building the new row, so the row is sized for its own new parity.
+
+The algebra is the argument: a row that gains an index must keep its parity, so `r + par`
+and `r + 1 + par'` have to agree mod 2, which forces `par' = par ^ 1`.
+
+**This has no decisive automated test, deliberately.** Five framings were tried and none
+could fail against the broken code without also failing against the fixed code:
+
+| Attempt | Why it could not fail |
+|---|---|
+| Bubbles stay inside the playfield | A mis-offset row reaches the right edge but does not pass it. The arithmetic: `originX + 2 * bcols * rad + rad <= originX + gw`. |
+| No row holds more bubbles than its offset allows | Rows are sparse from popping, and the shooter and in-flight bubbles land in row bands and inflate counts. |
+| Each row sits on one of two x-offsets | The in-flight bubble is not on the lattice by definition. |
+| Row parity preserved across a push | Rows that empty out are filtered from the view, so row-depth alignment breaks. |
+| Pixel check on the wall's leftmost lit column, in Chromium | The bug flips rows individually, so *some* row is always at offset 0 and the aggregate never moves. |
+
+Recorded so the next person does not repeat them. What *is* covered: long attract runs
+(1500 frames, and 800 at the 50ms dt ceiling, across banner widths 400/800/1600) complete
+with no exception, a finite on-screen wall, and nothing drawn off the playfield — which is
+what guards the out-of-bounds write below.
 
 ### 1.4 Puzzle Bobble shots tunnel through the wall — High
 
@@ -101,8 +120,20 @@ against a 9px radius. The `dt` clamp of 0.05 at line 1258 permits 85px steps. Th
 passes between or straight through bubbles, hits the ceiling test at line 1163, and gets
 placed in row 0 through the "bumped" fallback.
 
-**Fix:** sub-step the flight — `steps = ceil(dist / (rad * 0.5))` — or use a swept-circle
-test. Cap speed in absolute px/s rather than scaling it with `gw`.
+**Fix (shipped):** the flight is sub-stepped — it advances at most `rad * 0.5` per
+iteration, with the overlap test extracted into `overlaps(x, y)` and run at every
+sub-step, so correctness no longer depends on speed or on frame rate. Launch speed is also
+re-based from grid *width* to grid *height* and clamped to `[240, 1100]` px/s, which keeps
+crossing time consistent between the banner strip and the cabinet tube and removes the
+~2400 px/s worst case.
+
+Note the speed change is a margin-and-feel improvement, not the correctness fix: the
+sub-stepping is. Nor is speed now width-independent — the playfield's own height scales
+with the banner, so it is not, and an earlier draft of the tests wrongly asserted that.
+
+Also fixed alongside: `settle()` clamped the landing column to `colsForRow(r) - 1` and
+then wrote straight into `grid[r][c]` without the bounds guard `at()` has. It now clamps
+against the row's real length as well.
 
 ### 1.5 Play mode swallows WASD and arrow keys across the whole page — Medium-high
 
@@ -572,8 +603,7 @@ still open and is described above with the fix.
 
 **Still open, in the order I would take them**
 
-1. 1.3 and 1.4 — Puzzle Bobble's parity corruption and shot tunnelling. Both are visible in
-   attract mode today, and the parity fix is a prerequisite for the other.
+1. ~~1.3 and 1.4 — Puzzle Bobble's parity corruption and shot tunnelling.~~ **Shipped.**
 2. 1.2 — Breakout rebuilding its wall on every life, and the difficulty work in polish item 6.
    Breakout is the weakest of the five right now.
 3. 1.9 — `prefers-reduced-motion` makes START a no-op. The coin drop is explicit consent to
