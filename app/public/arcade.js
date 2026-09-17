@@ -1100,15 +1100,24 @@
         var env, mode, status, score;
         var rad, rowH, originX, originY, bcols, shooterX, shooterY, dangerY;
         var grid, cur, next, fly, angle, shotCd, pushCd, shots, COLORS;
+        var par;                    // parity offset; pushRow() toggles it
 
-        function colsForRow(r) { return bcols - (r % 2); }
-        function center(r, c) { return { x: originX + rad + c * 2 * rad + (r % 2) * rad, y: originY + rad + r * rowH }; }
+        // A hex lattice alternates row offset and width. Deriving that from `r % 2` alone
+        // broke the moment pushRow() unshifted a row: every existing row's index gained
+        // one, so its parity flipped while its array length and its drawn position did
+        // not. Rows were then drawn half a bubble off, the last bubble of a row hung past
+        // the right edge, and neighbours() stopped agreeing with what was on screen --
+        // touching clusters refused to pop and separated ones did. `par` keeps a row on
+        // the parity it was built with for as long as it exists.
+        function odd(r) { return (r + par) & 1; }
+        function colsForRow(r) { return bcols - odd(r); }
+        function center(r, c) { return { x: originX + rad + c * 2 * rad + odd(r) * rad, y: originY + rad + r * rowH }; }
         function ensureRow(r) { while (grid.length <= r) grid.push(new Array(colsForRow(grid.length)).fill(null)); }
         function neighbors(r, c) {
-            var odd = r % 2, out = [
+            var o = odd(r), out = [
                 [r, c - 1], [r, c + 1],
-                [r - 1, c - (odd ? 0 : 1)], [r - 1, c + (odd ? 1 : 0)],
-                [r + 1, c - (odd ? 0 : 1)], [r + 1, c + (odd ? 1 : 0)]
+                [r - 1, c - (o ? 0 : 1)], [r - 1, c + (o ? 1 : 0)],
+                [r + 1, c - (o ? 0 : 1)], [r + 1, c + (o ? 1 : 0)]
             ];
             return out;
         }
@@ -1145,6 +1154,7 @@
         }
         function reset(full) {
             tune();
+            par = 0;
             COLORS = [env.colors.accent, env.colors.highlight, env.colors.danger, '#27c0e0'];
             seed();
             angle = 0; fly = null; shotCd = 0.5; pushCd = 0; shots = 0;
@@ -1153,19 +1163,36 @@
         }
 
         function launch() {
-            var sp = env.L.gw * 1.7;
+            // Crossing time, not raw px/s: the same shot should take about a third of a
+            // second whether the playfield is a 140px banner strip or a 500px cabinet tube.
+            var sp = Math.max(240, Math.min(1100, env.L.gh * 3));
             fly = { x: shooterX, y: shooterY - rad, vx: Math.sin(angle) * sp, vy: -Math.cos(angle) * sp, color: cur };
             cur = next; next = randColor();
             shots++;
             if (mode === 'play') Sfx.waka(true);
         }
+        // Does a bubble at (x, y) overlap anything already on the wall?
+        function overlaps(x, y) {
+            var lim = (rad * 1.8) * (rad * 1.8);
+            for (var r = 0; r < grid.length; r++) {
+                var row = grid[r];
+                if (!row) continue;
+                for (var c = 0; c < row.length; c++) {
+                    if (!row[c]) continue;
+                    var p = center(r, c);
+                    if ((p.x - x) * (p.x - x) + (p.y - y) * (p.y - y) < lim) return true;
+                }
+            }
+            return false;
+        }
+
         function settle() {
             // nearest grid cell to the flown bubble
             var r = Math.max(0, Math.round((fly.y - originY - rad) / rowH));
             ensureRow(r);
-            var off = (r % 2) * rad;
+            var off = odd(r) * rad;                     // must match center(), not the raw index
             var c = Math.round((fly.x - originX - rad - off) / (2 * rad));
-            c = Math.max(0, Math.min(colsForRow(r) - 1, c));
+            c = Math.max(0, Math.min(Math.min(colsForRow(r), grid[r].length) - 1, c));
             if (grid[r][c]) {
                 // bumped — try the open neighbor closest to where it struck
                 var nb = neighbors(r, c), bestD = 1e9, br = r, bc = c, found = false;
@@ -1220,9 +1247,13 @@
             for (var r = 0; r < grid.length; r++) for (var cc = 0; cc < grid[r].length; cc++) if (grid[r][cc] && !keep[r + ',' + cc]) { grid[r][cc] = null; score += 20; }
         }
         function pushRow() {
+            // Toggle FIRST: every existing row is about to gain an index, and flipping the
+            // parity offset is what keeps odd(r) constant for it. The new row 0 is then
+            // built at the width its own new parity calls for.
+            par ^= 1;
             var row = new Array(colsForRow(0)).fill(null);
             for (var c = 0; c < row.length; c++) row[c] = randColor();
-            grid.unshift(row);                              // every existing bubble shifts down a row
+            grid.unshift(row);
         }
         function empty() { for (var r = 0; r < grid.length; r++) for (var c = 0; c < grid[r].length; c++) if (grid[r][c]) return false; return true; }
         function lost() {
@@ -1251,17 +1282,21 @@
                     else { var aSpd = 1.8; if (ctrl.held.left) angle -= aSpd * dt; if (ctrl.held.right) angle += aSpd * dt; angle = Math.max(-1.2, Math.min(1.2, angle)); }
                 }
                 if (fly) {
-                    fly.x += fly.vx * dt; fly.y += fly.vy * dt;
-                    if (fly.x < originX + rad) { fly.x = originX + rad; fly.vx = Math.abs(fly.vx); }
-                    if (fly.x > originX + L.gw - rad) { fly.x = originX + L.gw - rad; fly.vx = -Math.abs(fly.vx); }
-                    var hit = fly.y <= originY + rad;
-                    if (!hit) {
-                        for (var r = 0; r < grid.length && !hit; r++) for (var c = 0; c < grid[r].length; c++) {
-                            if (!grid[r][c]) continue; var p = center(r, c);
-                            if ((p.x - fly.x) * (p.x - fly.x) + (p.y - fly.y) * (p.y - fly.y) < (rad * 1.8) * (rad * 1.8)) { hit = true; break; }
-                        }
+                    // Sub-step the flight. Collision is a point test, so one integration
+                    // step longer than the hit radius can pass clean through a bubble.
+                    // Advancing at most half a radius at a time makes correctness
+                    // independent of speed and of the frame rate.
+                    var remain = dt, steps = 0;
+                    var maxStep = Math.max(1, rad * 0.5);
+                    while (fly && remain > 1e-6 && steps++ < 512) {
+                        var speed = Math.sqrt(fly.vx * fly.vx + fly.vy * fly.vy) || 1;
+                        var dtStep = Math.min(remain, maxStep / speed);
+                        remain -= dtStep;
+                        fly.x += fly.vx * dtStep; fly.y += fly.vy * dtStep;
+                        if (fly.x < originX + rad) { fly.x = originX + rad; fly.vx = Math.abs(fly.vx); }
+                        if (fly.x > originX + L.gw - rad) { fly.x = originX + L.gw - rad; fly.vx = -Math.abs(fly.vx); }
+                        if (fly.y <= originY + rad || overlaps(fly.x, fly.y)) settle();   // clears fly
                     }
-                    if (hit) settle();
                 } else {
                     if (mode === 'attract') aiAim();
                     shotCd -= dt * (mode === 'play' && ctrl.held.fire ? 2.6 : 1);
