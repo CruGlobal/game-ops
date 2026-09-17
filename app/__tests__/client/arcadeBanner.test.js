@@ -201,6 +201,36 @@ describe('play-mode input (regression: WASD was stolen from the page)', () => {
     });
 });
 
+describe('the fixture itself', () => {
+    /*
+     * buildLevels() walks back COLS * ROWS days from `new Date()`, so a fixture pinned to
+     * a fixed end date stops covering the grid as soon as the clock passes it: the newest
+     * cells find no entry, fall back to 0, and an "every day is busy" fixture starts
+     * painting the unlit colour. This file was pinned to 2026-09-16 and the ramp tests
+     * failed the next morning. These guard against pinning it again.
+     */
+    test('covers today', () => {
+        const dates = defaultCells().map((c) => c.date);
+        const today = new Date();
+        today.setUTCHours(0, 0, 0, 0);
+
+        expect(dates).toContain(today.toISOString().slice(0, 10));
+    });
+
+    test('runs past today, to absorb the local-vs-UTC skew in buildLevels', () => {
+        const dates = defaultCells().map((c) => c.date).sort();
+        const today = new Date();
+        today.setUTCHours(0, 0, 0, 0);
+
+        expect(dates[dates.length - 1] > today.toISOString().slice(0, 10)).toBe(true);
+    });
+
+    test('is long enough for the widest grid the app uses', () => {
+        // The banner is 53x7 = 371 days; the cabinet is 24x16 = 384.
+        expect(defaultCells().length).toBeGreaterThanOrEqual(384);
+    });
+});
+
 describe('grid data', () => {
     /*
      * Breakout is pinned because it paints the contribution grid plainly -- ramp colour by

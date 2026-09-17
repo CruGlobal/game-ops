@@ -17,13 +17,24 @@
  * made the cabinet as wide as whatever the control panel happened to measure -- and that
  * changed once 'Press Start 2P' finished loading, so the CRT reflowed after arcade.js had
  * already measured it. A fixed box makes the canvas size deterministic.
+ *
+ * Centring is declared here rather than inherited from the UA stylesheet. A modal
+ * <dialog> centres itself with `margin: auto` against its `inset: 0`, and
+ * modern-design-system.css has a `* { margin: 0 }` reset that wins over the UA rule --
+ * so the cabinet opened pinned to the top-left corner in production. `.cab` outranks `*`,
+ * so re-declaring the whole box here fixes it and does not depend on load order.
  */
 .cab {
+    position: fixed;
+    inset: 0;
+    margin: auto;                       /* with inset: 0, this is what centres it */
     border: 0;
     padding: 0;
     background: transparent;
     width: min(94vw, 900px);
+    height: fit-content;                /* or inset: 0 would stretch it vertically */
     max-height: 96vh;
+    overflow: auto;                      /* a very short window scrolls instead of clipping */
     color: #d8fff2;
 }
 
