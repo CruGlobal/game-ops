@@ -7,7 +7,7 @@ jest.unstable_mockModule('@octokit/rest', () => ({
 // If validation lets a request through, this is what pays for it: two sequential
 // GitHub calls per PR in the window, on the token everything else shares.
 const mockFetchActivityData = jest.fn().mockResolvedValue({ stats: [], blocked: [] });
-jest.unstable_mockModule('../services/contributorService.js', () => ({
+jest.unstable_mockModule('../../services/contributorService.js', () => ({
     fetchActivityData: mockFetchActivityData,
     fetchPullRequests: jest.fn(), awardBadges: jest.fn(),
     getTopContributors: jest.fn(), getTopReviewers: jest.fn(),

@@ -20,7 +20,7 @@ jest.unstable_mockModule('@octokit/rest', () => ({
 // award throws after the claim and counter have already committed.
 const mockAwardPoints = jest.fn();
 const mockAwardReviewPoints = jest.fn();
-jest.unstable_mockModule('../services/pointsService.js', () => ({
+jest.unstable_mockModule('../../services/pointsService.js', () => ({
     awardPoints: mockAwardPoints,
     awardReviewPoints: mockAwardReviewPoints,
     calculatePoints: () => ({ points: 40, type: 'default' }),
