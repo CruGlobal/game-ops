@@ -2151,7 +2151,7 @@ async function saveAndSendBillGift(id, username) {
                             resultsDiv.className = 'alert alert-danger';
                             resultsContent.innerHTML = `
                                 <strong>❌ Backfill Error</strong><br>
-                                ${progress.error || 'An unknown error occurred'}
+                                ${escapeHtml(progress.error || 'An unknown error occurred')}
                             `;
                         }
 
