@@ -692,11 +692,9 @@ npm run test:coverage   # Run tests with coverage report
 
 ### Points Calculation
 Defined in `app/config/points-config.js`:
-- **PR Merged:** 10 points (base)
-- **PR Reviewed:** 5 points
-- **Bug Fix PR:** +5 bonus (15 total) - detected via `bug` or `fix` labels
-- **Feature PR:** +10 bonus (20 total) - detected via `feature` or `enhancement` labels
-- **Documentation PR:** 0 bonus (10 total) - detected via `documentation` label
+- **PR Merged, by label:** feature 100, hotfix 80, enhancement 75, refactor 60, bug/fix 50, documentation 30, no recognized label 40 (`detectPRType` priority: hotfix > bug > feature > enhancement > refactor > documentation)
+- **PR Reviewed:** flat 40, the same as an unlabeled PR, whatever the reviewed PR's labels. A review submitted before 2026-10-01 (the start of 2027-T1) is valued at the old 15 whenever it is credited (`reviewPointsAt`); past awards were not recalculated
+- **Streak bonus:** 1.1x on merged PR points for a full workweek streak. Reviews do not get it
 
 ### Streak Badge Thresholds
 - **Week Warrior:** every workday of a week (5, or 4 in a holiday week)

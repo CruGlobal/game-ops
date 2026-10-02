@@ -1,5 +1,5 @@
 import prisma from '../lib/prisma.js';
-import { calculatePRPoints, POINT_VALUES, POINT_REASONS } from '../config/points-config.js';
+import { calculatePRPoints, reviewPointsAt, POINT_REASONS } from '../config/points-config.js';
 import { emitPointsAwarded } from '../utils/socketEmitter.js';
 import logger from '../utils/logger.js';
 
@@ -107,7 +107,7 @@ export const awardPoints = async (contributor, points, reason, prNumber = null, 
  */
 export const awardReviewPoints = async (contributor, timestamp = null, prNumber = null) => {
     try {
-        const reviewPoints = POINT_VALUES.review;
+        const reviewPoints = reviewPointsAt(timestamp);
         return await awardPoints(
             contributor,
             reviewPoints,

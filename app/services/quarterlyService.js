@@ -1,5 +1,5 @@
 import { prisma } from '../lib/prisma.js';
-import { POINT_REASONS, POINT_VALUES } from '../config/points-config.js';
+import { POINT_REASONS, POINT_VALUES, reviewPointsAt } from '../config/points-config.js';
 import { emitBillAwarded } from '../utils/socketEmitter.js';
 import { postQuarterlyWinnersDiscussion } from './discussionService.js';
 import { postQuarterlyWinnersSlack } from './slackService.js';
@@ -503,8 +503,8 @@ export async function updateQuarterlyStats(username, updates, activityDate = nul
 
         // quarterlyStats is a single JSON blob, so this is a read-modify-write with no
         // atomic increment available. Two webhooks for the same contributor — a PR
-        // worth 40 and a review worth 15 — both read {points: 100}; one writes 140, the
-        // other 115, and whichever lands second silently discards the other's points
+        // worth 50 and a review worth 40 — both read {points: 100}; one writes 150, the
+        // other 140, and whichever lands second silently discards the other's points
         // and its PR increment. point_history keeps both, so the quarter tally drifts
         // below the history it is supposed to summarise, skewing the quarterly
         // leaderboard, winner selection and the bills thresholds.
@@ -878,7 +878,7 @@ export async function recomputeCurrentQuarterStatsFallback(quarterString = null)
         if (!username) continue;
         const prsThisQuarter = prMap.get(id) || 0;
         const reviewsThisQuarter = reviewMap.get(id) || 0;
-        const pointsThisQuarter = prsThisQuarter * (POINT_VALUES.default || 40) + reviewsThisQuarter * (POINT_VALUES.review || 15);
+        const pointsThisQuarter = prsThisQuarter * (POINT_VALUES.default || 40) + reviewsThisQuarter * reviewPointsAt(start);
 
         await prisma.contributor.update({
             where: { id },
@@ -964,12 +964,14 @@ export async function recomputeHallOfFame(quarterString) {
             reviewMap = new Map(reviews.map(r => [String(r.contributorId), Number(r._count._all || 0)]));
         }
 
-        // Compute default points = PRs * default PR points + reviews * review points
+        // Compute default points = PRs * default PR points + reviews * the review value
+        // the period was scored at, so a rebuild cannot re-rank an old period
+        const reviewPoints = reviewPointsAt(start);
         const idSet = new Set([...prMap.keys(), ...reviewMap.keys()]);
         rankings = Array.from(idSet).map(id => {
             const prCount = prMap.get(id) || 0;
             const reviewCount = reviewMap.get(id) || 0;
-            const points = prCount * (POINT_VALUES.default || 40) + reviewCount * (POINT_VALUES.review || 15);
+            const points = prCount * (POINT_VALUES.default || 40) + reviewCount * reviewPoints;
             return { contributorId: id, _sum: { points: BigInt(points) }, __counts: { prs: prCount, reviews: reviewCount } };
         });
     }

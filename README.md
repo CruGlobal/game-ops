@@ -211,11 +211,10 @@ npx prisma migrate reset
    - View your current and longest streak on your profile
 
 4. **Earn Points**
-   - Merge PRs: 10 points base
-   - Review code: 5 points
-   - Add labels to PRs for bonuses:
-     - `bug` or `fix` label: +5 points
-     - `feature` or `enhancement` label: +10 points
+   - Merge PRs: 40 points with no recognized label, more or less by label:
+     - `feature` 100, `hotfix` 80, `enhancement` 75, `refactor` 60, `bug` or `fix` 50, `documentation` 30
+     - With several labels, the first match in this order wins: hotfix, bug/fix, feature, enhancement, refactor, documentation
+   - Review code: 40 points per credited review (approve or request changes, one per reviewer per PR), whatever the PR's labels
 
 ### For Admins
 
@@ -340,12 +339,18 @@ DATABASE_URL=postgresql://user:pass@host:5432/db?connection_limit=20&pool_timeou
 
 Edit `app/config/points-config.js` to customize point values:
 ```javascript
-export const POINTS = {
-  PR_MERGED: 10,
-  PR_REVIEWED: 5,
-  BUG_FIX_BONUS: 5,
-  FEATURE_BONUS: 10,
-  DOCUMENTATION_BONUS: 0
+const DEFAULT_PR_POINTS = 40;
+
+export const POINT_VALUES = {
+  'bug': 50,
+  'feature': 100,
+  'enhancement': 75,
+  'documentation': 30,
+  'refactor': 60,
+  'hotfix': 80,
+  'default': DEFAULT_PR_POINTS, // PRs without recognized labels
+  'review': DEFAULT_PR_POINTS,  // flat, no streak bonus
+  'streak-workweek': 1.1
 };
 ```
 
