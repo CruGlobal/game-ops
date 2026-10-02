@@ -19,7 +19,7 @@ import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 import { prisma } from '../lib/prisma.js';
 import { getCurrentQuarter, getQuarterDateRange } from '../services/quarterlyService.js';
-import { POINT_VALUES } from '../config/points-config.js';
+import { POINT_VALUES, reviewPointsAt } from '../config/points-config.js';
 
 dotenv.config();
 
@@ -174,7 +174,8 @@ async function main() {
 
     const ghPrs = mergedPRs.length;
     const ghReviews = reviews.length;
-    const ghPoints = ghPrs * (POINT_VALUES.default || 40) + ghReviews * (POINT_VALUES.review || 15);
+    const ghReviewPoints = reviews.reduce((sum, rv) => sum + reviewPointsAt(rv.submittedAt), 0);
+    const ghPoints = ghPrs * (POINT_VALUES.default || 40) + ghReviewPoints;
 
     // Fetch local snapshot
     const local = await prisma.contributor.findUnique({ where: { username: USER_LOGIN } });

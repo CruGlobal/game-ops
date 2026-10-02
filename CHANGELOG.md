@@ -4,6 +4,15 @@ All notable changes to Game Ops are documented in this file.
 
 ---
 
+## [Unreleased] - 2026-10-02
+
+### Changed
+- **A code review is worth 40 points, the same as a merged PR with no recognized label** - a credited review (an approval or a change request) paid a flat 15, about a third of a plain PR. With AI tooling writing code is cheaper than it was, and reviewing the larger volume of PRs is the harder part, so the two are now paid the same. The value stays flat rather than following the reviewed PR's label, so it does not depend on how the author labeled the PR, and reviews still get no streak bonus. `POINT_VALUES.review` and `POINT_VALUES.default` now share one constant so they cannot drift apart.
+
+- **A review's value follows when it was submitted, not when it is credited** - reviews are dated by `submitted_at`, and a review can be credited long after it was submitted: a backfill over an old range, or the 6-hour catch-up finding a webhook that was missed. With a single live value, such a review would land in a closed period at 40 next to peers that paid 15. `reviewPointsAt(submittedAt)` returns `LEGACY_REVIEW_POINTS` (15) for a review submitted before `REVIEW_POINTS_RAISED_AT` (2026-10-01, the start of 2027-T1) and 40 from then on, and every award path uses it: the webhook and the 6-hour catch-up through `awardReviewPoints`, and the backfill for both the point-history row and the quarterly stats. The estimates that score a whole period from counts use the value for that period's start: the Hall of Fame fallback in `recomputeHallOfFame` (for a period with no point history, rebuilt from the admin action, the `recompute_hall_of_fame` MCP tool, after a backfill, or on a period config change), the current-period fallback, and `scripts/verify-quarter-user.js`. Reviews already awarded keep the value they were awarded at. That includes reviews submitted in 2027-T1 before the deploy, which were credited at 15 and are not topped up.
+
+---
+
 ## [Unreleased] - 2026-09-01
 
 ### Fixed

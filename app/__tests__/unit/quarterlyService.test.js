@@ -9,6 +9,7 @@ import {
     resetQuarterlyStats,
     archiveQuarterWinners,
     checkAndResetIfNewQuarter,
+    recomputeHallOfFame,
     recomputeHallOfFameAll
 } from '../../services/quarterlyService.js';
 import { prisma, createTestContributor } from '../setup.js';
@@ -599,6 +600,44 @@ describe('QuarterlyService', () => {
 
             const remaining = await prisma.quarterlyWinner.findMany({ where: { quarter: current } });
             expect(remaining).toHaveLength(0);
+        });
+    });
+
+    describe('recomputeHallOfFame fallback (period with no point history)', () => {
+        async function seedCounts(username, { prs = 0, reviews = 0, date }) {
+            const contributor = await prisma.contributor.create({
+                data: createTestContributor({ username })
+            });
+            if (prs) {
+                await prisma.contribution.create({
+                    data: { contributorId: contributor.id, date, count: prs, merged: true }
+                });
+            }
+            if (reviews) {
+                await prisma.review.create({
+                    data: { contributorId: contributor.id, date, count: reviews }
+                });
+            }
+        }
+
+        it('ranks a period from before the raise at the old review value', async () => {
+            await prisma.quarterSettings.create({
+                data: { id: 'quarter-config', systemType: 'tertile', q1StartMonth: 10 }
+            });
+            // 2026-T3 is Jun - Sep 2026. At 15 a review, 3 PRs (120) beat 6 reviews (90);
+            // at 40 the reviewer (240) would take the period.
+            const inT3 = new Date('2026-07-15T00:00:00Z');
+            await seedCounts('pr-author', { prs: 3, date: inT3 });
+            await seedCounts('reviewer', { reviews: 6, date: inT3 });
+
+            await recomputeHallOfFame('2026-T3');
+
+            const row = await prisma.quarterlyWinner.findUnique({
+                where: { quarter_category: { quarter: '2026-T3', category: 'general' } }
+            });
+            expect(row.winner.username).toBe('pr-author');
+            expect(row.winner.pointsThisQuarter).toBe(120);
+            expect(row.top3[1]).toMatchObject({ username: 'reviewer', pointsThisQuarter: 90 });
         });
     });
 

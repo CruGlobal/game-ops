@@ -1,5 +1,9 @@
 import { FULL_WORKWEEK } from '../utils/holidays.js';
 
+// A review is worth the same as a merged PR with no recognized label. One constant so
+// the two cannot drift apart.
+const DEFAULT_PR_POINTS = 40;
+
 export const POINT_VALUES = {
     // Label-based PR points
     'bug': 50,
@@ -8,16 +12,29 @@ export const POINT_VALUES = {
     'documentation': 30,
     'refactor': 60,
     'hotfix': 80,
-    'default': 40, // PRs without recognized labels
+    'default': DEFAULT_PR_POINTS, // PRs without recognized labels
 
-    // Review points
-    'review': 15,
+    // Review points: flat, whatever the reviewed PR's labels, and no streak bonus
+    'review': DEFAULT_PR_POINTS,
 
     // Streak bonus (multiplier). One tier, at a full workweek: a streak counts the
     // workdays contributed in the current week, so there is no longer any chain to pay
     // compounding points for. The old 30/90/365-day tiers topped out at double points
     // for never taking a day off.
     'streak-workweek': 1.1 // 10% bonus
+};
+
+// What a review paid before it rose to match an unlabeled PR, and the start of the
+// period (2027-T1) it rose in. A review's value follows when it was submitted, not when
+// it is credited, so a late credit (a backfill, or the 6-hour catch-up finding a missed
+// webhook) or a Hall of Fame rebuild cannot put 40-point reviews into a period whose
+// other reviews paid 15.
+export const LEGACY_REVIEW_POINTS = 15;
+export const REVIEW_POINTS_RAISED_AT = new Date('2026-10-01T00:00:00.000Z');
+
+export const reviewPointsAt = (submittedAt) => {
+    const at = submittedAt ? new Date(submittedAt) : new Date();
+    return at < REVIEW_POINTS_RAISED_AT ? LEGACY_REVIEW_POINTS : POINT_VALUES.review;
 };
 
 // Re-exported rather than redeclared: the ceiling is one number, defined beside the
