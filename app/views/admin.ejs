@@ -1323,15 +1323,24 @@ document.getElementById('run-badge-scan')?.addEventListener('click', async () =>
         const resp = await fetch('/api/admin/run-badge-bill-scan', { method: 'POST' });
         const data = await resp.json();
         if (data.success) {
+            const localEscapeHtml = (val) => {
+                if (val === null || val === undefined) return '';
+                return String(val)
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#39;');
+            };
             const badgeCount = data.badges?.length || 0;
             const billCount = data.bills?.length || 0;
             resultDiv.className = 'alert alert-success';
             let msg = `Scan complete: ${badgeCount} badge(s) and ${billCount} bill(s) awarded.`;
             if (badgeCount > 0) {
-                msg += '<br>Badges: ' + data.badges.map(b => `${b.username} - ${b.badge}`).join(', ');
+                msg += '<br>Badges: ' + data.badges.map(b => `${localEscapeHtml(b.username)} - ${localEscapeHtml(b.badge)}`).join(', ');
             }
             if (billCount > 0) {
-                msg += '<br>Bills: ' + data.bills.map(b => `${b.username} - ${b.bills}`).join(', ');
+                msg += '<br>Bills: ' + data.bills.map(b => `${localEscapeHtml(b.username)} - ${localEscapeHtml(b.bills)}`).join(', ');
             }
             resultDiv.innerHTML = msg;
         } else {
