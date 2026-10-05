@@ -4,6 +4,13 @@ All notable changes to Game Ops are documented in this file.
 
 ---
 
+## [Unreleased] - 2026-10-05
+
+### Fixed
+- **Pac-Man no longer puts dots in the ghost house** - dots go on every lit contribution cell, and that included the six cells of the 3x2 box in the middle of the board. The box is a dead end with one door, every ghost starts there, and an eaten ghost's eyes return there before it leaves again, so a round whose last dots sat inside it could only be finished by walking into the one place the ghosts keep coming back to. The arcade game it copies never put dots in the ghost house, and now neither does this one, on the banner and in the cabinet, including the fallback that dots the whole board when the graph is empty. Those six cells draw as empty, the way an eaten cell does.
+
+---
+
 ## [Unreleased] - 2026-10-02
 
 ### Changed
