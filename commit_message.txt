@@ -1,0 +1,4 @@
+fix: sanitize user data in admin view
+
+Escaped devops team usernames to prevent XSS vulnerabilities when
+rendering team member lists to the DOM in `app/views/admin.ejs`.
