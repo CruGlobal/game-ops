@@ -1767,10 +1767,10 @@ async function syncDevOpsTeam() {
             resultsDiv.className = 'alert alert-success';
 
             const addedList = result.addedMembers && result.addedMembers.length > 0
-                ? `<li><strong>Added:</strong> ${result.addedMembers.join(', ')}</li>`
+                ? `<li><strong>Added:</strong> ${result.addedMembers.map(m => escapeHtml(m)).join(', ')}</li>`
                 : '';
             const removedList = result.removedMembers && result.removedMembers.length > 0
-                ? `<li><strong>Removed:</strong> ${result.removedMembers.join(', ')}</li>`
+                ? `<li><strong>Removed:</strong> ${result.removedMembers.map(m => escapeHtml(m)).join(', ')}</li>`
                 : '';
 
             contentDiv.innerHTML = `
@@ -1885,7 +1885,7 @@ function toggleDevOpsMembersList() {
         if (members.length > 0) {
             content.innerHTML = `
                 <ul style="column-count: ${members.length > 10 ? '3' : '2'}; list-style: none; padding-left: 0;">
-                    ${members.map(m => `<li>• @${m}</li>`).join('')}
+                    ${members.map(m => `<li>• @${escapeHtml(m)}</li>`).join('')}
                 </ul>
             `;
         } else {
