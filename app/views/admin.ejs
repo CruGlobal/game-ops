@@ -951,7 +951,7 @@ function displayFetchHistory(history) {
         html += `
             <li>
                 <strong>${date}</strong>:
-                ${fetch.prRangeFetched}
+                ${escapeHtml(fetch.prRangeFetched)}
                 (${fetch.prsAdded} PRs, ${fetch.reviewsAdded} reviews added)
             </li>
         `;
@@ -1328,10 +1328,10 @@ document.getElementById('run-badge-scan')?.addEventListener('click', async () =>
             resultDiv.className = 'alert alert-success';
             let msg = `Scan complete: ${badgeCount} badge(s) and ${billCount} bill(s) awarded.`;
             if (badgeCount > 0) {
-                msg += '<br>Badges: ' + data.badges.map(b => `${b.username} - ${b.badge}`).join(', ');
+                msg += '<br>Badges: ' + data.badges.map(b => `${escapeHtml(b.username)} - ${escapeHtml(b.badge)}`).join(', ');
             }
             if (billCount > 0) {
-                msg += '<br>Bills: ' + data.bills.map(b => `${b.username} - ${b.bills}`).join(', ');
+                msg += '<br>Bills: ' + data.bills.map(b => `${escapeHtml(b.username)} - ${escapeHtml(b.bills)}`).join(', ');
             }
             resultDiv.innerHTML = msg;
         } else {
@@ -1767,10 +1767,10 @@ async function syncDevOpsTeam() {
             resultsDiv.className = 'alert alert-success';
 
             const addedList = result.addedMembers && result.addedMembers.length > 0
-                ? `<li><strong>Added:</strong> ${result.addedMembers.join(', ')}</li>`
+                ? `<li><strong>Added:</strong> ${result.addedMembers.map(escapeHtml).join(', ')}</li>`
                 : '';
             const removedList = result.removedMembers && result.removedMembers.length > 0
-                ? `<li><strong>Removed:</strong> ${result.removedMembers.join(', ')}</li>`
+                ? `<li><strong>Removed:</strong> ${result.removedMembers.map(escapeHtml).join(', ')}</li>`
                 : '';
 
             contentDiv.innerHTML = `
@@ -1885,7 +1885,7 @@ function toggleDevOpsMembersList() {
         if (members.length > 0) {
             content.innerHTML = `
                 <ul style="column-count: ${members.length > 10 ? '3' : '2'}; list-style: none; padding-left: 0;">
-                    ${members.map(m => `<li>• @${m}</li>`).join('')}
+                    ${members.map(m => `<li>• @${escapeHtml(m)}</li>`).join('')}
                 </ul>
             `;
         } else {
