@@ -3,7 +3,7 @@
 // and filtering of leaderboards based on DevOps membership
 
 import { prisma } from '../lib/prisma.js';
-import { createOctokit } from '../lib/githubAuth.js';
+import { createOctokit, getGitHubAuthMode } from '../lib/githubAuth.js';
 import logger from '../utils/logger.js';
 
 const octokit = createOctokit();
@@ -49,7 +49,11 @@ export async function fetchDevOpsTeamFromGitHub() {
   } catch (error) {
     if (error.status === 404) {
       logger.error(`GitHub team not found: ${GITHUB_ORG}/${DEVOPS_TEAM_SLUG}`);
-      throw new Error(`GitHub team '${DEVOPS_TEAM_SLUG}' not found in organization '${GITHUB_ORG}'. Please verify the team exists and the GitHub credentials can read org members.`);
+      // In app mode a wrong installation id fails the token request with the same 404.
+      const appHint = getGitHubAuthMode() === 'app'
+        ? ' In GitHub App mode, also check GITHUB_APP_INSTALLATION_ID and that the app is installed on the org.'
+        : '';
+      throw new Error(`GitHub team '${DEVOPS_TEAM_SLUG}' not found in organization '${GITHUB_ORG}'. Please verify the team exists and the GitHub credentials can read org members.${appHint}`);
     } else if (error.status === 403) {
       logger.error('GitHub API permission denied - credentials may lack org member read access');
       throw new Error('GitHub API permission denied. Ensure GITHUB_TOKEN has read:org scope, or the GitHub App has Members: read.');

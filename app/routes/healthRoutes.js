@@ -1,6 +1,6 @@
 import express from 'express';
 import logger from '../utils/logger.js';
-import { createOctokit, getGitHubAuthMode } from '../lib/githubAuth.js';
+import { createOctokit, getGitHubAuthMode, getMissingGitHubAppVars } from '../lib/githubAuth.js';
 // The shared client, not a second `new PrismaClient()`. Instantiating another one here
 // opened a second connection pool against the same database purely to answer health
 // probes.
@@ -12,7 +12,17 @@ const router = express.Router();
 // GitHub for the rate limit on every hit spends the shared token's budget to report on
 // itself, so the answer is cached briefly.
 const GITHUB_HEALTH_TTL_MS = 60 * 1000;
-let githubHealthCache = { checkedAt: 0, value: null };
+let githubHealthCache = { checkedAt: 0, mode: null, value: null };
+
+// One client per auth mode. A fresh Octokit starts with an empty token cache, so building
+// one per probe would mint a new installation token every minute in app mode.
+let githubHealthClient = { mode: null, octokit: null };
+function healthOctokit(mode) {
+    if (githubHealthClient.mode !== mode) {
+        githubHealthClient = { mode, octokit: createOctokit() };
+    }
+    return githubHealthClient.octokit;
+}
 
 // Health check endpoint
 router.get('/health', async (req, res) => {
@@ -48,15 +58,25 @@ router.get('/health', async (req, res) => {
         // GitHub API health check. `auth` says whether calls run as the GitHub App or a
         // personal token, so a credential switch can be confirmed from outside.
         const githubAuthMode = getGitHubAuthMode();
-        if (githubAuthMode !== 'none') {
-            if (githubHealthCache.value && Date.now() - githubHealthCache.checkedAt < GITHUB_HEALTH_TTL_MS) {
+        const missingAppVars = getMissingGitHubAppVars();
+        if (missingAppVars.length > 0) {
+            // Someone meant to switch to the GitHub App and missed a variable. Calls may still
+            // run on GITHUB_TOKEN, but this must not read as healthy.
+            health.checks.github = {
+                status: 'misconfigured',
+                auth: githubAuthMode,
+                missing: missingAppVars
+            };
+        } else if (githubAuthMode !== 'none') {
+            if (githubHealthCache.value && githubHealthCache.mode === githubAuthMode &&
+                Date.now() - githubHealthCache.checkedAt < GITHUB_HEALTH_TTL_MS) {
                 health.checks.github = { ...githubHealthCache.value, cached: true };
             } else {
                 try {
-                    const octokit = createOctokit();
-                    const rateLimit = await octokit.rateLimit.get();
+                    const rateLimit = await healthOctokit(githubAuthMode).rateLimit.get();
                     githubHealthCache = {
                         checkedAt: Date.now(),
+                        mode: githubAuthMode,
                         value: {
                             status: 'healthy',
                             auth: githubAuthMode,

@@ -3,7 +3,7 @@ import { generateKeyPairSync } from 'crypto';
 import express from 'express';
 import request from 'supertest';
 import nock from 'nock';
-import { createOctokit, getGitHubAuthMode, getGitHubToken } from '../../lib/githubAuth.js';
+import { createOctokit, getGitHubAuthMode, getGitHubToken, getMissingGitHubAppVars } from '../../lib/githubAuth.js';
 import healthRoutes from '../../routes/healthRoutes.js';
 import logger from '../../utils/logger.js';
 
@@ -100,6 +100,21 @@ describe('githubAuth', () => {
                 { missing: ['GITHUB_APP_PRIVATE_KEY'] }
             );
         });
+
+        it('should be none when the app is partly configured and GITHUB_TOKEN is gone', async () => {
+            jest.spyOn(logger, 'warn').mockImplementation(() => {});
+            process.env.GITHUB_APP_ID = APP_ID;
+
+            expect(getGitHubAuthMode()).toBe('none');
+            expect(getMissingGitHubAppVars()).toEqual(['GITHUB_APP_PRIVATE_KEY', 'GITHUB_APP_INSTALLATION_ID']);
+            await expect(getGitHubToken()).resolves.toBeNull();
+        });
+
+        it('should report no missing app variables when none or all are set', () => {
+            expect(getMissingGitHubAppVars()).toEqual([]);
+            configureApp({ installationId: '102' });
+            expect(getMissingGitHubAppVars()).toEqual([]);
+        });
     });
 
     describe('getGitHubToken in app mode', () => {
@@ -181,6 +196,47 @@ describe('githubAuth', () => {
             const res = await request(app).get('/api/health');
 
             expect(res.body.checks.github).toMatchObject({ status: 'healthy', auth: 'token', limit: 5000 });
+        });
+
+        it('should report a partly configured app as misconfigured, not healthy', async () => {
+            jest.spyOn(logger, 'warn').mockImplementation(() => {});
+            process.env.GITHUB_APP_ID = APP_ID;
+            process.env.GITHUB_APP_INSTALLATION_ID = '400';
+
+            const res = await request(app).get('/api/health');
+
+            expect(res.status).toBe(503);
+            expect(res.body.status).toBe('degraded');
+            expect(res.body.checks.github).toEqual({
+                status: 'misconfigured',
+                auth: 'none',
+                missing: ['GITHUB_APP_PRIVATE_KEY']
+            });
+        });
+
+        it('should reuse one installation token across uncached probes in app mode', async () => {
+            configureApp({ installationId: '401' });
+            // Only one mint is allowed: a second token request would find no interceptor
+            // and the probe would come back unhealthy.
+            const mint = mintInstallationToken('401', 'ghs_health');
+            const api = nock('https://api.github.com')
+                .get('/rate_limit').times(2)
+                .matchHeader('authorization', 'token ghs_health')
+                .reply(200, RATE_LIMIT_BODY);
+
+            // Step past the route's 60s answer cache before each probe.
+            const start = Date.now();
+            const now = jest.spyOn(Date, 'now');
+            now.mockReturnValue(start + 61 * 1000);
+            const first = await request(app).get('/api/health');
+            now.mockReturnValue(start + 122 * 1000);
+            const second = await request(app).get('/api/health');
+
+            expect(first.body.checks.github).toMatchObject({ status: 'healthy', auth: 'app' });
+            expect(second.body.checks.github).toMatchObject({ status: 'healthy', auth: 'app' });
+            expect(second.body.checks.github.cached).toBeUndefined();
+            expect(mint.scope.isDone()).toBe(true);
+            expect(api.isDone()).toBe(true);
         });
     });
 });
