@@ -2,11 +2,11 @@
 // Manages automatic sync of DevOps team members from GitHub Teams API
 // and filtering of leaderboards based on DevOps membership
 
-import { Octokit } from '@octokit/rest';
 import { prisma } from '../lib/prisma.js';
+import { createOctokit, getGitHubAuthMode } from '../lib/githubAuth.js';
 import logger from '../utils/logger.js';
 
-const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
+const octokit = createOctokit();
 
 const GITHUB_ORG = process.env.GITHUB_ORG || process.env.REPO_OWNER;
 const DEVOPS_TEAM_SLUG = process.env.DEVOPS_TEAM_SLUG || 'devops-engineering-team';
@@ -49,13 +49,17 @@ export async function fetchDevOpsTeamFromGitHub() {
   } catch (error) {
     if (error.status === 404) {
       logger.error(`GitHub team not found: ${GITHUB_ORG}/${DEVOPS_TEAM_SLUG}`);
-      throw new Error(`GitHub team '${DEVOPS_TEAM_SLUG}' not found in organization '${GITHUB_ORG}'. Please verify the team exists and GITHUB_TOKEN has read:org permission.`);
+      // In app mode a wrong installation id fails the token request with the same 404.
+      const appHint = getGitHubAuthMode() === 'app'
+        ? ' In GitHub App mode, also check GITHUB_APP_INSTALLATION_ID and that the app is installed on the org.'
+        : '';
+      throw new Error(`GitHub team '${DEVOPS_TEAM_SLUG}' not found in organization '${GITHUB_ORG}'. Please verify the team exists and the GitHub credentials can read org members.${appHint}`);
     } else if (error.status === 403) {
-      logger.error('GitHub API permission denied - token may lack read:org scope');
-      throw new Error('GitHub API permission denied. Ensure GITHUB_TOKEN has read:org scope.');
+      logger.error('GitHub API permission denied - credentials may lack org member read access');
+      throw new Error('GitHub API permission denied. Ensure GITHUB_TOKEN has read:org scope, or the GitHub App has Members: read.');
     } else if (error.status === 401) {
-      logger.error('GitHub API authentication failed - invalid token');
-      throw new Error('GitHub API authentication failed. Check GITHUB_TOKEN is valid.');
+      logger.error('GitHub API authentication failed - invalid credentials');
+      throw new Error('GitHub API authentication failed. Check GITHUB_TOKEN, or the GITHUB_APP_* settings, are valid.');
     } else {
       logger.error('Failed to fetch DevOps team from GitHub:', error);
       throw error;

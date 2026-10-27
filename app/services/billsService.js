@@ -9,11 +9,11 @@
 // independently callable/retryable it reads the quarterlyAward table directly.
 
 import crypto from 'crypto';
-import { Octokit } from '@octokit/rest';
 import { prisma } from '../lib/prisma.js';
+import { createOctokit } from '../lib/githubAuth.js';
 import logger from '../utils/logger.js';
 
-const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
+const octokit = createOctokit();
 
 const DEFAULT_BILLS_API_URL = 'https://bills.ustech.app/api/v1';
 

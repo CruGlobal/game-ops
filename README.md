@@ -310,7 +310,7 @@ app/
 ### Environment Variables
 
 **Required:**
-- `GITHUB_TOKEN` - GitHub PAT with repo access
+- `GITHUB_TOKEN` - GitHub PAT with repo access and `read:org`, **or** all three of `GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID`, `GITHUB_APP_PRIVATE_KEY` to run as a GitHub App installation (takes precedence when all three are set; see `app/lib/githubAuth.js`)
 - `DATABASE_URL` - PostgreSQL connection string
 - `SESSION_SECRET` - Session encryption key
 - `NODE_ENV` - 'development' or 'production'

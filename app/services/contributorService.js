@@ -1,5 +1,5 @@
-import { Octokit } from '@octokit/rest';
 import { prisma } from '../lib/prisma.js';
+import { createOctokit, getGitHubToken } from '../lib/githubAuth.js';
 import fetch from 'node-fetch';
 import { emitPRUpdate, emitBadgeAwarded, emitBillAwarded, emitLeaderboardUpdate, emitReviewUpdate } from '../utils/socketEmitter.js';
 import { updateStreak, checkStreakBadges } from './streakService.js';
@@ -10,9 +10,8 @@ import { updateChallengeProgress, autoJoinContributorToActiveChallenges } from '
 import { checkAndResetIfNewQuarter, updateQuarterlyStats } from './quarterlyService.js';
 import { isProxyBot, resolveProxyAuthor, resolveContributorUsername } from './attributionService.js';
 
-// Initialize Octokit with GitHub token and custom fetch
-const octokit = new Octokit({
-    auth: process.env.GITHUB_TOKEN,
+// Initialize Octokit with the configured GitHub credentials and custom fetch
+const octokit = createOctokit({
     request: {
         fetch: fetch
     }
@@ -1181,16 +1180,17 @@ export const getContributorByUsername = async (username) => {
 
 // function to fetch activity data
 export const fetchActivityData = async (prFrom, prTo) => {
-    const headers = {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${process.env.GITHUB_TOKEN}`
-    };
-
     const stats = [];
     const blocked = [];
 
     for (let i = prFrom; i <= prTo; i++) {
         try {
+            // Fetched per PR: a GitHub App installation token can expire partway
+            // through a long range. getGitHubToken() serves it from cache otherwise.
+            const headers = {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${await getGitHubToken()}`
+            };
             const url = `https://api.github.com/repos/${repoOwner}/${repoName}/pulls/${i}`;
             const response = await fetch(url, { headers });
             if (!response.ok) {
