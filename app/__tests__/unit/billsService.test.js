@@ -235,6 +235,22 @@ describe('billsService', () => {
             expect(fetchMock.mock.calls[0][0]).toBe('https://bills-stage.ustech.app/api/v1/gifts');
         });
 
+        it.each([
+            ['2027-T1', 'Tertile'],
+            ['2027-Q2', 'Quarter']
+        ])('names %s a %s in the gift reason (Cru switched to quarters Dec 1, 2026)', async (quarter, periodLabel) => {
+            await seedContributor({ username: 'first', billsEmail: 'first@cru.org', billsEmailSource: 'admin' });
+            fetchMock.mockResolvedValue(fetchResponse(201, { gift: { id: 'g' } }));
+
+            await sendTertileWinnerBills(quarter, {
+                nonDevOpsAwards: [{ username: 'first', rank: 1, value: 5, points: 500 }],
+                devOpsAwards: []
+            });
+
+            const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+            expect(body.reason).toContain(`${quarter} — 🥇 1st place ${periodLabel} winner`);
+        });
+
         it('records a failure (code: message) but still processes the other winners', async () => {
             await seedContributor({ username: 'first', billsEmail: 'first@cru.org', billsEmailSource: 'admin' });
             await seedContributor({ username: 'second', billsEmail: 'second@cru.org', billsEmailSource: 'admin' });

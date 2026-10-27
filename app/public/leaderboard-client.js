@@ -265,7 +265,7 @@ async function loadLeaderboardData() {
 function updateQuarterInfoDisplay() {
     if (!currentQuarterInfo) return;
 
-    const label = currentQuarterInfo.periodLabel || 'Quarter'; // 'Tertile' when the system is tertile
+    const label = currentQuarterInfo.periodLabel || 'Quarter'; // 'Tertile' while the current period is a tertile
     const titleEl = document.getElementById('current-quarter-title');
     const datesEl = document.getElementById('current-quarter-dates');
 
@@ -338,8 +338,9 @@ function checkAndShowWinnersBanner() {
     }
 
     const categoryLabel = recent.category === 'devops' ? 'DevOps ' : '';
-    // Match the configured period: "Tertile" when the system is tertile, else "Quarter".
-    const periodLabel = currentQuarterInfo?.periodLabel || 'Quarter';
+    // Named by its own label: the week after Dec 1, 2026 this is 2027-T1 while the
+    // page is already on a quarter.
+    const periodLabel = /-T\d$/.test(recent.quarter) ? 'Tertile' : 'Quarter';
 
     content.innerHTML = `
         <div class="winners-banner-title">👑 ${escapeHtml(recent.quarter)} ${categoryLabel}${periodLabel} Champions</div>

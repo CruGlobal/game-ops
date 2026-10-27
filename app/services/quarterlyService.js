@@ -27,6 +27,53 @@ function tertileYearOffset(systemType, q1Start) {
     return (systemType === 'tertile' && q1Start > 1) ? 1 : 0;
 }
 
+// Cru retired tertiles. From this instant the 'tertile' system runs Cru's fiscal
+// quarters, so 2027-T1 ends Nov 30, 2026 and 2027-Q2 follows. Bills switched the
+// same day (at midnight ET; Game Ops boundaries are UTC).
+const TERTILE_RETIREMENT = new Date(Date.UTC(2026, 11, 1));
+
+// Cru's fiscal year runs Sep–Aug and is named by the year it ends in:
+// Q1 Sep–Nov, Q2 Dec–Feb, Q3 Mar–May, Q4 Jun–Aug.
+const CRU_FISCAL_QUARTERS = { q1Start: 9, months: 3, prefix: 'Q', yearOffset: 1 };
+
+function configScheme(config) {
+    return {
+        q1Start: config.q1StartMonth,
+        months: periodMonths(config.systemType),
+        prefix: periodPrefix(config.systemType),
+        yearOffset: tertileYearOffset(config.systemType, config.q1StartMonth)
+    };
+}
+
+function schemeAt(config, date) {
+    if (config.systemType === 'tertile' && date >= TERTILE_RETIREMENT) return CRU_FISCAL_QUARTERS;
+    return configScheme(config);
+}
+
+function schemeForLabel(config, label) {
+    if (config.systemType === 'tertile' && label.split('-')[1]?.startsWith('Q')) return CRU_FISCAL_QUARTERS;
+    return configScheme(config);
+}
+
+// UTC parts, because getQuarterDateRange builds its windows in UTC. Reading local
+// parts meant that on any server not set to UTC the label and the range it pairs
+// with could disagree around a boundary — the label saying one period while the
+// dates described another.
+function periodLabelAt(config, date) {
+    const scheme = schemeAt(config, date);
+    const year = date.getUTCFullYear();
+    const month = date.getUTCMonth() + 1; // 1-12
+
+    // Months elapsed since period 1 starts, wrapping across the year so
+    // non-calendar configs (fiscal/academic/tertile) compute the right period.
+    // e.g. tertile q1Start=10 (Oct): Feb→T2, Jun→T3.
+    const monthsSinceQ1 = (month - scheme.q1Start + 12) % 12;
+    const periodNum = Math.floor(monthsSinceQ1 / scheme.months) + 1;
+    const cycleStartYear = month >= scheme.q1Start ? year : year - 1;
+
+    return `${cycleStartYear + scheme.yearOffset}-${scheme.prefix}${periodNum}`;
+}
+
 /**
  * Get quarter configuration from database
  * @returns {Object} Quarter settings
@@ -68,29 +115,7 @@ export async function getQuarterConfig() {
  */
 export async function getCurrentQuarter() {
     const config = await getQuarterConfig();
-    // UTC parts, because getQuarterDateRange builds its windows in UTC. Reading local
-    // parts here meant that on any server not set to UTC the label and the range it
-    // pairs with could disagree around a boundary — the label saying one period while
-    // the dates described another.
-    const now = new Date();
-    const currentYear = now.getUTCFullYear();
-    const currentMonth = now.getUTCMonth() + 1; // 1-12
-
-    // Get Q1 start month from config
-    const q1Start = config.q1StartMonth;
-    const pm = periodMonths(config.systemType);
-
-    // Months elapsed since the configured Q1 start, wrapping across the year so
-    // non-calendar configs (fiscal/academic/tertile) compute the right period.
-    // e.g. tertile q1Start=10 (Oct): Feb→T2, Jun→T3.
-    const monthsSinceQ1 = (currentMonth - q1Start + 12) % 12;
-    const quarterNum = Math.floor(monthsSinceQ1 / pm) + 1;
-
-    // Cycle-start year, then apply the tertile end-year offset for the label.
-    const cycleStartYear = currentMonth >= q1Start ? currentYear : currentYear - 1;
-    const year = cycleStartYear + tertileYearOffset(config.systemType, q1Start);
-
-    return `${year}-${periodPrefix(config.systemType)}${quarterNum}`;
+    return periodLabelAt(config, new Date());
 }
 
 /**
@@ -104,11 +129,12 @@ export async function getQuarterDateRange(quarterString) {
     const labelYear = parseInt(yearStr);
     const quarterNum = parseInt(quarterStr.replace(/\D/g, '')); // tolerate Q or T prefix
 
-    const q1Start = config.q1StartMonth;
-    const pm = periodMonths(config.systemType);
-    // Undo the tertile end-year offset to get the cycle-start year the month
-    // math is built on.
-    const year = labelYear - tertileYearOffset(config.systemType, q1Start);
+    const scheme = schemeForLabel(config, quarterString);
+    const q1Start = scheme.q1Start;
+    const pm = scheme.months;
+    // Undo the end-year offset to get the cycle-start year the month math is
+    // built on.
+    const year = labelYear - scheme.yearOffset;
 
     // Absolute month offset (0-indexed from January of the cycle-start year) of
     // this period's first month: period 1 begins at q1Start, each period adds
@@ -132,7 +158,12 @@ export async function getQuarterDateRange(quarterString) {
     // `>= start && <= end`, so activity timestamped in that window belonged to no period
     // and was dropped from quarterly stats entirely. Nothing finer than a millisecond is
     // representable in a JS Date, so this closes the gap rather than narrowing it.
-    const endDate = new Date(Date.UTC(endYear, endMonth0, lastDay, 23, 59, 59, 999));
+    let endDate = new Date(Date.UTC(endYear, endMonth0, lastDay, 23, 59, 59, 999));
+
+    // 2027-T1 would run to Jan 31; it stops where the quarters take over.
+    if (config.systemType === 'tertile' && scheme.prefix === 'T' && endDate >= TERTILE_RETIREMENT) {
+        endDate = new Date(TERTILE_RETIREMENT.getTime() - 1);
+    }
 
     return { start: startDate, end: endDate };
 }
@@ -1116,9 +1147,8 @@ export async function recomputeHallOfFame(quarterString) {
  */
 export async function recomputeHallOfFameAll() {
     const config = await getQuarterConfig();
-    const q1Start = config.q1StartMonth;
-    const pm = periodMonths(config.systemType);
-    const prefix = periodPrefix(config.systemType);
+    // The tertile system's own rows carry both prefixes since tertiles retired.
+    const ownPrefixes = config.systemType === 'tertile' ? ['T', 'Q'] : [periodPrefix(config.systemType)];
 
     // Aggregate ranges across all relevant tables to ensure full historical coverage
     const phRange = await prisma.pointHistory.aggregate({ _min: { timestamp: true }, _max: { timestamp: true } });
@@ -1141,7 +1171,7 @@ export async function recomputeHallOfFameAll() {
         await prisma.quarterlyWinner.deleteMany({
             where: {
                 OR: [
-                    { quarter: { not: { contains: '-' + prefix } } },
+                    { NOT: ownPrefixes.map(p => ({ quarter: { contains: '-' + p } })) },
                     { quarter: currentPeriod },
                     { quarterEnd: { gt: new Date() } }
                 ]
@@ -1165,23 +1195,12 @@ export async function recomputeHallOfFameAll() {
     // regenerated from authoritative history below, so a full wipe is safe.
     await prisma.quarterlyWinner.deleteMany({});
 
-    // Helper: get the period string for a date (works for quarters or tertiles).
-    const quarterFromDate = (date) => {
-        const year = date.getUTCFullYear();
-        const month = date.getUTCMonth() + 1; // 1-12
-        const monthsSinceQ1 = (month - q1Start + 12) % 12;
-        const quarterNum = Math.floor(monthsSinceQ1 / pm) + 1;
-        const cycleStartYear = month >= q1Start ? year : year - 1;
-        const qYear = cycleStartYear + tertileYearOffset(config.systemType, q1Start);
-        return `${qYear}-${prefix}${quarterNum}`;
-    };
-
     // Generate all period strings in range
     const quarters = new Set();
     let cursor = new Date(Date.UTC(minTs.getUTCFullYear(), minTs.getUTCMonth(), 1));
     const end = new Date(Date.UTC(maxTs.getUTCFullYear(), maxTs.getUTCMonth(), 1));
     while (cursor <= end) {
-        quarters.add(quarterFromDate(cursor));
+        quarters.add(periodLabelAt(config, cursor));
         // advance one month
         const m = cursor.getUTCMonth();
         cursor = new Date(Date.UTC(cursor.getUTCFullYear(), m + 1, 1));
