@@ -1,6 +1,6 @@
 import express from 'express';
-import { Octokit } from '@octokit/rest';
 import logger from '../utils/logger.js';
+import { createOctokit, getGitHubAuthMode } from '../lib/githubAuth.js';
 // The shared client, not a second `new PrismaClient()`. Instantiating another one here
 // opened a second connection pool against the same database purely to answer health
 // probes.
@@ -45,18 +45,21 @@ router.get('/health', async (req, res) => {
             };
         }
 
-        // GitHub API health check
-        if (process.env.GITHUB_TOKEN) {
+        // GitHub API health check. `auth` says whether calls run as the GitHub App or a
+        // personal token, so a credential switch can be confirmed from outside.
+        const githubAuthMode = getGitHubAuthMode();
+        if (githubAuthMode !== 'none') {
             if (githubHealthCache.value && Date.now() - githubHealthCache.checkedAt < GITHUB_HEALTH_TTL_MS) {
                 health.checks.github = { ...githubHealthCache.value, cached: true };
             } else {
                 try {
-                    const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
+                    const octokit = createOctokit();
                     const rateLimit = await octokit.rateLimit.get();
                     githubHealthCache = {
                         checkedAt: Date.now(),
                         value: {
                             status: 'healthy',
+                            auth: githubAuthMode,
                             remaining: rateLimit.data.rate.remaining,
                             limit: rateLimit.data.rate.limit,
                             reset: new Date(rateLimit.data.rate.reset * 1000).toISOString()
@@ -69,6 +72,7 @@ router.get('/health', async (req, res) => {
                     // than pinned as unhealthy for a minute.
                     health.checks.github = {
                         status: 'unhealthy',
+                        auth: githubAuthMode,
                         ...(process.env.NODE_ENV === 'production' ? {} : { error: error.message })
                     };
                 }
@@ -76,7 +80,7 @@ router.get('/health', async (req, res) => {
         } else {
             health.checks.github = {
                 status: 'not_configured',
-                message: 'GitHub token not provided'
+                message: 'GitHub credentials not provided'
             };
         }
 

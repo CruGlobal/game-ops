@@ -1,10 +1,9 @@
-import { Octokit } from '@octokit/rest';
 import fetch from 'node-fetch';
+import { createOctokit } from '../lib/githubAuth.js';
 import logger from '../utils/logger.js';
 import { prisma } from '../lib/prisma.js';
 
-const octokit = new Octokit({
-    auth: process.env.GITHUB_TOKEN,
+const octokit = createOctokit({
     request: { fetch }
 });
 

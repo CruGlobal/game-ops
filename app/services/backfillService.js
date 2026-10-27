@@ -1,5 +1,5 @@
-import { Octokit } from '@octokit/rest';
 import { prisma } from '../lib/prisma.js';
+import { createOctokit } from '../lib/githubAuth.js';
 import { getSocketIO } from '../utils/socketEmitter.js';
 import logger from '../utils/logger.js';
 import { awardPoints, calculatePoints } from './pointsService.js';
@@ -11,7 +11,7 @@ import { awardBadges } from './contributorService.js';
 import { autoJoinContributorToActiveChallenges } from './challengeService.js';
 import { isProxyBot, resolveProxyAuthor, resolveContributorUsername } from './attributionService.js';
 
-const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
+const octokit = createOctokit();
 const repoOwner = process.env.REPO_OWNER || 'CruGlobal';
 const repoName = process.env.REPO_NAME || 'android';
 

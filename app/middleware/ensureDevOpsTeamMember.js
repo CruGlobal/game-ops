@@ -1,4 +1,5 @@
 import fetch from 'node-fetch';
+import { getGitHubToken } from '../lib/githubAuth.js';
 
 // The admin page fires a burst of admin API calls, each of which re-checked team
 // membership against GitHub — a serial round-trip and a rate-limit unit per request,
@@ -26,11 +27,11 @@ export const ensureDevOpsTeamMember = async (req, res, next) => {
     }
 
     if (isAuth) {
-        const token = process.env.GITHUB_TOKEN;
         const org = process.env.GITHUB_ORG; // Read GitHub organization from environment variable
         const teamSlug = process.env.DEVOPS_TEAM_SLUG || 'devops-engineering-team'; // Use DEVOPS_TEAM_SLUG for consistency
 
         try {
+            const token = await getGitHubToken();
             const response = await fetch(`https://api.github.com/orgs/${org}/teams/${teamSlug}/memberships/${encodeURIComponent(req.user.username)}`, {
                 headers: {
                     'Authorization': `token ${token}`,
