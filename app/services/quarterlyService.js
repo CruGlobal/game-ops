@@ -1495,7 +1495,7 @@ export async function checkAndResetIfNewQuarter() {
                     quarterChanged: true,
                     oldQuarter: contributorQuarter,
                     newQuarter: currentQuarter,
-                    alreadyArchived: true
+                    alreadyClosed: true
                 };
             }
 

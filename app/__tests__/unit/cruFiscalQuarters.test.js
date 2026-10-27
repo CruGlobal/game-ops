@@ -157,16 +157,29 @@ describe('tertile system after Cru retired tertiles (Dec 1, 2026)', () => {
             expect(Number(paid.totalBillsAwarded)).toBe(5);
         });
 
-        it('does not pay 2027-T1 twice when a rollover is retried', async () => {
-            await seedTertileConfig({ activeQuarter: '2027-T1' });
+        it('does not pay or announce 2027-T1 twice when a rollover is retried', async () => {
+            await seedTertileConfig({
+                activeQuarter: '2027-T1',
+                enableSlackNotifications: true,
+                slackWebhookUrl: 'https://hooks.slack.test/services/T000/B000/x'
+            });
             await seedContributorWithHistory('nov-champ', { prs: 12, at: new Date('2026-11-20T12:00:00Z') });
+            const realFetch = global.fetch;
+            const fetchMock = jest.fn().mockResolvedValue({ ok: true, status: 200, text: async () => 'ok' });
+            global.fetch = fetchMock;
             setNow('2026-12-01T00:30:00.000Z');
 
-            await checkAndResetIfNewQuarter();
-            await setActiveQuarter('2027-T1'); // as if the first run died before recording Q2
-            const retry = await checkAndResetIfNewQuarter();
+            try {
+                await checkAndResetIfNewQuarter();
+                await setActiveQuarter('2027-T1'); // as if the first run died before recording Q2
+                const retry = await checkAndResetIfNewQuarter();
 
-            expect(retry.alreadyArchived).toBe(true);
+                expect(retry.alreadyClosed).toBe(true);
+            } finally {
+                global.fetch = realFetch;
+            }
+            const slackPosts = fetchMock.mock.calls.filter(([url]) => String(url).startsWith('https://hooks.slack.test/'));
+            expect(slackPosts).toHaveLength(1);
             const paid = await prisma.contributor.findUnique({ where: { username: 'nov-champ' } });
             expect(Number(paid.totalBillsAwarded)).toBe(5);
         });
