@@ -1,4 +1,5 @@
 import fetch from 'node-fetch';
+import { getGitHubToken } from '../lib/githubAuth.js';
 
 // How long a verified repository-access decision stays good for on a session.
 const REPO_ACCESS_TTL_MS = 15 * 60 * 1000;
@@ -25,11 +26,11 @@ export const ensureRepositoryAccess = async (req, res, next) => {
     }
 
     if (isAuth) {
-        const token = process.env.GITHUB_TOKEN;
         const repoOwner = process.env.REPO_OWNER || process.env.GITHUB_ORG;
         const repoName = process.env.REPO_NAME || 'cru-terraform';
         
         try {
+            const token = await getGitHubToken();
             // Check if user has access to the repository
             const response = await fetch(`https://api.github.com/repos/${repoOwner}/${repoName}/collaborators/${encodeURIComponent(req.user.username)}`, {
                 headers: {

@@ -1,5 +1,5 @@
 import { prisma } from '../lib/prisma.js';
-import { POINT_REASONS, POINT_VALUES } from '../config/points-config.js';
+import { POINT_REASONS, POINT_VALUES, reviewPointsAt } from '../config/points-config.js';
 import { emitBillAwarded } from '../utils/socketEmitter.js';
 import { postQuarterlyWinnersDiscussion } from './discussionService.js';
 import { postQuarterlyWinnersSlack } from './slackService.js';
@@ -27,6 +27,53 @@ function tertileYearOffset(systemType, q1Start) {
     return (systemType === 'tertile' && q1Start > 1) ? 1 : 0;
 }
 
+// Cru retired tertiles. From this instant the 'tertile' system runs Cru's fiscal
+// quarters, so 2027-T1 ends Nov 30, 2026 and 2027-Q2 follows. Bills switched the
+// same day (at midnight ET; Game Ops boundaries are UTC).
+const TERTILE_RETIREMENT = new Date(Date.UTC(2026, 11, 1));
+
+// Cru's fiscal year runs Sep–Aug and is named by the year it ends in:
+// Q1 Sep–Nov, Q2 Dec–Feb, Q3 Mar–May, Q4 Jun–Aug.
+const CRU_FISCAL_QUARTERS = { q1Start: 9, months: 3, prefix: 'Q', yearOffset: 1 };
+
+function configScheme(config) {
+    return {
+        q1Start: config.q1StartMonth,
+        months: periodMonths(config.systemType),
+        prefix: periodPrefix(config.systemType),
+        yearOffset: tertileYearOffset(config.systemType, config.q1StartMonth)
+    };
+}
+
+function schemeAt(config, date) {
+    if (config.systemType === 'tertile' && date >= TERTILE_RETIREMENT) return CRU_FISCAL_QUARTERS;
+    return configScheme(config);
+}
+
+function schemeForLabel(config, label) {
+    if (config.systemType === 'tertile' && label.split('-')[1]?.startsWith('Q')) return CRU_FISCAL_QUARTERS;
+    return configScheme(config);
+}
+
+// UTC parts, because getQuarterDateRange builds its windows in UTC. Reading local
+// parts meant that on any server not set to UTC the label and the range it pairs
+// with could disagree around a boundary — the label saying one period while the
+// dates described another.
+function periodLabelAt(config, date) {
+    const scheme = schemeAt(config, date);
+    const year = date.getUTCFullYear();
+    const month = date.getUTCMonth() + 1; // 1-12
+
+    // Months elapsed since period 1 starts, wrapping across the year so
+    // non-calendar configs (fiscal/academic/tertile) compute the right period.
+    // e.g. tertile q1Start=10 (Oct): Feb→T2, Jun→T3.
+    const monthsSinceQ1 = (month - scheme.q1Start + 12) % 12;
+    const periodNum = Math.floor(monthsSinceQ1 / scheme.months) + 1;
+    const cycleStartYear = month >= scheme.q1Start ? year : year - 1;
+
+    return `${cycleStartYear + scheme.yearOffset}-${scheme.prefix}${periodNum}`;
+}
+
 /**
  * Get quarter configuration from database
  * @returns {Object} Quarter settings
@@ -38,7 +85,7 @@ export async function getQuarterConfig() {
 
     if (!config) {
         try {
-            // Create default config (tertiles: T1 Oct, T2 Feb, T3 Jun)
+            // Create default config (Cru's calendar: tertiles, then fiscal quarters)
             config = await prisma.quarterSettings.create({
                 data: {
                     id: 'quarter-config',
@@ -68,29 +115,7 @@ export async function getQuarterConfig() {
  */
 export async function getCurrentQuarter() {
     const config = await getQuarterConfig();
-    // UTC parts, because getQuarterDateRange builds its windows in UTC. Reading local
-    // parts here meant that on any server not set to UTC the label and the range it
-    // pairs with could disagree around a boundary — the label saying one period while
-    // the dates described another.
-    const now = new Date();
-    const currentYear = now.getUTCFullYear();
-    const currentMonth = now.getUTCMonth() + 1; // 1-12
-
-    // Get Q1 start month from config
-    const q1Start = config.q1StartMonth;
-    const pm = periodMonths(config.systemType);
-
-    // Months elapsed since the configured Q1 start, wrapping across the year so
-    // non-calendar configs (fiscal/academic/tertile) compute the right period.
-    // e.g. tertile q1Start=10 (Oct): Feb→T2, Jun→T3.
-    const monthsSinceQ1 = (currentMonth - q1Start + 12) % 12;
-    const quarterNum = Math.floor(monthsSinceQ1 / pm) + 1;
-
-    // Cycle-start year, then apply the tertile end-year offset for the label.
-    const cycleStartYear = currentMonth >= q1Start ? currentYear : currentYear - 1;
-    const year = cycleStartYear + tertileYearOffset(config.systemType, q1Start);
-
-    return `${year}-${periodPrefix(config.systemType)}${quarterNum}`;
+    return periodLabelAt(config, new Date());
 }
 
 /**
@@ -104,11 +129,12 @@ export async function getQuarterDateRange(quarterString) {
     const labelYear = parseInt(yearStr);
     const quarterNum = parseInt(quarterStr.replace(/\D/g, '')); // tolerate Q or T prefix
 
-    const q1Start = config.q1StartMonth;
-    const pm = periodMonths(config.systemType);
-    // Undo the tertile end-year offset to get the cycle-start year the month
-    // math is built on.
-    const year = labelYear - tertileYearOffset(config.systemType, q1Start);
+    const scheme = schemeForLabel(config, quarterString);
+    const q1Start = scheme.q1Start;
+    const pm = scheme.months;
+    // Undo the end-year offset to get the cycle-start year the month math is
+    // built on.
+    const year = labelYear - scheme.yearOffset;
 
     // Absolute month offset (0-indexed from January of the cycle-start year) of
     // this period's first month: period 1 begins at q1Start, each period adds
@@ -132,14 +158,19 @@ export async function getQuarterDateRange(quarterString) {
     // `>= start && <= end`, so activity timestamped in that window belonged to no period
     // and was dropped from quarterly stats entirely. Nothing finer than a millisecond is
     // representable in a JS Date, so this closes the gap rather than narrowing it.
-    const endDate = new Date(Date.UTC(endYear, endMonth0, lastDay, 23, 59, 59, 999));
+    let endDate = new Date(Date.UTC(endYear, endMonth0, lastDay, 23, 59, 59, 999));
+
+    // 2027-T1 would run to Jan 31; it stops where the quarters take over.
+    if (config.systemType === 'tertile' && scheme.prefix === 'T' && endDate >= TERTILE_RETIREMENT) {
+        endDate = new Date(TERTILE_RETIREMENT.getTime() - 1);
+    }
 
     return { start: startDate, end: endDate };
 }
 
 /**
  * Update quarter configuration
- * @param {String} systemType - 'calendar', 'fiscal-us', 'academic', 'custom'
+ * @param {String} systemType - 'calendar', 'fiscal-us', 'academic', 'tertile', 'custom'
  * @param {Number} q1StartMonth - 1-12
  * @param {String} modifiedBy - Username
  * @param {Boolean} enableGitHubDiscussions - Whether to post quarterly winner announcements as GitHub Discussions
@@ -155,7 +186,7 @@ export async function updateQuarterConfig(systemType, q1StartMonth, modifiedBy, 
         'calendar': 1,    // January
         'fiscal-us': 10,  // October
         'academic': 9,    // September
-        'tertile': 10,    // October (T1 Oct–Jan, T2 Feb–May, T3 Jun–Sep)
+        'tertile': 10,    // October (T1 Oct–Jan, T2 Feb–May, T3 Jun–Sep), quarters from TERTILE_RETIREMENT
         'custom': q1StartMonth
     };
 
@@ -503,8 +534,8 @@ export async function updateQuarterlyStats(username, updates, activityDate = nul
 
         // quarterlyStats is a single JSON blob, so this is a read-modify-write with no
         // atomic increment available. Two webhooks for the same contributor — a PR
-        // worth 40 and a review worth 15 — both read {points: 100}; one writes 140, the
-        // other 115, and whichever lands second silently discards the other's points
+        // worth 50 and a review worth 40 — both read {points: 100}; one writes 150, the
+        // other 140, and whichever lands second silently discards the other's points
         // and its PR increment. point_history keeps both, so the quarter tally drifts
         // below the history it is supposed to summarise, skewing the quarterly
         // leaderboard, winner selection and the bills thresholds.
@@ -878,7 +909,7 @@ export async function recomputeCurrentQuarterStatsFallback(quarterString = null)
         if (!username) continue;
         const prsThisQuarter = prMap.get(id) || 0;
         const reviewsThisQuarter = reviewMap.get(id) || 0;
-        const pointsThisQuarter = prsThisQuarter * (POINT_VALUES.default || 40) + reviewsThisQuarter * (POINT_VALUES.review || 15);
+        const pointsThisQuarter = prsThisQuarter * (POINT_VALUES.default || 40) + reviewsThisQuarter * reviewPointsAt(start);
 
         await prisma.contributor.update({
             where: { id },
@@ -964,12 +995,14 @@ export async function recomputeHallOfFame(quarterString) {
             reviewMap = new Map(reviews.map(r => [String(r.contributorId), Number(r._count._all || 0)]));
         }
 
-        // Compute default points = PRs * default PR points + reviews * review points
+        // Compute default points = PRs * default PR points + reviews * the review value
+        // the period was scored at, so a rebuild cannot re-rank an old period
+        const reviewPoints = reviewPointsAt(start);
         const idSet = new Set([...prMap.keys(), ...reviewMap.keys()]);
         rankings = Array.from(idSet).map(id => {
             const prCount = prMap.get(id) || 0;
             const reviewCount = reviewMap.get(id) || 0;
-            const points = prCount * (POINT_VALUES.default || 40) + reviewCount * (POINT_VALUES.review || 15);
+            const points = prCount * (POINT_VALUES.default || 40) + reviewCount * reviewPoints;
             return { contributorId: id, _sum: { points: BigInt(points) }, __counts: { prs: prCount, reviews: reviewCount } };
         });
     }
@@ -1114,9 +1147,8 @@ export async function recomputeHallOfFame(quarterString) {
  */
 export async function recomputeHallOfFameAll() {
     const config = await getQuarterConfig();
-    const q1Start = config.q1StartMonth;
-    const pm = periodMonths(config.systemType);
-    const prefix = periodPrefix(config.systemType);
+    // The tertile system's own rows carry both prefixes since tertiles retired.
+    const ownPrefixes = config.systemType === 'tertile' ? ['T', 'Q'] : [periodPrefix(config.systemType)];
 
     // Aggregate ranges across all relevant tables to ensure full historical coverage
     const phRange = await prisma.pointHistory.aggregate({ _min: { timestamp: true }, _max: { timestamp: true } });
@@ -1139,7 +1171,7 @@ export async function recomputeHallOfFameAll() {
         await prisma.quarterlyWinner.deleteMany({
             where: {
                 OR: [
-                    { quarter: { not: { contains: '-' + prefix } } },
+                    { NOT: ownPrefixes.map(p => ({ quarter: { contains: '-' + p } })) },
                     { quarter: currentPeriod },
                     { quarterEnd: { gt: new Date() } }
                 ]
@@ -1163,23 +1195,12 @@ export async function recomputeHallOfFameAll() {
     // regenerated from authoritative history below, so a full wipe is safe.
     await prisma.quarterlyWinner.deleteMany({});
 
-    // Helper: get the period string for a date (works for quarters or tertiles).
-    const quarterFromDate = (date) => {
-        const year = date.getUTCFullYear();
-        const month = date.getUTCMonth() + 1; // 1-12
-        const monthsSinceQ1 = (month - q1Start + 12) % 12;
-        const quarterNum = Math.floor(monthsSinceQ1 / pm) + 1;
-        const cycleStartYear = month >= q1Start ? year : year - 1;
-        const qYear = cycleStartYear + tertileYearOffset(config.systemType, q1Start);
-        return `${qYear}-${prefix}${quarterNum}`;
-    };
-
     // Generate all period strings in range
     const quarters = new Set();
     let cursor = new Date(Date.UTC(minTs.getUTCFullYear(), minTs.getUTCMonth(), 1));
     const end = new Date(Date.UTC(maxTs.getUTCFullYear(), maxTs.getUTCMonth(), 1));
     while (cursor <= end) {
-        quarters.add(quarterFromDate(cursor));
+        quarters.add(periodLabelAt(config, cursor));
         // advance one month
         const m = cursor.getUTCMonth();
         cursor = new Date(Date.UTC(cursor.getUTCFullYear(), m + 1, 1));
@@ -1341,18 +1362,19 @@ export async function awardQuarterlyBills(quarterString) {
                 }
             },
             select: {
+                id: true,
                 username: true,
                 avatarUrl: true,
-                quarterlyStats: true,
                 totalBillsAwarded: true
             }
         });
 
+        // From point_history, like the podium above. The cache skipped a member whose
+        // first event of the new period landed before this ran, and counted work done
+        // after the period ended if the rollover ran late.
         for (const contributor of devOpsContributors) {
-            if (contributor.quarterlyStats?.currentQuarter !== quarter) continue;
-            const contributions =
-                (contributor.quarterlyStats?.prsThisQuarter || 0) +
-                (contributor.quarterlyStats?.reviewsThisQuarter || 0);
+            const earned = billsTotals.get(String(contributor.id));
+            const contributions = (earned?.prsThisQuarter || 0) + (earned?.reviewsThisQuarter || 0);
 
             if (contributions >= DEVOPS_PARTICIPATION_THRESHOLD) {
                 await prisma.contributor.update({
@@ -1458,21 +1480,22 @@ export async function checkAndResetIfNewQuarter() {
         if (contributorQuarter !== currentQuarter) {
             console.log(`New quarter detected: ${contributorQuarter} → ${currentQuarter}`);
 
-            // Check if this quarter was already archived (e.g., by updateQuarterConfig)
-            // to prevent duplicate notifications
-            const existingArchive = await prisma.quarterlyWinner.findFirst({
+            // The payout claim marks a period as closed, so a retried rollover does not
+            // announce twice. A Hall of Fame row does not: the admin recompute writes one
+            // for the open period, and keying on it skipped that period's payout.
+            const alreadyClosed = await prisma.quarterlyAward.findUnique({
                 where: { quarter: contributorQuarter }
             });
 
-            if (existingArchive) {
-                console.log(`Quarter ${contributorQuarter} already archived, skipping notifications — resetting stats only`);
+            if (alreadyClosed) {
+                console.log(`Quarter ${contributorQuarter} already closed, skipping notifications — resetting stats only`);
                 await resetQuarterlyStats(currentQuarter);
                 await setActiveQuarter(currentQuarter);
                 return {
                     quarterChanged: true,
                     oldQuarter: contributorQuarter,
                     newQuarter: currentQuarter,
-                    alreadyArchived: true
+                    alreadyClosed: true
                 };
             }
 

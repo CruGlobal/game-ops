@@ -82,6 +82,7 @@ cru application invoke -n game-ops -e s --task cron
 ### Environment Setup
 - Copy `.env.example` to `.env` in app directory and populate with actual values:
   - `GITHUB_TOKEN`: GitHub personal access token (**requires `read:org` scope for DevOps team sync**)
+  - `GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID`, `GITHUB_APP_PRIVATE_KEY`: optional; when all three are set, every GitHub call runs as the GitHub App installation instead of `GITHUB_TOKEN` (`app/lib/githubAuth.js`). `/api/health` reports which one is in use as `checks.github.auth`
   - `DATABASE_URL`: PostgreSQL connection string
   - `NODE_ENV`: 'development' or 'production'
   - `GITHUB_ORG`: Organization name (optional, defaults to `REPO_OWNER`)
@@ -214,7 +215,11 @@ them from an agent session.
 
 **QuarterSettings Schema** (`app/prisma/schema.prisma`) - **PHASE 2**:
 - Singleton configuration (id: 'quarter-config')
-- systemType: calendar, fiscal-us, academic, custom
+- systemType: calendar, fiscal-us, academic, tertile, custom
+  - `tertile` (the default) is Cru's calendar, not plain tertiles: T labels through
+    2026-11-30, then Cru fiscal quarters (Q1 Sep–Nov, Q2 Dec–Feb, Q3 Mar–May, Q4 Jun–Aug)
+    from 2026-12-01, labeled by the year the fiscal year ends (`2027-Q2`). `2027-T1` is cut
+    short to Oct–Nov. Copy picks "Tertile"/"Quarter" from each label (`utils/periodNoun.js`).
 - q1StartMonth: 1-12 (defines quarter start)
 - Modified timestamp and modifiedBy tracking
 - **Notification Settings**:
@@ -551,7 +556,7 @@ There is no `models/` directory — persistence is Prisma, defined in
   - POST `/api/admin/devops-team/toggle-filter` - Enable/disable leaderboard filter
 
 - **Environment Variables:**
-  - `GITHUB_TOKEN` - Must have `read:org` scope
+  - `GITHUB_TOKEN` - Must have `read:org` scope (or, in GitHub App mode, the app needs organization Members: read)
   - `GITHUB_ORG` - Organization name (defaults to `REPO_OWNER`)
   - `DEVOPS_TEAM_SLUG` - Team slug (defaults to `devops-engineering-team`)
 
@@ -692,11 +697,9 @@ npm run test:coverage   # Run tests with coverage report
 
 ### Points Calculation
 Defined in `app/config/points-config.js`:
-- **PR Merged:** 10 points (base)
-- **PR Reviewed:** 5 points
-- **Bug Fix PR:** +5 bonus (15 total) - detected via `bug` or `fix` labels
-- **Feature PR:** +10 bonus (20 total) - detected via `feature` or `enhancement` labels
-- **Documentation PR:** 0 bonus (10 total) - detected via `documentation` label
+- **PR Merged, by label:** feature 100, hotfix 80, enhancement 75, refactor 60, bug/fix 50, documentation 30, no recognized label 40 (`detectPRType` priority: hotfix > bug > feature > enhancement > refactor > documentation)
+- **PR Reviewed:** flat 40, the same as an unlabeled PR, whatever the reviewed PR's labels. A review submitted before 2026-10-01 (the start of 2027-T1) is valued at the old 15 whenever it is credited (`reviewPointsAt`); past awards were not recalculated
+- **Streak bonus:** 1.1x on merged PR points for a full workweek streak. Reviews do not get it
 
 ### Streak Badge Thresholds
 - **Week Warrior:** every workday of a week (5, or 4 in a holiday week)
@@ -768,7 +771,7 @@ Bills and Vonettes are real-world rewards: **40 Bills = 1 day off work**.
 ## Environment Variables
 
 ### Required
-- `GITHUB_TOKEN` - GitHub personal access token with repo access
+- `GITHUB_TOKEN` - GitHub PAT with repo access and `read:org`, **or** all three of `GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID`, `GITHUB_APP_PRIVATE_KEY` to run as a GitHub App installation (takes precedence when all three are set; see `app/lib/githubAuth.js`)
 - `DATABASE_URL` - PostgreSQL connection string (local or Neon)
 - `SESSION_SECRET` - Secret for session encryption
 - `NODE_ENV` - 'development' or 'production'

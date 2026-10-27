@@ -9,11 +9,12 @@
 // independently callable/retryable it reads the quarterlyAward table directly.
 
 import crypto from 'crypto';
-import { Octokit } from '@octokit/rest';
 import { prisma } from '../lib/prisma.js';
+import { createOctokit } from '../lib/githubAuth.js';
 import logger from '../utils/logger.js';
+import { periodNoun } from '../utils/periodNoun.js';
 
-const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
+const octokit = createOctokit();
 
 const DEFAULT_BILLS_API_URL = 'https://bills.ustech.app/api/v1';
 
@@ -259,7 +260,7 @@ export async function sendTertileWinnerBills(quarterString, billResults = null) 
             return summary;
         }
 
-        const periodLabel = settings.systemType === 'tertile' ? 'Tertile' : 'Quarter';
+        const periodLabel = periodNoun(quarter);
 
         for (const award of awards) {
             // One winner's failure must not stop the others.

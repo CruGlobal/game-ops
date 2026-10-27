@@ -5,6 +5,7 @@
 **CRITICAL:** This application uses sensitive environment variables that must be kept secure:
 
 - `GITHUB_TOKEN` - GitHub personal access token with repo access
+- `GITHUB_APP_PRIVATE_KEY` - GitHub App private key; anyone holding it can act as the app installation
 - `GITHUB_CLIENT_SECRET` - OAuth application client secret
 - `JWT_SECRET` - Secret for signing JWT tokens
 - `SESSION_SECRET` - Secret for Express sessions

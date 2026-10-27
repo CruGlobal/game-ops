@@ -1,9 +1,9 @@
-import { Octokit } from '@octokit/rest';
 import { prisma } from '../lib/prisma.js';
+import { createOctokit } from '../lib/githubAuth.js';
 import { getSocketIO } from '../utils/socketEmitter.js';
 import logger from '../utils/logger.js';
 import { awardPoints, calculatePoints } from './pointsService.js';
-import { POINT_REASONS, POINT_VALUES } from '../config/points-config.js';
+import { POINT_REASONS, reviewPointsAt } from '../config/points-config.js';
 import { updateQuarterlyStats, recomputeHallOfFameAll, recomputeCurrentQuarterStats } from './quarterlyService.js';
 import { checkAndAwardAchievements } from './achievementService.js';
 import { updateStreak, checkStreakBadges } from './streakService.js';
@@ -11,7 +11,7 @@ import { awardBadges } from './contributorService.js';
 import { autoJoinContributorToActiveChallenges } from './challengeService.js';
 import { isProxyBot, resolveProxyAuthor, resolveContributorUsername } from './attributionService.js';
 
-const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
+const octokit = createOctokit();
 const repoOwner = process.env.REPO_OWNER || 'CruGlobal';
 const repoName = process.env.REPO_NAME || 'android';
 
@@ -357,16 +357,17 @@ async function processPR(pr) {
 
                             // Award points for the review using PR number for traceability
                             const reviewDate = new Date(review.submitted_at);
+                            const reviewPoints = reviewPointsAt(submittedDate);
                             await awardPoints(
                                 reviewerRecord,
-                                POINT_VALUES.review,
+                                reviewPoints,
                                 POINT_REASONS.REVIEW_COMPLETED,
                                 pr.number,
                                 submittedDate
                             );
 
                             // Update quarterly stats for review (count + points)
-                            await updateQuarterlyStats(reviewerUsername, { reviews: 1, points: POINT_VALUES.review }, reviewDate);
+                            await updateQuarterlyStats(reviewerUsername, { reviews: 1, points: reviewPoints }, reviewDate);
 
                             // Update streak for reviews (with workweek-aware logic)
                             await updateStreak(reviewerRecord, submittedDate);

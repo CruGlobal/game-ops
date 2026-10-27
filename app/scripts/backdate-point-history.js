@@ -12,16 +12,17 @@
  *   npm run backdate:point-history [-- --owner <owner> --repo <name> --dry]
  *
  * Env:
- *   GITHUB_TOKEN is required (repo scope). If not provided, exits.
+ *   GITHUB_TOKEN (repo scope) or the GITHUB_APP_* variables are required. If neither is
+ *   set, exits.
  *   If --owner/--repo not provided, attempts to read from PRMetadata table
  *   or env GITHUB_OWNER/GITHUB_REPO.
  */
 
 import dotenv from 'dotenv';
-import { Octokit } from '@octokit/rest';
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 import { prisma } from '../lib/prisma.js';
+import { createOctokit, getGitHubAuthMode } from '../lib/githubAuth.js';
 import { getQuarterDateRange } from '../services/quarterlyService.js';
 
 dotenv.config();
@@ -38,13 +39,14 @@ const argv = yargs(hideBin(process.argv))
   .help()
   .argv;
 
-const GH_TOKEN = process.env.GITHUB_TOKEN || process.env.GITHUB_PAT;
-if (!GH_TOKEN) {
-  console.error('Missing GITHUB_TOKEN (or GITHUB_PAT) in environment');
+// GITHUB_PAT is an older alias for GITHUB_TOKEN in this script.
+if (!process.env.GITHUB_TOKEN && process.env.GITHUB_PAT) process.env.GITHUB_TOKEN = process.env.GITHUB_PAT;
+if (getGitHubAuthMode() === 'none') {
+  console.error('Missing GitHub credentials: set GITHUB_TOKEN (or GITHUB_PAT), or the GITHUB_APP_* variables');
   process.exit(1);
 }
 
-const octokit = new Octokit({ auth: GH_TOKEN, userAgent: 'pr-game-ops-backdate/1.0' });
+const octokit = createOctokit({ userAgent: 'pr-game-ops-backdate/1.0' });
 
 async function resolveRepo() {
   // 1) CLI flags

@@ -9,7 +9,8 @@
  *   npm run verify:quarter:user -- --user <github_login> [--quarter YYYY-QN] [--org <org_login>]
  *
  * Requires:
- *   - GITHUB_TOKEN in env (PAT with read:org, repo scope is sufficient to read PR metadata)
+ *   - GitHub credentials in env: GITHUB_TOKEN (PAT with read:org, repo scope is sufficient to read
+ *     PR metadata), or GITHUB_APP_ID + GITHUB_APP_PRIVATE_KEY + GITHUB_APP_INSTALLATION_ID
  *   - Optionally GITHUB_ORG in env; or pass --org
  */
 
@@ -18,8 +19,9 @@ import fetch from 'node-fetch';
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 import { prisma } from '../lib/prisma.js';
+import { getGitHubAuthMode, getGitHubToken } from '../lib/githubAuth.js';
 import { getCurrentQuarter, getQuarterDateRange } from '../services/quarterlyService.js';
-import { POINT_VALUES } from '../config/points-config.js';
+import { POINT_VALUES, reviewPointsAt } from '../config/points-config.js';
 
 dotenv.config();
 
@@ -30,9 +32,8 @@ const argv = yargs(hideBin(process.argv))
   .help()
   .argv;
 
-const GH_TOKEN = process.env.GITHUB_TOKEN;
-if (!GH_TOKEN) {
-  console.error('Missing GITHUB_TOKEN in environment');
+if (getGitHubAuthMode() === 'none') {
+  console.error('Missing GitHub credentials: set GITHUB_TOKEN or the GITHUB_APP_* variables');
   process.exit(1);
 }
 
@@ -48,7 +49,7 @@ async function gh(query, variables) {
   const res = await fetch('https://api.github.com/graphql', {
     method: 'POST',
     headers: {
-      'Authorization': `bearer ${GH_TOKEN}`,
+      'Authorization': `bearer ${await getGitHubToken()}`,
       'Content-Type': 'application/json'
     },
     body: JSON.stringify({ query, variables })
@@ -174,7 +175,8 @@ async function main() {
 
     const ghPrs = mergedPRs.length;
     const ghReviews = reviews.length;
-    const ghPoints = ghPrs * (POINT_VALUES.default || 40) + ghReviews * (POINT_VALUES.review || 15);
+    const ghReviewPoints = reviews.reduce((sum, rv) => sum + reviewPointsAt(rv.submittedAt), 0);
+    const ghPoints = ghPrs * (POINT_VALUES.default || 40) + ghReviewPoints;
 
     // Fetch local snapshot
     const local = await prisma.contributor.findUnique({ where: { username: USER_LOGIN } });

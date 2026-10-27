@@ -291,6 +291,7 @@
         // door cell (c, top-1) connects up into the maze
         if (top - 2 >= 0) hW[c][top - 2] = false;
     }
+    function inGhostHouse(c, r) { return c >= GH_COL - 1 && c <= GH_COL + 1 && r >= GH_ROW - 1 && r <= GH_ROW; }
 
     // Remove straight single-block wall segments so every maze line is >= 2 blocks
     // long. Only clears walls (never seals a passage): a segment is dropped only
@@ -479,12 +480,14 @@
             pellets = fullMask();
             // Pellets only on the darker contribution blocks (lit cells) — Pac eats
             // the graph's contributions; empty cells are just open corridor.
-            for (var pc = 0; pc < COLS; pc++) for (var pr = 0; pr < ROWS; pr++) pellets[pc][pr] = (env.levels[pc][pr] > 0);
+            // None in the ghost house: it is a dead end the ghosts spawn and respawn in,
+            // so dots left there for last made the round a death trap to finish.
+            for (var pc = 0; pc < COLS; pc++) for (var pr = 0; pr < ROWS; pr++) pellets[pc][pr] = (env.levels[pc][pr] > 0) && !inGhostHouse(pc, pr);
             // fallback: if the graph has no contributions yet, dot the whole band so
             // there is still something to clear
             var any = false;
             for (var ac = PM_LO; ac < PM_HI && !any; ac++) for (var ar = 0; ar < ROWS; ar++) if (pellets[ac][ar]) { any = true; break; }
-            if (!any) for (var fc = PM_LO; fc < PM_HI; fc++) for (var fr = 0; fr < ROWS; fr++) pellets[fc][fr] = true;
+            if (!any) for (var fc = PM_LO; fc < PM_HI; fc++) for (var fr = 0; fr < ROWS; fr++) pellets[fc][fr] = !inGhostHouse(fc, fr);
             pac = { c: START.c, r: START.r }; dir = { x: 1, y: 0 }; want = { x: 1, y: 0 };
             pellets[pac.c][pac.r] = false;
             placeEnergizers();

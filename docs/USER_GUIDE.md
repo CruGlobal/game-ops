@@ -376,7 +376,7 @@ federal holiday) on which you contributed, by either:
 - **Documentation** (`doc` or `documentation`): 30 points
 
 **Review Points:**
-- **Complete Code Review:** 15 points
+- **Complete Code Review:** 40 points, the same as a PR with no label, whatever the reviewed PR's labels. Approvals and change requests count, once per reviewer per PR; comment-only reviews and reviews of your own PR do not
 
 **Streak Multiplier:**
 
@@ -435,8 +435,8 @@ Total: 110 points (100 × 1.1)
 
 **Scenario 6: Code Review**
 ```
-Review points: 15
-Total: 15 points (no streak multiplier)
+Review points: 40
+Total: 40 points (no streak multiplier)
 ```
 
 **Scenario 7: Complete a Challenge**
@@ -828,7 +828,7 @@ A: Try:
    - Stack with regular PR/review points
 
 4. **Review Code Regularly**
-   - Easy 15 points per review
+   - 40 points per review, the same as a PR with no label
    - Helps maintain streaks
    - Consistent contribution
 

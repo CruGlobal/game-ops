@@ -1,5 +1,6 @@
 import { prisma } from '../lib/prisma.js';
 import logger from '../utils/logger.js';
+import { getGitHubToken } from '../lib/githubAuth.js';
 
 /**
  * Post quarterly winners announcement as a GitHub Discussion.
@@ -21,12 +22,12 @@ export async function postQuarterlyWinnersDiscussion(quarterString, billResults,
             return;
         }
 
-        const token = process.env.GITHUB_TOKEN;
+        const token = await getGitHubToken();
         const owner = process.env.REPO_OWNER || process.env.GITHUB_OWNER;
         const repo = process.env.REPO_NAME || process.env.GITHUB_REPO;
 
         if (!token || !owner || !repo) {
-            logger.warn('Cannot post discussion — GITHUB_TOKEN, REPO_OWNER, or REPO_NAME not set');
+            logger.warn('Cannot post discussion — GitHub credentials, REPO_OWNER, or REPO_NAME not set');
             return;
         }
 
@@ -165,12 +166,12 @@ export async function postNewChallengesDiscussion(challenges) {
             return;
         }
 
-        const token = process.env.GITHUB_TOKEN;
+        const token = await getGitHubToken();
         const owner = process.env.REPO_OWNER || process.env.GITHUB_OWNER;
         const repo = process.env.REPO_NAME || process.env.GITHUB_REPO;
 
         if (!token || !owner || !repo) {
-            logger.warn('Cannot post new-challenge discussion: GITHUB_TOKEN, REPO_OWNER, or REPO_NAME not set');
+            logger.warn('Cannot post new-challenge discussion: GitHub credentials, REPO_OWNER, or REPO_NAME not set');
             return;
         }
 

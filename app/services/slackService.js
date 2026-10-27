@@ -1,5 +1,6 @@
 import { prisma } from '../lib/prisma.js';
 import logger from '../utils/logger.js';
+import { periodNoun } from '../utils/periodNoun.js';
 
 /**
  * Post quarterly winners announcement to Slack via Incoming Webhook.
@@ -28,8 +29,7 @@ export async function postQuarterlyWinnersSlack(quarterString, billResults, quar
             return;
         }
 
-        // Match the configured period: "Tertile" for the tertile system, else "Quarter".
-        const periodLabel = settings.systemType === 'tertile' ? 'Tertile' : 'Quarter';
+        const periodLabel = periodNoun(quarterString);
         const baseUrl = process.env.BASE_URL || 'http://localhost:3000';
         const leaderboardUrl = `${baseUrl.replace(/\/$/, '')}/leaderboard?tab=quarterly`;
 
@@ -63,7 +63,7 @@ export async function postQuarterlyWinnersSlack(quarterString, billResults, quar
 /**
  * Build Slack Block Kit blocks for the period winners announcement.
  *
- * @param {String} periodLabel - "Tertile" or "Quarter" per the configured system
+ * @param {String} periodLabel - "Tertile" or "Quarter", from the period's own label
  * @param {String} leaderboardUrl - Deep link to the current-period leaderboard tab
  */
 function buildSlackBlocks(quarterString, billResults, quarterlyWinner, periodLabel = 'Quarter', leaderboardUrl = null) {
@@ -144,7 +144,7 @@ function buildSlackBlocks(quarterString, billResults, quarterlyWinner, periodLab
                 type: 'section',
                 text: {
                     type: 'mrkdwn',
-                    text: `:bar_chart: <${leaderboardUrl}|View the full This ${periodLabel} leaderboard>`
+                    text: `:bar_chart: <${leaderboardUrl}|View the full leaderboard>`
                 }
             }
         );

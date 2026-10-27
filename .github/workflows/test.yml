@@ -73,3 +73,51 @@ jobs:
 
       - name: Run tests
         run: npm test
+
+  # Jest never loads server.js, so it cannot see a dependency bump that stops the real
+  # app from booting or rendering. This builds the production image the same way the
+  # pipeline does and drives it over HTTP. Required for merge, so it gates Dependabot.
+  smoke:
+    name: Smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: gameops
+          POSTGRES_PASSWORD: gameops
+          POSTGRES_DB: game_ops_smoke
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U gameops -d game_ops_smoke"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v7
+
+      # public.ecr.aws throttles anonymous pulls per IP ("429 ... Data limit exceeded"),
+      # and hosted runners share IPs. Seed the Dockerfile's base image from Google's
+      # Docker Hub mirror (same digest) so the build uses the local copy instead.
+      - name: Seed the Node base image
+        run: |
+          tag="$(grep nodejs .tool-versions | awk '{ print $NF }')-alpine"
+          if docker pull "mirror.gcr.io/library/node:$tag"; then
+            docker tag "mirror.gcr.io/library/node:$tag" "public.ecr.aws/docker/library/node:$tag"
+          else
+            echo "::warning::mirror.gcr.io pull failed; the build will pull from public.ecr.aws"
+          fi
+
+      - name: Build production image
+        run: ./build.sh
+        env:
+          DOCKER_ARGS: --load --tag game-ops:smoke
+
+      - name: Boot the image and check it serves
+        run: scripts/smoke-test.sh game-ops:smoke
+        env:
+          DATABASE_URL: postgresql://gameops:gameops@localhost:5432/game_ops_smoke?schema=public
