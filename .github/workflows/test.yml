@@ -73,3 +73,39 @@ jobs:
 
       - name: Run tests
         run: npm test
+
+  # Jest never loads server.js, so it cannot see a dependency bump that stops the real
+  # app from booting or rendering. This builds the production image the same way the
+  # pipeline does and drives it over HTTP. Required for merge, so it gates Dependabot.
+  smoke:
+    name: Smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: gameops
+          POSTGRES_PASSWORD: gameops
+          POSTGRES_DB: game_ops_smoke
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U gameops -d game_ops_smoke"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Build production image
+        run: ./build.sh
+        env:
+          DOCKER_ARGS: --load --tag game-ops:smoke
+
+      - name: Boot the image and check it serves
+        run: scripts/smoke-test.sh game-ops:smoke
+        env:
+          DATABASE_URL: postgresql://gameops:gameops@localhost:5432/game_ops_smoke?schema=public
