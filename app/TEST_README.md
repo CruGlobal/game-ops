@@ -176,11 +176,29 @@ node --inspect-brk node_modules/.bin/jest --runInBand
 
 ## Continuous Integration
 
-Tests are designed to run in CI environments:
-- No external dependencies (MongoDB, GitHub API are mocked)
-- Deterministic results
-- Fast execution with parallel test running
-- Clear error reporting
+`.github/workflows/test.yml` runs two jobs on every pull request. The `main` ruleset
+(`applications/game-ops/github.tf` in cru-terraform) lists both as required checks,
+and the Dependabot auto-merge workflow waits for required checks, so a patch or minor
+bump merges itself only when both pass.
+
+- **Jest** runs this suite against a Postgres service container.
+- **Smoke** builds the production image with `build.sh`, runs the same
+  `prisma db push --accept-data-loss` as the ECS `db-migrate` container, seeds one
+  contributor, boots the app, and drives it over HTTP: health, the OAuth redirects,
+  the Socket.IO handshake, the page templates, a few `/api` reads, and two MCP calls.
+  Jest builds its own small Express apps and never loads `server.js`, so this is the
+  only check that catches a dependency that breaks startup or rendering.
+
+Run the smoke test locally against a scratch database. The container uses host
+networking and binds port 3000, so stop anything else on 3000 first. `DATABASE_URL`
+is resolved from the Docker host: on Linux that is `localhost`; under Colima use
+`host.lima.internal`.
+
+```bash
+DOCKER_ARGS="--load --tag game-ops:smoke" ./build.sh
+DATABASE_URL=postgresql://user:pass@host.lima.internal:5432/game_ops_smoke \
+    scripts/smoke-test.sh game-ops:smoke
+```
 
 ## Troubleshooting
 
