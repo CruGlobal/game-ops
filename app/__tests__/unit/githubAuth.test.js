@@ -36,8 +36,10 @@ function mintInstallationToken(installationId, token) {
     let seenAuthorization;
     const scope = nock('https://api.github.com')
         .post(`/app/installations/${installationId}/access_tokens`)
-        .reply(function () {
-            seenAuthorization = this.req.headers.authorization;
+        // nock 15 passes the intercepted fetch Request as the first argument and no
+        // longer sets `this.req`.
+        .reply((request) => {
+            seenAuthorization = request.headers.get('authorization');
             return [201, {
                 token,
                 expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
