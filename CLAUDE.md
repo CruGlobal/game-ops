@@ -215,7 +215,11 @@ them from an agent session.
 
 **QuarterSettings Schema** (`app/prisma/schema.prisma`) - **PHASE 2**:
 - Singleton configuration (id: 'quarter-config')
-- systemType: calendar, fiscal-us, academic, custom
+- systemType: calendar, fiscal-us, academic, tertile, custom
+  - `tertile` (the default) is Cru's calendar, not plain tertiles: T labels through
+    2026-11-30, then Cru fiscal quarters (Q1 Sep–Nov, Q2 Dec–Feb, Q3 Mar–May, Q4 Jun–Aug)
+    from 2026-12-01, labeled by the year the fiscal year ends (`2027-Q2`). `2027-T1` is cut
+    short to Oct–Nov. Copy picks "Tertile"/"Quarter" from each label (`utils/periodNoun.js`).
 - q1StartMonth: 1-12 (defines quarter start)
 - Modified timestamp and modifiedBy tracking
 - **Notification Settings**:

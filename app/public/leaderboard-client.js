@@ -265,11 +265,11 @@ async function loadLeaderboardData() {
 function updateQuarterInfoDisplay() {
     if (!currentQuarterInfo) return;
 
-    const label = currentQuarterInfo.periodLabel || 'Quarter'; // 'Tertile' when the system is tertile
+    const label = currentQuarterInfo.periodLabel || 'Quarter'; // 'Tertile' while the current period is a tertile
     const titleEl = document.getElementById('current-quarter-title');
     const datesEl = document.getElementById('current-quarter-dates');
 
-    // Relabel the "This Quarter" tab to match the configured period.
+    // Relabel the "This Quarter" tab to match the current period.
     const tabEl = document.getElementById('tab-quarterly');
     if (tabEl) tabEl.textContent = `📅 This ${label}`;
 
@@ -338,8 +338,9 @@ function checkAndShowWinnersBanner() {
     }
 
     const categoryLabel = recent.category === 'devops' ? 'DevOps ' : '';
-    // Match the configured period: "Tertile" when the system is tertile, else "Quarter".
-    const periodLabel = currentQuarterInfo?.periodLabel || 'Quarter';
+    // Named by its own label, not the current period's: right after a switch they
+    // differ. Same rule as utils/periodNoun.js (this script can't import it).
+    const periodLabel = /-T\d$/.test(recent.quarter) ? 'Tertile' : 'Quarter';
 
     content.innerHTML = `
         <div class="winners-banner-title">👑 ${escapeHtml(recent.quarter)} ${categoryLabel}${periodLabel} Champions</div>
@@ -936,6 +937,7 @@ function showError(message) {
             if (quarterInfoData && quarterInfoData.success) {
                 currentQuarterInfo = {
                     currentQuarter: quarterInfoData.currentQuarter,
+                    periodLabel: quarterInfoData.periodLabel || 'Quarter',
                     quarterDates: { start: quarterInfoData.quarterStart, end: quarterInfoData.quarterEnd }
                 };
                 updateQuarterInfoDisplay();

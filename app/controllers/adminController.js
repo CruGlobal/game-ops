@@ -17,6 +17,7 @@ import {
     recomputeHallOfFame,
     recomputeHallOfFameAll
 } from '../services/quarterlyService.js';
+import { periodNoun } from '../utils/periodNoun.js';
 import { ensureAppSettingsTable, getCronEnabled, setCronEnabled, getCronTaskSettings, setCronTaskSetting, CRON_TASK_DEFAULTS } from '../lib/appSettings.js';
 import {
     syncDevOpsTeamFromGitHub,
@@ -189,7 +190,7 @@ export async function getQuarterInfoController(req, res) {
         const currentQuarter = await getCurrentQuarter();
         const { start, end } = await getQuarterDateRange(currentQuarter);
         const config = await getQuarterConfig();
-        const periodLabel = config.systemType === 'tertile' ? 'Tertile' : 'Quarter';
+        const periodLabel = periodNoun(currentQuarter);
 
         res.json({
             success: true,
