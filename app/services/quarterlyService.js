@@ -85,7 +85,7 @@ export async function getQuarterConfig() {
 
     if (!config) {
         try {
-            // Create default config (tertiles: T1 Oct, T2 Feb, T3 Jun)
+            // Create default config (Cru's calendar: tertiles, then fiscal quarters)
             config = await prisma.quarterSettings.create({
                 data: {
                     id: 'quarter-config',
@@ -170,7 +170,7 @@ export async function getQuarterDateRange(quarterString) {
 
 /**
  * Update quarter configuration
- * @param {String} systemType - 'calendar', 'fiscal-us', 'academic', 'custom'
+ * @param {String} systemType - 'calendar', 'fiscal-us', 'academic', 'tertile', 'custom'
  * @param {Number} q1StartMonth - 1-12
  * @param {String} modifiedBy - Username
  * @param {Boolean} enableGitHubDiscussions - Whether to post quarterly winner announcements as GitHub Discussions
@@ -186,7 +186,7 @@ export async function updateQuarterConfig(systemType, q1StartMonth, modifiedBy, 
         'calendar': 1,    // January
         'fiscal-us': 10,  // October
         'academic': 9,    // September
-        'tertile': 10,    // October (T1 Oct–Jan, T2 Feb–May, T3 Jun–Sep)
+        'tertile': 10,    // October (T1 Oct–Jan, T2 Feb–May, T3 Jun–Sep), quarters from TERTILE_RETIREMENT
         'custom': q1StartMonth
     };
 
@@ -1362,18 +1362,19 @@ export async function awardQuarterlyBills(quarterString) {
                 }
             },
             select: {
+                id: true,
                 username: true,
                 avatarUrl: true,
-                quarterlyStats: true,
                 totalBillsAwarded: true
             }
         });
 
+        // From point_history, like the podium above. The cache skipped a member whose
+        // first event of the new period landed before this ran, and counted work done
+        // after the period ended if the rollover ran late.
         for (const contributor of devOpsContributors) {
-            if (contributor.quarterlyStats?.currentQuarter !== quarter) continue;
-            const contributions =
-                (contributor.quarterlyStats?.prsThisQuarter || 0) +
-                (contributor.quarterlyStats?.reviewsThisQuarter || 0);
+            const earned = billsTotals.get(String(contributor.id));
+            const contributions = (earned?.prsThisQuarter || 0) + (earned?.reviewsThisQuarter || 0);
 
             if (contributions >= DEVOPS_PARTICIPATION_THRESHOLD) {
                 await prisma.contributor.update({
@@ -1479,14 +1480,15 @@ export async function checkAndResetIfNewQuarter() {
         if (contributorQuarter !== currentQuarter) {
             console.log(`New quarter detected: ${contributorQuarter} → ${currentQuarter}`);
 
-            // Check if this quarter was already archived (e.g., by updateQuarterConfig)
-            // to prevent duplicate notifications
-            const existingArchive = await prisma.quarterlyWinner.findFirst({
+            // The payout claim marks a period as closed, so a retried rollover does not
+            // announce twice. A Hall of Fame row does not: the admin recompute writes one
+            // for the open period, and keying on it skipped that period's payout.
+            const alreadyClosed = await prisma.quarterlyAward.findUnique({
                 where: { quarter: contributorQuarter }
             });
 
-            if (existingArchive) {
-                console.log(`Quarter ${contributorQuarter} already archived, skipping notifications — resetting stats only`);
+            if (alreadyClosed) {
+                console.log(`Quarter ${contributorQuarter} already closed, skipping notifications — resetting stats only`);
                 await resetQuarterlyStats(currentQuarter);
                 await setActiveQuarter(currentQuarter);
                 return {

@@ -30,11 +30,23 @@ function viewMarkup() {
         .replace(/<script[\s\S]*?<\/script>/g, '');
 }
 
-async function mountLeaderboard(responses) {
+function fakeSocket() {
+    const handlers = {};
+    return { handlers, on: (event, cb) => { handlers[event] = cb; } };
+}
+
+async function mountLeaderboard(responses, socket = fakeSocket()) {
+    window.realtimeSocket = socket;
+    const fetched = [];
     window.fetch = globalThis.fetch = (url) => {
         const path = String(url).split('?')[0];
+        fetched.push(path);
+        if (path === '/api/top-contributors' || path === '/api/top-reviewers') {
+            return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve([]) });
+        }
         return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(responses[path] ?? { success: true, data: [] }) });
     };
+    window.CSS = { escape: (s) => String(s).replace(/[^\w-]/g, '\\$&') }; // jsdom has no CSS.escape
     window.matchMedia = () => ({
         matches: false, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {}
     });
@@ -43,11 +55,13 @@ async function mountLeaderboard(responses) {
     new window.Function(readFileSync(join(APP, 'public', 'leaderboard-client.js'), 'utf8')).call(window);
     document.dispatchEvent(new window.Event('DOMContentLoaded'));
     for (let i = 0; i < 10; i++) await new Promise((r) => setTimeout(r, 0));
+    return fetched;
 }
 
 describe('leaderboard period names across the Dec 1, 2026 switch', () => {
     afterEach(() => {
         jest.useRealTimers();
+        jest.restoreAllMocks();
         localStorage.clear();
     });
 
@@ -83,5 +97,32 @@ describe('leaderboard period names across the Dec 1, 2026 switch', () => {
         expect(document.getElementById('tab-quarterly').textContent).toBe('📅 This Quarter');
         expect(document.getElementById('current-quarter-title').textContent).toBe('Current Quarter: 2027-Q2');
         expect(document.querySelector('.winners-banner-title').textContent).toBe('👑 2027-T1 Tertile Champions');
+    });
+
+    test('a live update keeps the period name instead of falling back to "Quarter"', async () => {
+        const socket = fakeSocket();
+        const fetched = await mountLeaderboard({
+            '/api/quarter-info': {
+                success: true,
+                currentQuarter: '2027-T1',
+                quarterStart: '2026-10-01T00:00:00.000Z',
+                quarterEnd: '2026-11-30T23:59:59.999Z',
+                systemType: 'tertile',
+                periodLabel: 'Tertile'
+            }
+        }, socket);
+        expect(document.getElementById('tab-quarterly').textContent).toBe('📅 This Tertile');
+        const errors = jest.spyOn(console, 'error').mockImplementation(() => {});
+        fetched.length = 0;
+
+        socket.handlers['leaderboard-update']({ username: 'someone' });
+        await new Promise((r) => setTimeout(r, 2200)); // the page waits 2s of quiet before refreshing
+        for (let i = 0; i < 10; i++) await new Promise((r) => setTimeout(r, 0));
+
+        // One smart refresh, not its fall-back full reload (which would set the label itself).
+        expect(errors).not.toHaveBeenCalled();
+        expect(fetched.filter((p) => p === '/api/quarter-info')).toHaveLength(1);
+        expect(document.getElementById('tab-quarterly').textContent).toBe('📅 This Tertile');
+        expect(document.getElementById('current-quarter-title').textContent).toBe('Current Tertile: 2027-T1');
     });
 });

@@ -5,7 +5,9 @@ import {
     getCurrentQuarter,
     getQuarterDateRange,
     checkAndResetIfNewQuarter,
-    recomputeHallOfFameAll
+    recomputeHallOfFame,
+    recomputeHallOfFameAll,
+    setActiveQuarter
 } from '../../services/quarterlyService.js';
 import { postQuarterlyWinnersSlack } from '../../services/slackService.js';
 import contributorRoutes from '../../routes/contributorRoutes.js';
@@ -31,9 +33,9 @@ async function seedTertileConfig(extra = {}) {
     });
 }
 
-async function seedContributorWithHistory(username, { prs, at }) {
+async function seedContributorWithHistory(username, { prs, at, ...overrides }) {
     const contributor = await prisma.contributor.create({
-        data: createTestContributor({ username, avatarUrl: `https://github.com/${username}.png` })
+        data: createTestContributor({ username, avatarUrl: `https://github.com/${username}.png`, ...overrides })
     });
     await prisma.pointHistory.createMany({
         data: Array.from({ length: prs }, () => ({
@@ -132,6 +134,65 @@ describe('tertile system after Cru retired tertiles (Dec 1, 2026)', () => {
 
             const settings = await prisma.quarterSettings.findUnique({ where: { id: 'quarter-config' } });
             expect(settings.activeQuarter).toBe('2027-Q2');
+
+            expect(await prisma.quarterlyAward.findUnique({ where: { quarter: '2027-T1' } })).not.toBeNull();
+            const paid = await prisma.contributor.findUnique({ where: { username: 'nov-champ' } });
+            const notPaid = await prisma.contributor.findUnique({ where: { username: 'dec-early' } });
+            expect(Number(paid.totalBillsAwarded)).toBe(5);
+            expect(Number(notPaid.totalBillsAwarded)).toBe(0);
+            expect(notPaid.quarterlyStats).toMatchObject({ currentQuarter: '2027-Q2', pointsThisQuarter: 200 });
+        });
+
+        it('still pays 2027-T1 when the admin recompute already wrote its Hall of Fame row', async () => {
+            await seedTertileConfig({ activeQuarter: '2027-T1' });
+            await seedContributorWithHistory('nov-champ', { prs: 12, at: new Date('2026-11-20T12:00:00Z') });
+            setNow('2026-11-25T12:00:00.000Z');
+            await recomputeHallOfFame(); // the admin button with no quarter typed in
+            setNow('2026-12-01T00:30:00.000Z');
+
+            await checkAndResetIfNewQuarter();
+
+            expect(await prisma.quarterlyAward.findUnique({ where: { quarter: '2027-T1' } })).not.toBeNull();
+            const paid = await prisma.contributor.findUnique({ where: { username: 'nov-champ' } });
+            expect(Number(paid.totalBillsAwarded)).toBe(5);
+        });
+
+        it('does not pay 2027-T1 twice when a rollover is retried', async () => {
+            await seedTertileConfig({ activeQuarter: '2027-T1' });
+            await seedContributorWithHistory('nov-champ', { prs: 12, at: new Date('2026-11-20T12:00:00Z') });
+            setNow('2026-12-01T00:30:00.000Z');
+
+            await checkAndResetIfNewQuarter();
+            await setActiveQuarter('2027-T1'); // as if the first run died before recording Q2
+            const retry = await checkAndResetIfNewQuarter();
+
+            expect(retry.alreadyArchived).toBe(true);
+            const paid = await prisma.contributor.findUnique({ where: { username: 'nov-champ' } });
+            expect(Number(paid.totalBillsAwarded)).toBe(5);
+        });
+
+        it('pays DevOps participation from 2027-T1 history, not the live cache', async () => {
+            await seedTertileConfig({ activeQuarter: '2027-T1' });
+            const nov = new Date('2026-11-20T12:00:00Z');
+            // Earned it in Oct–Nov, but a Dec 1 event already rolled the cache to Q2.
+            await seedContributorWithHistory('ops-earned', {
+                prs: 50, at: nov, isDevOps: true,
+                quarterlyStats: { currentQuarter: '2027-Q2', prsThisQuarter: 1, reviewsThisQuarter: 0, pointsThisQuarter: 10 }
+            });
+            // Cache says 60 (old code kept adding December to 2027-T1), history says 30.
+            await seedContributorWithHistory('ops-short', {
+                prs: 30, at: nov, isDevOps: true,
+                quarterlyStats: { currentQuarter: '2027-T1', prsThisQuarter: 60, reviewsThisQuarter: 0, pointsThisQuarter: 600 }
+            });
+            setNow('2026-12-01T00:30:00.000Z');
+
+            const result = await checkAndResetIfNewQuarter();
+
+            expect(result.billsAwarded.devOpsAwards.map(a => a.username)).toEqual(['ops-earned']);
+            const earned = await prisma.contributor.findUnique({ where: { username: 'ops-earned' } });
+            const short = await prisma.contributor.findUnique({ where: { username: 'ops-short' } });
+            expect(Number(earned.totalBillsAwarded)).toBe(1);
+            expect(Number(short.totalBillsAwarded)).toBe(0);
         });
     });
 
@@ -202,11 +263,16 @@ describe('tertile system after Cru retired tertiles (Dec 1, 2026)', () => {
     });
 
     describe('Slack winners post', () => {
+        const realFetch = global.fetch;
         let fetchMock;
 
         beforeEach(() => {
             fetchMock = jest.fn().mockResolvedValue({ ok: true, status: 200, text: async () => 'ok' });
             global.fetch = fetchMock;
+        });
+
+        afterEach(() => {
+            global.fetch = realFetch;
         });
 
         it.each([
@@ -225,6 +291,9 @@ describe('tertile system after Cru retired tertiles (Dec 1, 2026)', () => {
             expect(fetchMock).toHaveBeenCalledTimes(1);
             const { blocks } = JSON.parse(fetchMock.mock.calls[0][1].body);
             expect(blocks[0].text.text).toBe(header);
+            // The link opens the period now running, which is not the one just closed.
+            const link = blocks.find(b => b.text?.text?.includes('/leaderboard?tab=quarterly'));
+            expect(link.text.text).not.toMatch(/Tertile|Quarter/);
         });
     });
 });

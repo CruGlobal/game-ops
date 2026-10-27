@@ -144,7 +144,7 @@ function buildSlackBlocks(quarterString, billResults, quarterlyWinner, periodLab
                 type: 'section',
                 text: {
                     type: 'mrkdwn',
-                    text: `:bar_chart: <${leaderboardUrl}|View the full This ${periodLabel} leaderboard>`
+                    text: `:bar_chart: <${leaderboardUrl}|View the full leaderboard>`
                 }
             }
         );
