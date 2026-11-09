@@ -4,6 +4,13 @@ All notable changes to Game Ops are documented in this file.
 
 ---
 
+## [Unreleased] - 2026-11-09
+
+### Fixed
+- **The banner's demo Pac-Man dodges the ghosts** - the attract-mode autopilot walked the shortest path to the nearest dot and never looked at the ghosts. A demo death costs no life, it only puts Pac and the ghosts back where they started, so a dot beside the ghost-house door, on the lane every released ghost walks out along, could hold the demo in the same fatal walk for minutes. Pac now only steps onto a cell it can leave before any ghost could get there, checked over its next 8 steps. A penned ghost counts from its release, and a ghost walking away counts as unable to turn straight back, since ghosts outside the pen never reverse. Pac skips a dot in a dead-end pocket when a ghost could close the way out, and with no dot safely in reach it runs for the cell the ghosts reach last. Four ghosts can still pin it from both sides, but on a full board at 60 fps that is now under one death a minute, against about seven before. Play mode is unchanged.
+
+---
+
 ## [Unreleased] - 2026-10-05
 
 ### Fixed
