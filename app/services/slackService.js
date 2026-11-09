@@ -170,8 +170,8 @@ function buildSlackBlocks(quarterString, billResults, quarterlyWinner, periodLab
 /**
  * Post a new-challenge announcement to Slack via Incoming Webhook.
  * Accepts one or more challenges; a multi-challenge array renders as a single
- * batched announcement (used by the weekly cron so Monday doesn't generate 3
- * separate pings).
+ * batched announcement. Only challenges created one at a time (admin page or the
+ * MCP create_challenge tool) post here. The weekly cron does not post to Slack.
  *
  * Checks enableSlackNotifications in QuarterSettings; returns early if disabled.
  * Never throws; logs a warning on failure.
