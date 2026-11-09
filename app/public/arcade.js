@@ -533,31 +533,92 @@
             });
             g.c = wrapCol(g.c + best.x); g.r += best.y; g.dir = best;
         }
+        // Ghost ticks until a ghost that can kill Pac could stand on each cell. A frightened
+        // ghost counts again in its last second, or Pac strolls up to one as it turns back.
+        function ghostReach() {
+            var reach = [], c;
+            for (c = 0; c < COLS; c++) reach[c] = new Array(ROWS).fill(Infinity);
+            ghosts.forEach(function (g) {
+                if (g.state === 'eyes' || (g.fright && frightTimer > 1)) return;
+                // A penned ghost is no threat until its release; floor keeps the estimate early.
+                var wait = g.state === 'pen' ? Math.max(0, Math.floor((g.release - clock) / GTICK)) : 0;
+                var seen = {}, q = [{ c: g.c, r: g.r, n: wait }], qi = 0;
+                seen[g.c + ',' + g.r] = true;
+                while (qi < q.length) {
+                    var cur = q[qi++];
+                    if (cur.n < reach[cur.c][cur.r]) reach[cur.c][cur.r] = cur.n;
+                    // Outside the pen stepToward never reverses, so a ghost walking away
+                    // can only come back the long way round. Later steps may turn freely.
+                    var mv = (qi === 1 && g.state === 'out') ? validMoves(cur.c, cur.r, g.dir) : [];
+                    if (!mv.length) mv = validMoves(cur.c, cur.r, null);
+                    mv.forEach(function (m) {
+                        var nc = wrapCol(cur.c + m.x), nr = cur.r + m.y, k = nc + ',' + nr;
+                        if (seen[k]) return;
+                        seen[k] = true; q.push({ c: nc, r: nr, n: cur.n + 1 });
+                    });
+                }
+            });
+            return reach;
+        }
+        // Past SAFE_HORIZON steps some ghost reaches every cell first; the route is re-planned each tick.
+        var SAFE_HORIZON = 8, ESCAPE_STEPS = 6;
+        // Pac leaves the cell `d` steps out at d*TICK; a ghost `g` ticks away can land at (g-1)*GTICK.
+        // Real steps round up to whole frames (update() zeroes acc/gacc), so this is a bit optimistic.
+        function outrunsGhosts(d, g) { return d > SAFE_HORIZON || d * TICK < (g - 1) * GTICK; }
+        // Pac must be able to get ESCAPE_STEPS on from a cell it heads for, or a ghost at the
+        // mouth of a dead-end pocket shuts it in.
+        function canEscape(from, reach) {
+            var seen = {}, q = [{ c: from.c, r: from.r, k: 0 }], qi = 0;
+            seen[from.c + ',' + from.r] = true;
+            while (qi < q.length) {
+                var cur = q[qi++];
+                if (cur.k >= ESCAPE_STEPS) return true;
+                var mv = validMoves(cur.c, cur.r, null);
+                for (var i = 0; i < mv.length; i++) {
+                    var nc = wrapCol(cur.c + mv[i].x), nr = cur.r + mv[i].y, key = nc + ',' + nr;
+                    if (seen[key] || !outrunsGhosts(from.d + cur.k + 1, reach[nc][nr])) continue;
+                    seen[key] = true; q.push({ c: nc, r: nr, k: cur.k + 1 });
+                }
+            }
+            return false;
+        }
         // Attract-mode brain: BFS over open corridors to the nearest pellet and
         // step along that path. (Greedy Manhattan steering oscillated in place
         // once pellets only sat on the sparse contribution blocks.)
+        // It only crosses cells Pac can clear before a ghost arrives: a demo death costs no
+        // life, so a brain blind to ghosts replays the same fatal walk forever.
         function aiPacDir() {
+            var reach = ghostReach();
             var startK = pac.c + ',' + pac.r;
             var prev = {}; prev[startK] = { fromK: null, step: null };
-            var q = [{ c: pac.c, r: pac.r }], qi = 0, target = null;
+            var q = [{ c: pac.c, r: pac.r, d: 0 }], qi = 0, target = null, refuge = null;
             var dirs = [{ x: 1, y: 0 }, { x: -1, y: 0 }, { x: 0, y: 1 }, { x: 0, y: -1 }];
             while (qi < q.length) {
                 var cur = q[qi++];
-                if ((cur.c !== pac.c || cur.r !== pac.r) && pellets[cur.c][cur.r]) { target = cur; break; }
+                if (cur.d > 0 && pellets[cur.c][cur.r] && canEscape(cur, reach)) { target = cur; break; }
+                var rc = reach[cur.c][cur.r];
+                if (cur.d > 0 && rc < Infinity && (!refuge || rc > reach[refuge.c][refuge.r]) && canEscape(cur, reach)) refuge = cur;
                 for (var i = 0; i < dirs.length; i++) {
                     var d = dirs[i];
                     if (!canMove(maze, cur.c, cur.r, d.x, d.y)) continue;
                     var ncx = wrapCol(cur.c + d.x), ncy = cur.r + d.y;
                     var nk = ncx + ',' + ncy;
-                    if (prev[nk]) continue;
+                    if (prev[nk] || !outrunsGhosts(cur.d + 1, reach[ncx][ncy])) continue;
                     prev[nk] = { fromK: cur.c + ',' + cur.r, step: d };
-                    q.push({ c: ncx, r: ncy });
+                    q.push({ c: ncx, r: ncy, d: cur.d + 1 });
                 }
             }
-            if (!target) { // no reachable pellet — keep drifting forward
-                var mv = validMoves(pac.c, pac.r, dir);
-                if (!mv.length) mv = validMoves(pac.c, pac.r, null);
-                return mv.length ? mv[0] : dir;
+            target = target || refuge;      // no safe pellet: run for the cell ghosts reach last
+            if (!target) {
+                // Boxed in: take the exit a ghost reaches latest; turning back loses ties.
+                var mv = validMoves(pac.c, pac.r, dir), back = { x: -dir.x, y: -dir.y };
+                if (canMove(maze, pac.c, pac.r, back.x, back.y)) mv.push(back);
+                var best = null, bestReach = -1;
+                mv.forEach(function (m) {
+                    var g = reach[wrapCol(pac.c + m.x)][pac.r + m.y];
+                    if (g > bestReach) { bestReach = g; best = m; }
+                });
+                return best || dir;
             }
             var k = target.c + ',' + target.r;            // walk back to the first step out of pac
             while (prev[k].fromK !== startK) k = prev[k].fromK;
