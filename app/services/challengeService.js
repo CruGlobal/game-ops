@@ -94,8 +94,8 @@ export const autoJoinContributorToActiveChallenges = async (contributorId) => {
  * @param {Object} challenge
  * @param {Object} [options]
  * @param {Boolean} [options.skipNotifications=false] - Suppress the Slack/Discussion
- *   announcement. Used by generateWeeklyChallenges so the 3 challenges created each
- *   Monday batch into a single post instead of 3 separate ones.
+ *   announcement. Used by generateWeeklyChallenges, which batches the 3 Monday
+ *   challenges into a single GitHub Discussion and skips Slack.
  */
 const handleChallengeCreated = async (challenge, { skipNotifications = false } = {}) => {
     if (!challenge?.id) return;
@@ -1280,12 +1280,14 @@ export const generateWeeklyChallenges = async () => {
             endDate: endOfWeek
         });
 
-        // Single batched announcement for all weekly challenges.
+        // One batched GitHub Discussion for the week's challenges, and no Slack post.
+        // Everyone is auto-enrolled, so a weekly Slack ping asked nobody to do anything
+        // and read as noise in a shared channel. Challenges created one at a time
+        // (admin page or the MCP create_challenge tool) still post to Slack through
+        // handleChallengeCreated. The Discussion post never throws, so a failure there
+        // can't release the week's claim below.
         if (generatedChallenges.length > 0) {
-            await Promise.allSettled([
-                postNewChallengesSlack(generatedChallenges),
-                postNewChallengesDiscussion(generatedChallenges)
-            ]);
+            await postNewChallengesDiscussion(generatedChallenges);
         }
 
         return generatedChallenges;
