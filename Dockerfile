@@ -23,8 +23,10 @@ RUN npx prisma generate
 ARG NODE_VERSION
 FROM public.ecr.aws/docker/library/node:${NODE_VERSION}-alpine
 
-# Install OpenSSL for Prisma
-RUN apk add --no-cache openssl
+# Upgrade the base image's Alpine packages (it can lag security fixes), then
+# install OpenSSL for Prisma
+RUN apk upgrade --no-cache \
+    && apk add --no-cache openssl
 
 ENV NODE_ENV="production"
 
