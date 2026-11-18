@@ -6,7 +6,7 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        NODE_VERSION: "24.18.0"
+        NODE_VERSION: "24.22.3"
     ports:
       - "3000:3000"
     environment:
